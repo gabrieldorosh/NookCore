@@ -39,6 +39,24 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
     public PlotCommands(NookStore store,BooleanSupplier ready,Runnable reconcile,Consumer<Exception> failure,Predicate<String> managed,Runnable validate){this(store,ready,reconcile,failure,managed,validate,System::currentTimeMillis);}
     PlotCommands(NookStore store,BooleanSupplier ready,Runnable reconcile,Consumer<Exception> failure,Predicate<String> managed,Runnable validate,LongSupplier clock){this.store=store;this.ready=ready;this.reconcile=reconcile;this.failure=failure;this.managed=managed;this.validate=validate;this.clock=clock;}
 
+    static net.kyori.adventure.text.Component expiryNotice(String plot){
+        return net.kyori.adventure.text.Component.text("Plots › ",NookUi.ACCENT)
+            .append(NookUi.text("Your abandonment confirmation for "+plot+" expired. Nothing was changed. "))
+            .append(net.kyori.adventure.text.Component.text("[Review again]",NookUi.COMMAND)
+                .clickEvent(net.kyori.adventure.text.event.ClickEvent.suggestCommand("/nookplots abandon "+plot)));
+    }
+    void expireConfirmations(BiConsumer<UUID,String> notify){
+        long now=clock.getAsLong();
+        var iterator=pendingAbandonments.entrySet().iterator();
+        while(iterator.hasNext()){
+            var entry=iterator.next();
+            if(now>=entry.getValue().expires()){
+                UUID actor=entry.getKey();String plot=entry.getValue().quote().plot();
+                iterator.remove();notify.accept(actor,plot);
+            }
+        }
+    }
+
     static String role(String input){return input.equalsIgnoreCase("both")?"BUILD_STOCK":input.toUpperCase(Locale.ROOT);}
 
     private UUID player(String text)throws SQLException {
@@ -64,7 +82,12 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
             validate.run(); // No debit or membership mutation until live protection is verified.
 
             long now=clock.getAsLong();UUID actor=p.getUniqueId();
-            pendingAbandonments.values().removeIf(pending->now>=pending.expires());
+            var expired=pendingAbandonments.get(actor);
+            if(expired!=null && now>=expired.expires()){
+                pendingAbandonments.remove(actor);
+                sender.sendMessage(expiryNotice(expired.quote().plot()));
+                if(args.length==3 && args[0].equalsIgnoreCase("abandon") && args[2].equalsIgnoreCase("confirm"))return true;
+            }
 
             if(args.length==0 || args.length==1 && args[0].equalsIgnoreCase("list")){
 

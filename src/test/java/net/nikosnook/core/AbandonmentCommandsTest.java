@@ -54,4 +54,22 @@ class AbandonmentCommandsTest {
         command("abandon","one");assertEquals(List.of("confirm"),commands.onTabComplete(player,null,"nookplots",new String[]{"abandon","one",""}));
         time.addAndGet(60000);assertEquals(List.of(),commands.onTabComplete(player,null,"nookplots",new String[]{"abandon","one",""}));
     }
+
+    @Test void expiryNotifiesOnceAtDeadlineWithoutChangingLease()throws Exception {
+        var notices=new ArrayList<String>();command("abandon","one");
+        time.addAndGet(59999);commands.expireConfirmations((id,plot)->notices.add(id+":"+plot));assertTrue(notices.isEmpty());
+        time.incrementAndGet();commands.expireConfirmations((id,plot)->notices.add(id+":"+plot));
+        commands.expireConfirmations((id,plot)->notices.add(id+":"+plot));
+        assertEquals(List.of(owner+":one"),notices);assertEquals("ACTIVE",store.plot("one").state());
+        command("abandon","one","confirm");assertEquals(14000,store.account(owner).orElseThrow().cents());
+    }
+    @Test void renewedPreviewDoesNotExpireAtOldDeadline(){
+        command("abandon","one");time.addAndGet(30000);command("abandon","one");time.addAndGet(30000);
+        commands.expireConfirmations((id,plot)->fail("New review expired too early"));
+        assertEquals(List.of("confirm"),commands.onTabComplete(player,null,"nookplots",new String[]{"abandon","one",""}));
+    }
+    @Test void completedConfirmationHasNoLaterExpiryNotice(){
+        command("abandon","one");command("abandon","one","confirm");time.addAndGet(60000);
+        commands.expireConfirmations((id,plot)->fail("Completed confirmation must not expire"));
+    }
 }

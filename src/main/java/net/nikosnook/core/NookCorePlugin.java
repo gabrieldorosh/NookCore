@@ -45,6 +45,10 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             getCommand("nooks").setTabCompleter(this);getCommand("nookadmin").setTabCompleter(this);
             var plots=new PlotCommands(store,this::rentalsReady,this::reconcilePlots,this::fail,id->plotGate!=null && plotGate.manages(id),()->plotGate.validateConfiguration());
             Objects.requireNonNull(getCommand("nookplots")).setExecutor(plots);getCommand("nookplots").setTabCompleter(plots);
+            Bukkit.getScheduler().runTaskTimer(this,()->plots.expireConfirmations((id,plot)->{
+                Player player=Bukkit.getPlayer(id);
+                if(player!=null)player.sendMessage(PlotCommands.expiryNotice(plot));
+            }),20,20);
             for(Player p:Bukkit.getOnlinePlayers())joinPlayer(p);
             Bukkit.getScheduler().runTaskTimer(this,()->{
                 if(!healthy)return;

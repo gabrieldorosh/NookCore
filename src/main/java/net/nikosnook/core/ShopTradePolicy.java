@@ -22,7 +22,11 @@ public final class ShopTradePolicy {
         if(plot.equals(TOWN) || plot.equals(ROAD) || locations.stream().anyMatch(p->!p.equals(plot)))
             throw new IllegalArgumentException("The sign and every stock container must be inside the same rented plot.");
         NookStore.Plot lease=store.plot(plot);
-        if(!store.canTrade(plot,now))throw new IllegalArgumentException("This shop is closed until its rent is paid.");
+        if(!store.canTrade(plot,now))throw new IllegalArgumentException(switch(lease.state()){
+            case "RECLAIM" -> "This shop is closed and awaiting staff clearance.";
+            case "AVAILABLE" -> "This plot is not currently rented.";
+            default -> "This shop is closed until its rent is paid.";
+        });
         if(!Objects.equals(lease.owner(),beneficiary))
             throw new IllegalArgumentException("Shop payments must belong to the original renter.");
     }

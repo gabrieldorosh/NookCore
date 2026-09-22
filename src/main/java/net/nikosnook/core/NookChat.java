@@ -57,7 +57,7 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
     void close(){unregister.run();NookUi.preferences=null;}
     String placeholder(UUID id,String key){
         Snapshot s=snapshots.get(id);if(s==null)return "";
-        return switch(key){case "name"->"&"+s.preference().textColour().asHexString()+s.name()+"&r";case "pronouns"->s.preference().pronouns().isEmpty()?"":" &7"+s.preference().pronouns()+"&r";case "rank"->("&"+(s.rank().equals("nookling")?NookUi.GOOD:NookUi.ACCENT).asHexString())+"["+s.rank()+"] &r";default->null;};
+        return switch(key){case "name"->"&"+s.preference().textColour().asHexString()+s.name()+"&r";case "pronouns"->s.preference().pronouns().isEmpty()?"":" &7· "+s.preference().pronouns()+"&r";case "rank"->("&"+(s.rank().equals("nookling")?NookUi.GOOD:NookUi.ACCENT).asHexString())+"["+s.rank()+"] &r";default->null;};
     }
     private void refresh(Player player){
         String rank="nookling";

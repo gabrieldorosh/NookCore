@@ -38,7 +38,7 @@ final class ChatStyle {
     static Component render(Component rank,String name,ChatPreferences.Preference preference,Component body){
         Component prefix=Component.empty().append(rank).append(Component.text(" "))
             .append(Component.text(name,preference.textColour()));
-        if(!preference.pronouns().isEmpty())prefix=prefix.append(Component.text(" "+preference.pronouns(),NamedTextColor.GRAY));
+        if(!preference.pronouns().isEmpty())prefix=prefix.append(Component.text(" · "+preference.pronouns(),NookUi.MUTED));
         return prefix.append(Component.text(": ",NamedTextColor.WHITE)).append(body);
     }
 }

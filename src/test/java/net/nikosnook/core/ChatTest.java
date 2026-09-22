@@ -64,7 +64,7 @@ class ChatTest {
     }
     @Test void prefixIsSeparateFromBodyFormatting(){
         Component c=ChatStyle.render("nookling","DrunkeUnicorn",new ChatPreferences.Preference("aqua","he/him"),ChatStyle.message("&lHello!"));
-        assertEquals("[nookling] DrunkeUnicorn he/him: Hello!",plain(c));
+        assertEquals("[nookling] DrunkeUnicorn · he/him: Hello!",plain(c));
         assertNotEquals(TextDecoration.State.TRUE,c.decoration(TextDecoration.BOLD));
     }
     @Test void absentPronounsLeaveNoExtraSpace(){
