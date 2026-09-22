@@ -32,7 +32,12 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
     private final Runnable validate;
 
-    public PlotCommands(NookStore store,BooleanSupplier ready,Runnable reconcile,Consumer<Exception> failure,Predicate<String> managed,Runnable validate){this.store=store;this.ready=ready;this.reconcile=reconcile;this.failure=failure;this.managed=managed;this.validate=validate;}
+    private final LongSupplier clock;
+    private record PendingAbandonment(NookStore.AbandonmentQuote quote,long expires) {}
+    private final Map<UUID,PendingAbandonment> pendingAbandonments=new HashMap<>();
+
+    public PlotCommands(NookStore store,BooleanSupplier ready,Runnable reconcile,Consumer<Exception> failure,Predicate<String> managed,Runnable validate){this(store,ready,reconcile,failure,managed,validate,System::currentTimeMillis);}
+    PlotCommands(NookStore store,BooleanSupplier ready,Runnable reconcile,Consumer<Exception> failure,Predicate<String> managed,Runnable validate,LongSupplier clock){this.store=store;this.ready=ready;this.reconcile=reconcile;this.failure=failure;this.managed=managed;this.validate=validate;this.clock=clock;}
 
     static String role(String input){return input.equalsIgnoreCase("both")?"BUILD_STOCK":input.toUpperCase(Locale.ROOT);}
 
@@ -56,7 +61,8 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
             validate.run(); // No debit or membership mutation until live protection is verified.
 
-            long now=System.currentTimeMillis();UUID actor=p.getUniqueId();
+            long now=clock.getAsLong();UUID actor=p.getUniqueId();
+            pendingAbandonments.values().removeIf(pending->now>=pending.expires());
 
             if(args.length==0 || args.length==1 && args[0].equalsIgnoreCase("list")){
 
@@ -74,9 +80,32 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
             }
 
-            if(args.length>1 && Set.of("rent","invite","role","remove","prepay","reopen").contains(args[0].toLowerCase(Locale.ROOT)) && !managed.test(args[1]))throw new IllegalArgumentException("That plot has no configured protection mapping.");
+            if(args.length>1 && Set.of("rent","invite","role","remove","prepay","reopen","abandon").contains(args[0].toLowerCase(Locale.ROOT)) && !managed.test(args[1]))throw new IllegalArgumentException("That plot has no configured protection mapping.");
 
             switch(args[0].toLowerCase(Locale.ROOT)){
+                case "abandon" -> {
+                    if(args.length<2 || args.length>3)throw new IllegalArgumentException("Use /nookplots abandon <plot> to review the refund before confirming.");
+                    if(args.length==2){
+                        var quote=store.abandonmentQuote(args[1],actor,now);
+                        pendingAbandonments.put(actor,new PendingAbandonment(quote,now+60_000));
+                        sender.sendMessage(net.kyori.adventure.text.Component.text("Abandon "+quote.plot()+"?",NookUi.WARNING));
+                        sender.sendMessage(NookUi.text("Refund: "+Money.format(quote.refund())+" for wholly unused prepaid weeks. The current rental week is not refunded."));
+                        sender.sendMessage(NookUi.text("Sales stop and all members lose access immediately. Everyone can rent elsewhere; this plot stays closed until staff clear it."));
+                        sender.sendMessage(NookUi.text("No blocks or items are deleted. Contact staff for collection; belongings are kept indefinitely."));
+                        sender.sendMessage(net.kyori.adventure.text.Component.text("Within 60 seconds: /nookplots abandon "+quote.plot()+" confirm",NookUi.COMMAND));
+                        return true;
+                    }
+                    if(!args[2].equalsIgnoreCase("confirm"))throw new IllegalArgumentException("Use /nookplots abandon "+args[1]+" first, then add confirm if you want to proceed.");
+                    var pending=pendingAbandonments.get(actor);
+                    if(pending==null || !pending.quote().plot().equals(args[1]))throw new IllegalArgumentException("Review /nookplots abandon "+args[1]+" first. Confirmation expires after 60 seconds.");
+                    // Consume before attempting the transaction: a failed confirmation must be reviewed again.
+                    pendingAbandonments.remove(actor);
+                    long refund=store.abandon(pending.quote(),actor,now);
+                    reconcile.run();
+                    sender.sendMessage(net.kyori.adventure.text.Component.text("Plot abandoned · "+Money.format(refund)+" refunded.",NookUi.GOOD));
+                    sender.sendMessage(NookUi.text("Your plot allowance is free. Contact staff to collect your shop belongings."));
+                    return true;
+                }
                 case "leave" -> {
                     if(args.length!=1)break;
                     for(var plot:store.plots())if(managed.test(plot.id()) && !store.role(plot.id(),actor).equals("NONE")){
@@ -126,7 +155,7 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
             }
 
-            NookUi.help(sender,"Plot commands","/nookplots leave — leave as a co-owner","/nookplots list — see prices, owners and availability","/nookplots rent <plot> — rent an available plot","/nookplots invite <plot> <player> <build|stock|both> — invite or update a member","/nookplots invitations — see your invitations","/nookplots accept [player] — accept; omit player if only one invitation","/nookplots decline [player] — decline an invitation","/nookplots role <plot> <player> <build|stock|both> — replace their permissions","/nookplots remove <plot> <player> — remove a member","/nookplots prepay <plot> <weeks> — pay ahead, up to four weeks","/nookplots reopen <plot> — pay remaining rent and resume sales");
+            NookUi.help(sender,"Plot commands","/nookplots abandon <plot> — review closure and a prepaid-week refund","/nookplots leave — leave as a co-owner","/nookplots list — see prices, owners and availability","/nookplots rent <plot> — rent an available plot","/nookplots invite <plot> <player> <build|stock|both> — invite or update a member","/nookplots invitations — see your invitations","/nookplots accept [player] — accept; omit player if only one invitation","/nookplots decline [player] — decline an invitation","/nookplots role <plot> <player> <build|stock|both> — replace their permissions","/nookplots remove <plot> <player> — remove a member","/nookplots prepay <plot> <weeks> — pay ahead, up to four weeks","/nookplots reopen <plot> — pay remaining rent and resume sales");
 
         }catch(IllegalArgumentException ex){sender.sendMessage(ex.getMessage());}
 
@@ -172,15 +201,17 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
             List<String> values=new ArrayList<>();String sub=args[0].toLowerCase(Locale.ROOT);
 
-            if(args.length==1)values.addAll(List.of("leave","list","help","rent","invite","invitations","accept","decline","role","remove","prepay","reopen"));
+            if(args.length==1)values.addAll(List.of("abandon","leave","list","help","rent","invite","invitations","accept","decline","role","remove","prepay","reopen"));
 
             else if(args.length==2){
 
                 if(Set.of("accept","decline").contains(sub)){for(var i:store.invitations(player.getUniqueId(),System.currentTimeMillis()))values.add(store.account(i.inviter()).orElseThrow().name());}
 
-                else if(Set.of("rent","invite","role","remove","prepay","reopen").contains(sub)){for(var plot:store.plots())if(managed.test(plot.id()) && (sub.equals("rent")?plot.state().equals("AVAILABLE"):player.getUniqueId().equals(plot.owner())))values.add(plot.id());}
+                else if(Set.of("rent","invite","role","remove","prepay","reopen","abandon").contains(sub)){for(var plot:store.plots())if(managed.test(plot.id()) && (sub.equals("rent")?plot.state().equals("AVAILABLE"):player.getUniqueId().equals(plot.owner()) && store.role(plot.id(),player.getUniqueId()).equals("OWNER")))values.add(plot.id());}
 
             }else if(args.length==3){
+
+                if(sub.equals("abandon")){var pending=pendingAbandonments.get(player.getUniqueId());if(pending!=null && clock.getAsLong()<pending.expires() && pending.quote().plot().equals(args[1]))values.add("confirm");}
 
                 if(sub.equals("invite")){for(var a:store.accounts())if(!a.id().equals(player.getUniqueId()))values.add(a.name());}
 

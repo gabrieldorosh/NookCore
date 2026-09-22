@@ -21,7 +21,7 @@ final class NookUi {
     }
     static Component plot(NookStore store,NookStore.Plot plot)throws SQLException {
         Component result=text(plot.id()).append(Component.text(" · ",MUTED)).append(status(plot,System.currentTimeMillis()));
-        if(plot.owner()!=null)result=result.append(Component.text(" · Owner: ",MUTED)).append(name(store,plot.owner()));
+        if(plot.owner()!=null)result=result.append(Component.text(store.abandoned(plot.id())?" · Former renter: ":" · Owner: ",MUTED)).append(name(store,plot.owner()));
         return plot.owner()==null?result.append(Component.text(" · "+Money.format(plot.weekly())+"/week",COMMAND)):result;
     }
     static void help(CommandSender sender,String heading,String... lines){sender.sendMessage(Component.text(heading,ACCENT).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD));for(String line:lines){int split=line.indexOf(" — ");String command=split<0?line:line.substring(0,split);Component row=Component.text("  "+command,COMMAND).clickEvent(ClickEvent.suggestCommand(command));if(split>=0)row=row.append(Component.text(line.substring(split),MUTED));sender.sendMessage(row);}}

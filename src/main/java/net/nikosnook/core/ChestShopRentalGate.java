@@ -86,12 +86,12 @@ public final class ChestShopRentalGate implements Listener {
         var loaded=Objects.requireNonNull(Bukkit.getWorld(world));
         regionAt(new Location(loaded,0,0,0));
         var manager=WorldGuard.getInstance().getPlatform().getRegionContainer().get(BukkitAdapter.adapt(loaded));
-        Objects.requireNonNull(manager.getRegion(district)).setFlag(Flags.DENY_MESSAGE,plugin.getConfig().getString("shop-gate.deny-message","&bNiko's Nook &8» &fThis spot is protected. Rent a plot or ask its owner for access."));
+        Objects.requireNonNull(manager.getRegion(district)).setFlag(Flags.DENY_MESSAGE,plugin.getConfig().getString("shop-gate.deny-message","&bNiko's Nook &8» &fThe shopping district is protected. Build in a plot you have access to, or ask staff for help."));
         for(var entry:regions.entrySet()) {
             var region=Objects.requireNonNull(manager.getRegion(entry.getKey()));
             var lease=store.plot(entry.getValue());
             DefaultDomain owners=new DefaultDomain(),members=new DefaultDomain();
-            if(lease.owner()!=null)owners.addPlayer(lease.owner());
+            if(lease.owner()!=null && store.role(entry.getValue(),lease.owner()).equals("OWNER"))owners.addPlayer(lease.owner());
             for(var member:store.members(entry.getValue()).entrySet())
                 if(!member.getKey().equals(lease.owner()))members.addPlayer(member.getKey());
             region.setOwners(owners);region.setMembers(members);
