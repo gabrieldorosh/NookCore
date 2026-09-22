@@ -56,8 +56,8 @@ public final class ChestShopRentalGate implements Listener {
             for(String location:locations)if(!permissions.allowed(location,event.getPlayer().getUniqueId(),PlotPermissions.Action.ALTER_CONTAINER))
                 throw new IllegalArgumentException("Creating a plot shop requires BUILD and STOCK permissions.");
             policy.check(locations,event.getOwnerAccount()==null?null:event.getOwnerAccount().getUuid(),System.currentTimeMillis());
-        }catch(IllegalArgumentException ex){event.setCancelled(true);event.getPlayer().sendMessage(ex.getMessage());}
-        catch(Exception ex){event.setCancelled(true);failure.accept(ex);event.getPlayer().sendMessage("Shop creation is paused; contact staff.");}
+        }catch(IllegalArgumentException ex){event.setCancelled(true);event.getPlayer().sendMessage(NookUi.error(ex.getMessage()));}
+        catch(Exception ex){event.setCancelled(true);failure.accept(ex);event.getPlayer().sendMessage(NookUi.text("Shop creation is paused; contact staff."));}
     }
     @EventHandler(priority=EventPriority.HIGHEST)
     public void stockAccess(ProtectionCheckEvent event){
@@ -154,9 +154,9 @@ public final class ChestShopRentalGate implements Listener {
             containers(event.getOwnerInventory().getHolder(),locations);
             policy.checkCustomer(locations,event.getOwnerAccount()==null?null:event.getOwnerAccount().getUuid(),event.getClient().getUniqueId(),System.currentTimeMillis());
         }catch(IllegalArgumentException ex) {
-            event.setCancelled(true);event.getClient().sendMessage(ex.getMessage());
+            event.setCancelled(true);event.getClient().sendMessage(NookUi.error(ex.getMessage()));
         }catch(Exception ex) {
-            event.setCancelled(true);failure.accept(ex);event.getClient().sendMessage("Shop payments are paused; contact staff.");
+            event.setCancelled(true);failure.accept(ex);event.getClient().sendMessage(NookUi.text("Shop payments are paused; contact staff."));
         }
     }
 }

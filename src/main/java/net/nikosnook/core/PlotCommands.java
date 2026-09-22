@@ -53,11 +53,13 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
 
-        if(!ready.getAsBoolean()){sender.sendMessage("Plot rentals are not enabled, or are paused for a protection/storage check.");return true;}
+        if(!ready.getAsBoolean()){sender.sendMessage(NookUi.text("Plot rentals are not enabled, or are paused for a protection/storage check."));return true;}
 
-        if(!(sender instanceof Player p)){sender.sendMessage("Use the staff plot commands from console.");return true;}
+        if(!(sender instanceof Player p)){sender.sendMessage(NookUi.text("Use the staff plot commands from console."));return true;}
 
         try {
+
+            CommandSyntax.check("nookplots",args);
 
             validate.run(); // No debit or membership mutation until live protection is verified.
 
@@ -113,7 +115,7 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
                     }
                     throw new IllegalArgumentException("You do not belong to a rented plot.");
                 }
-                case "rent" -> {if(args.length!=2)break;store.rent(args[1],actor,now);reconcile.run();sender.sendMessage("Rented "+args[1]+" for "+Money.format(store.plot(args[1]).weekly())+". Rent renews automatically while eligible; prepay up to four future weeks.");return true;}
+                case "rent" -> {if(args.length!=2)break;store.rent(args[1],actor,now);reconcile.run();sender.sendMessage(NookUi.text("Rented "+args[1]+" for "+Money.format(store.plot(args[1]).weekly())+". Rent renews automatically while eligible; prepay up to four future weeks."));return true;}
 
                 case "invite" -> {
 
@@ -125,7 +127,7 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
                     var invite=store.invite(args[1],actor,member,role(args[3]),now);
 
-                    sender.sendMessage("Invitation sent; it expires in 24 hours and does not reserve membership.");
+                    sender.sendMessage(NookUi.text("Invitation sent; it expires in 24 hours and does not reserve membership."));
 
                     Player target=Bukkit.getPlayer(invite.member());if(target!=null)showInvitation(target,invite);return true;
 
@@ -135,7 +137,7 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
                     if(args.length!=1)break;var invites=store.invitations(actor,now);
 
-                    if(invites.isEmpty())sender.sendMessage("No unexpired plot invitations.");
+                    if(invites.isEmpty())sender.sendMessage(NookUi.text("No unexpired plot invitations."));
 
                     for(var i:invites)showInvitation(sender,i);return true;
 
@@ -145,21 +147,21 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
                 case "decline" -> {if(args.length>2)break;var invitation=resolveInvitation(actor,args.length==2?args[1]:"",now);store.declineInvitation(invitation.token(),actor,now);sender.sendMessage(NookUi.text("Invitation declined."));return true;}
 
-                case "role" -> {if(args.length!=4)break;store.changeRole(args[1],actor,player(args[2]),role(args[3]),now);reconcile.run();sender.sendMessage("Plot permissions updated.");return true;}
+                case "role" -> {if(args.length!=4)break;store.changeRole(args[1],actor,player(args[2]),role(args[3]),now);reconcile.run();sender.sendMessage(NookUi.text("Plot permissions updated."));return true;}
 
-                case "remove" -> {if(args.length!=3)break;store.removeMember(args[1],actor,player(args[2]),now);reconcile.run();sender.sendMessage("Member removed and any pending invitation withdrawn.");return true;}
+                case "remove" -> {if(args.length!=3)break;store.removeMember(args[1],actor,player(args[2]),now);reconcile.run();sender.sendMessage(NookUi.text("Member removed and any pending invitation withdrawn."));return true;}
 
                 case "prepay" -> {if(args.length!=3)break;store.prepay(args[1],actor,Integer.parseInt(args[2]),now);sender.sendMessage(NookUi.text("Rent prepaid · Paid until "+NookUi.date(store.plot(args[1]).paidUntil())+"."));return true;}
 
-                case "reopen" -> {if(args.length!=2)break;long charged=store.reopen(args[1],actor,now);sender.sendMessage("Shop reopened for "+Money.format(charged)+"; the original billing date is unchanged.");return true;}
+                case "reopen" -> {if(args.length!=2)break;long charged=store.reopen(args[1],actor,now);sender.sendMessage(NookUi.text("Shop reopened for "+Money.format(charged)+"; the original billing date is unchanged."));return true;}
 
             }
 
             NookUi.help(sender,"Plot commands","/nookplots abandon <plot> — review closure and a prepaid-week refund","/nookplots leave — leave as a co-owner","/nookplots list — see prices, owners and availability","/nookplots rent <plot> — rent an available plot","/nookplots invite <plot> <player> <build|stock|both> — invite or update a member","/nookplots invitations — see your invitations","/nookplots accept [player] — accept; omit player if only one invitation","/nookplots decline [player] — decline an invitation","/nookplots role <plot> <player> <build|stock|both> — replace their permissions","/nookplots remove <plot> <player> — remove a member","/nookplots prepay <plot> <weeks> — pay ahead, up to four weeks","/nookplots reopen <plot> — pay remaining rent and resume sales");
 
-        }catch(IllegalArgumentException ex){sender.sendMessage(ex.getMessage());}
+        }catch(IllegalArgumentException ex){sender.sendMessage(NookUi.error(ex.getMessage()));}
 
-        catch(Exception ex){failure.accept(ex);sender.sendMessage("Could not confirm the plot operation. Payments/protection are paused; contact staff before retrying.");}
+        catch(Exception ex){failure.accept(ex);sender.sendMessage(NookUi.text("Could not confirm the plot operation. Payments/protection are paused; contact staff before retrying."));}
 
         return true;
 
@@ -228,4 +230,3 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
     }
 
 }
-

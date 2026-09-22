@@ -18,6 +18,13 @@ class PlotCommandsTest {
     @AfterEach void close()throws Exception {store.close();}
     PlotCommands commands(boolean enabled,boolean mapped,Runnable validate,Runnable reconcile){return new PlotCommands(store,()->enabled,reconcile,e->failures.incrementAndGet(),p->mapped,validate);}
     void rent(PlotCommands commands){commands.onCommand(player,null,"nookplots",new String[]{"rent","one"});}
+    @Test void malformedRentalCommandsCannotSpendMoneyOrGrantMembership()throws Exception {
+        var c=commands(true,true,()->{},()->reconciles.incrementAndGet());
+        for(String[] args:new String[][]{{"rent"},{"rent","one","extra"},{"prepay","one","1.5"},{"invite","one","Player"}})
+            c.onCommand(player,null,"nookplots",args);
+        assertEquals(6000,store.account(id).orElseThrow().cents());assertEquals("AVAILABLE",store.plot("one").state());
+        assertTrue(store.members("one").isEmpty());assertEquals(0,reconciles.get());assertEquals(0,failures.get());
+    }
     UUID inviter(String name,String plot)throws Exception {UUID owner=UUID.randomUUID();long now=System.currentTimeMillis();store.join(owner,name,now,6000);store.definePlot(plot,3000);store.rent(plot,owner,now);store.invite(plot,owner,id,"STOCK",now);return owner;}
     @Test void acceptsNamedInvitationWithoutTypingToken()throws Exception {
         inviter("Owner","other");var c=commands(true,true,()->{},()->{});

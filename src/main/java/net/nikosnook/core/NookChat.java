@@ -57,7 +57,7 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
     void close(){unregister.run();NookUi.preferences=null;}
     String placeholder(UUID id,String key){
         Snapshot s=snapshots.get(id);if(s==null)return "";
-        return switch(key){case "name"->"&"+s.preference().textColour().asHexString()+s.name()+"&r";case "pronouns"->s.preference().pronouns().isEmpty()?"":" &7"+s.preference().pronouns()+"&r";case "rank"->(s.rank().equals("nookling")?"&a":"&b")+"["+s.rank()+"] &r";default->null;};
+        return switch(key){case "name"->"&"+s.preference().textColour().asHexString()+s.name()+"&r";case "pronouns"->s.preference().pronouns().isEmpty()?"":" &7"+s.preference().pronouns()+"&r";case "rank"->("&"+(s.rank().equals("nookling")?NookUi.GOOD:NookUi.ACCENT).asHexString())+"["+s.rank()+"] &r";default->null;};
     }
     private void refresh(Player player){
         String rank="nookling";
@@ -84,18 +84,27 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
         });
     }
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
-        if(!(sender instanceof Player player)){sender.sendMessage("Use /nookchat in game.");return true;}
+        if(!(sender instanceof Player player)){sender.sendMessage(NookUi.text("Use /nookchat in game."));return true;}
         try {
+            CommandSyntax.check("nookchat",args);
+            if(CommandSyntax.chatHelp(args)){
+                NookUi.help(sender,"Chat settings","/nookchat colour <colour|#RRGGBB|reset> — change your name colour","/nookchat pronouns <pronouns|reset> — choose or hide pronouns","/nookchat preview — see your current style");
+                sender.sendMessage(NookUi.text("Message formatting: ").append(Component.text("&l bold  &o italic  &n underline  &m strikethrough  &r reset",NookUi.MUTED)));
+                sender.sendMessage(NookUi.text("Use named colours or a hex colour such as #b8d8a8. Reset restores the default."));
+                return true;
+            }
             var old=preferences.get(player.getUniqueId());
             if(args.length==2 && args[0].equalsIgnoreCase("colour"))preferences.set(player.getUniqueId(),new ChatPreferences.Preference(args[1].equalsIgnoreCase("reset")?"white":args[1],old.pronouns()));
             else if(args.length>=2 && args[0].equalsIgnoreCase("pronouns")){
                 String text=String.join(" ",Arrays.copyOfRange(args,1,args.length));
                 preferences.set(player.getUniqueId(),new ChatPreferences.Preference(old.colour(),selectedPronouns(text,pronouns())));
-            }else if(!(args.length==1 && args[0].equalsIgnoreCase("preview"))){NookUi.help(sender,"Chat settings","/nookchat colour <colour|#RRGGBB|reset> — change your name colour","/nookchat pronouns <pronouns|reset> — choose or hide pronouns","/nookchat preview — see your current style");sender.sendMessage(NookUi.text("Message styles: &l bold · &o italic · &n underline · &m strikethrough · &r reset"));}
+            }
             refresh(player);var snapshot=snapshots.get(player.getUniqueId());
-            sender.sendMessage(ChatStyle.render(snapshot.rank(),snapshot.name(),snapshot.preference(),net.kyori.adventure.text.Component.text("Hello!")));
-        }catch(IllegalArgumentException e){sender.sendMessage(e.getMessage());}
-        catch(IOException e){plugin.getLogger().log(Level.SEVERE,"Chat preference save failed; previous settings retained.",e);sender.sendMessage("Your chat settings could not be saved. Your previous settings remain active.");}
+            if(args[0].equalsIgnoreCase("preview"))sender.sendMessage(ChatStyle.render(snapshot.rank(),snapshot.name(),snapshot.preference(),Component.text("Hello!")));
+            else if(args[0].equalsIgnoreCase("colour"))sender.sendMessage(NookUi.text("Name colour saved: ").append(NookUi.name(player.getUniqueId(),player.getName())));
+            else sender.sendMessage(NookUi.text(snapshot.preference().pronouns().isEmpty()?"Pronouns hidden.":"Pronouns saved: "+snapshot.preference().pronouns()));
+        }catch(IllegalArgumentException e){sender.sendMessage(NookUi.error(e.getMessage()));}
+        catch(IOException e){plugin.getLogger().log(Level.SEVERE,"Chat preference save failed; previous settings retained.",e);sender.sendMessage(NookUi.text("Your chat settings could not be saved. Your previous settings remain active."));}
         return true;
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args){

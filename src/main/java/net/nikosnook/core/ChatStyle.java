@@ -33,7 +33,7 @@ final class ChatStyle {
         return result.append(Component.text(text.substring(start),style));
     }
     static Component render(String rank,String name,ChatPreferences.Preference preference,Component body){
-        return render(Component.text("["+rank+"]",rank.equals("nookling")?NamedTextColor.GREEN:NamedTextColor.AQUA),name,preference,body);
+        return render(Component.text("["+rank+"]",rank.equals("nookling")?NookUi.GOOD:NookUi.ACCENT),name,preference,body);
     }
     static Component render(Component rank,String name,ChatPreferences.Preference preference,Component body){
         Component prefix=Component.empty().append(rank).append(Component.text(" "))
