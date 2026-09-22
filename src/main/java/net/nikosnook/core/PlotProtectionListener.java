@@ -37,13 +37,15 @@ public final class PlotProtectionListener implements Listener {
         catch(Exception ex){failure.accept(ex);return true;}
     }
     private boolean inventoryAllowed(Player player,InventoryHolder holder){
+        if(holder instanceof HumanEntity)return true;
         if(holder instanceof DoubleChest chest)return inventoryAllowed(player,chest.getLeftSide()) && inventoryAllowed(player,chest.getRightSide());
         if(holder instanceof Container container)return allowed(player,container.getLocation(),STOCK);
         if(holder instanceof Entity entity)return allowed(player,entity.getLocation(),STOCK);
-        return true; // Player/crafting/virtual inventories carry no plot stock themselves.
+        return true; // Crafting/virtual inventories carry no plot stock themselves.
     }
     private boolean protectedInventory(Inventory inventory){
         var holder=inventory.getHolder();
+        if(holder instanceof HumanEntity)return false;
         if(holder instanceof DoubleChest chest)return protectedInventory(chest.getLeftSide().getInventory()) || protectedInventory(chest.getRightSide().getInventory());
         if(holder instanceof Container container)return protectedLocation(container.getLocation());
         if(holder instanceof Entity entity)return protectedLocation(entity.getLocation());
@@ -63,11 +65,37 @@ public final class PlotProtectionListener implements Listener {
     public void sign(SignChangeEvent event){if(!allowed(event.getPlayer(),event.getBlock().getLocation(),ALTER_CONTAINER))deny(event,event.getPlayer());}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void open(InventoryOpenEvent event){if(event.getPlayer() instanceof Player player && !inventoryAllowed(player,event.getInventory().getHolder()))deny(event,player);}
-    // Recheck on every transfer: removal/role changes must invalidate already-open inventories.
+    static boolean affectsTopInventory(int rawSlot,int topSize,InventoryAction action){
+        if(rawSlot>=0 && rawSlot<topSize)return true;
+        return action==InventoryAction.MOVE_TO_OTHER_INVENTORY
+            || action==InventoryAction.COLLECT_TO_CURSOR
+            || action==InventoryAction.UNKNOWN;
+    }
+
+    static boolean affectsTopInventory(Set<Integer> rawSlots,int topSize){
+        return rawSlots.stream().anyMatch(slot->slot>=0 && slot<topSize);
+    }
+
+    // Recheck transfers that can actually touch the top inventory:
+    // removal/role changes must invalidate already-open protected stock without
+    // preventing the player from rearranging their own inventory.
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
-    public void click(InventoryClickEvent event){if(event.getWhoClicked() instanceof Player player && !inventoryAllowed(player,event.getView().getTopInventory().getHolder()))deny(event,player);}
+    public void click(InventoryClickEvent event){
+        if(!(event.getWhoClicked() instanceof Player player))return;
+        var top=event.getView().getTopInventory();
+        if(affectsTopInventory(event.getRawSlot(),top.getSize(),event.getAction())
+                && !inventoryAllowed(player,top.getHolder()))
+            deny(event,player);
+    }
+
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
-    public void drag(InventoryDragEvent event){if(event.getWhoClicked() instanceof Player player && !inventoryAllowed(player,event.getView().getTopInventory().getHolder()))deny(event,player);}
+    public void drag(InventoryDragEvent event){
+        if(!(event.getWhoClicked() instanceof Player player))return;
+        var top=event.getView().getTopInventory();
+        if(affectsTopInventory(event.getRawSlots(),top.getSize())
+                && !inventoryAllowed(player,top.getHolder()))
+            deny(event,player);
+    }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void move(InventoryMoveItemEvent event){if(protectedInventory(event.getSource()) || protectedInventory(event.getDestination()))event.setCancelled(true);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
