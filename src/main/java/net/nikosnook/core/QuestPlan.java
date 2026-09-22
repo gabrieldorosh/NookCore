@@ -1,12 +1,10 @@
 package net.nikosnook.core;
 
 import java.time.*;
-import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.nio.charset.StandardCharsets;
 
 final class QuestPlan {
-    static final ZoneId ZONE=ZoneId.of("Europe/London");
     record Week(String id,long nextReset) {}
     record Goal(String id,String title,String kind,String target,int amount,long reward) {
         Goal {
@@ -15,10 +13,8 @@ final class QuestPlan {
         }
     }
     static Week week(long time){
-        var now=Instant.ofEpochMilli(time).atZone(ZONE);
-        var start=now.toLocalDate().with(TemporalAdjusters.previousOrSame(DayOfWeek.WEDNESDAY)).atTime(2,0).atZone(ZONE);
-        if(now.isBefore(start))start=start.minusWeeks(1);
-        return new Week(start.toLocalDate().toString(),start.plusWeeks(1).toInstant().toEpochMilli());
+        var now=Instant.ofEpochMilli(time);
+        return new Week(WeekSchedule.start(now).atZone(WeekSchedule.ZONE).toLocalDate().toString(),WeekSchedule.next(now).toEpochMilli());
     }
     static String encode(List<Goal> goals){
         return goals.stream().map(g->String.join("|",g.id(),Base64.getEncoder().encodeToString(g.title().getBytes(StandardCharsets.UTF_8)),g.kind(),g.target(),Integer.toString(g.amount()),Long.toString(g.reward()))).collect(java.util.stream.Collectors.joining("\n"));

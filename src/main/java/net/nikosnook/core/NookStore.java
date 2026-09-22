@@ -61,6 +61,9 @@ public final class NookStore implements AutoCloseable {
             bind(p,player,week,goal);try(var rows=p.executeQuery()){return rows.next()?rows.getInt(1):0;}
         }
     }
+    public static final class BalanceCapacityException extends IllegalArgumentException {
+        BalanceCapacityException(){super("Balance limit reached.");}
+    }
     public record QuestUpdate(QuestPlan.Goal goal,int progress,boolean paid) {}
     public List<QuestPlan.Goal> progressQuests(UUID player,String week,String kind,String target,String unique,long now)throws SQLException {
         return advanceQuests(player,week,kind,target,unique,now).stream().filter(QuestUpdate::paid).map(QuestUpdate::goal).toList();
@@ -143,7 +146,7 @@ public final class NookStore implements AutoCloseable {
         Account a=account(id).orElseThrow(()->new IllegalArgumentException("That player has not joined this season."));
         long next=Math.addExact(a.cents(),delta);
         if(next<0) throw new IllegalArgumentException("Not enough Nooks. Cost: "+Money.format(-delta)+" · Your balance: "+Money.format(a.cents())+".");
-        if(next>Money.MAX) throw new IllegalArgumentException("Balance limit reached.");
+        if(next>Money.MAX) throw new BalanceCapacityException();
         update("UPDATE accounts SET cents=? WHERE uuid=?",next,id);
         update("INSERT INTO ledger(time,uuid,delta,kind,reference) VALUES(?,?,?,?,?)",now,id,delta,kind,ref);
     }
