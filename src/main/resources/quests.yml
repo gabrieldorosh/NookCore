@@ -1,0 +1,47 @@
+# Enable after reviewing the targets. Restart to load changes.
+# Definitions freeze for the current Wednesday 02:00 UK rotation once enabled.
+# Changes then apply to the next week; never edit stored progress to reset rewards.
+enabled: false
+goals:
+  skeletons:
+    title: Defeat 32 skeletons
+    kind: KILL
+    target: SKELETON
+    amount: 32
+    reward-cents: 1500
+  zombies:
+    title: Defeat 48 zombies
+    kind: KILL
+    target: ZOMBIE
+    amount: 48
+    reward-cents: 1500
+  spiders:
+    title: Defeat 24 spiders
+    kind: KILL
+    target: SPIDER
+    amount: 24
+    reward-cents: 1500
+  cod:
+    title: Catch or hunt 32 cod
+    kind: FISH
+    target: COD
+    amount: 32
+    reward-cents: 1500
+  salmon:
+    title: Catch or hunt 24 salmon
+    kind: FISH
+    target: SALMON
+    amount: 24
+    reward-cents: 1500
+  explorer:
+    title: Visit 8 different biomes
+    kind: BIOME
+    target: ANY
+    amount: 8
+    reward-cents: 1500
+  challenge:
+    title: Defeat 192 common hostile mobs
+    kind: KILL
+    target: HOSTILE
+    amount: 192
+    reward-cents: 3000

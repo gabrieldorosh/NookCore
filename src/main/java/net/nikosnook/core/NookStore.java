@@ -39,11 +39,52 @@ public final class NookStore implements AutoCloseable {
 
             s.execute("CREATE TABLE IF NOT EXISTS plot_leases (plot TEXT PRIMARY KEY REFERENCES plots(id), lease TEXT NOT NULL UNIQUE)");
             s.execute("CREATE TABLE IF NOT EXISTS plot_abandonments (lease TEXT PRIMARY KEY, plot TEXT NOT NULL REFERENCES plots(id), owner TEXT NOT NULL REFERENCES accounts(uuid), time INTEGER NOT NULL, refund INTEGER NOT NULL)");
+            s.execute("CREATE TABLE IF NOT EXISTS quest_rotations (week TEXT PRIMARY KEY, definitions TEXT NOT NULL)");
+            s.execute("CREATE TABLE IF NOT EXISTS quest_progress (uuid TEXT NOT NULL REFERENCES accounts(uuid), week TEXT NOT NULL REFERENCES quest_rotations(week), goal TEXT NOT NULL, progress INTEGER NOT NULL, PRIMARY KEY(uuid,week,goal))");
+            s.execute("CREATE TABLE IF NOT EXISTS quest_visits (uuid TEXT NOT NULL REFERENCES accounts(uuid), week TEXT NOT NULL REFERENCES quest_rotations(week), goal TEXT NOT NULL, biome TEXT NOT NULL, PRIMARY KEY(uuid,week,goal,biome))");
             // Give existing leases an identity once; a new rental always replaces it.
             for(Plot plot:plots())if(plot.owner()!=null)
                 update("INSERT OR IGNORE INTO plot_leases(plot,lease) VALUES(?,?)",plot.id(),UUID.randomUUID());
         }
     }
+    public List<QuestPlan.Goal> questRotation(String week,List<QuestPlan.Goal> proposed)throws SQLException {
+        if(proposed.isEmpty() || proposed.stream().map(QuestPlan.Goal::id).distinct().count()!=proposed.size())throw new IllegalArgumentException("Quest IDs must be unique and rotation nonempty.");
+        return tx(()->{
+            update("INSERT OR IGNORE INTO quest_rotations VALUES(?,?)",week,QuestPlan.encode(proposed));
+            try(var p=db.prepareStatement("SELECT definitions FROM quest_rotations WHERE week=?")){
+                bind(p,week);try(var rows=p.executeQuery()){rows.next();return QuestPlan.decode(rows.getString(1));}
+            }
+        });
+    }
+    public synchronized int questProgress(UUID player,String week,String goal)throws SQLException {
+        try(var p=db.prepareStatement("SELECT progress FROM quest_progress WHERE uuid=? AND week=? AND goal=?")){
+            bind(p,player,week,goal);try(var rows=p.executeQuery()){return rows.next()?rows.getInt(1):0;}
+        }
+    }
+    public List<QuestPlan.Goal> progressQuests(UUID player,String week,String kind,String target,String unique,long now)throws SQLException {
+        // Load the authoritative snapshot, never accept caller-supplied payout amounts.
+        return tx(()->{
+            List<QuestPlan.Goal> goals;
+            try(var p=db.prepareStatement("SELECT definitions FROM quest_rotations WHERE week=?")){
+                bind(p,week);try(var rows=p.executeQuery()){if(!rows.next())throw new IllegalArgumentException("Unknown quest rotation");goals=QuestPlan.decode(rows.getString(1));}
+            }
+            if(!QuestPlan.week(now).id().equals(week))throw new IllegalArgumentException("Quest week has changed");
+            var completed=new ArrayList<QuestPlan.Goal>();
+            for(var g:goals){
+                if(!g.kind().equals(kind) || !(g.target().equals(target) || g.target().equals("ANY")))continue;
+                int before=questProgress(player,week,g.id());if(before>=g.amount())continue;
+                if(kind.equals("BIOME")){
+                    if(unique==null || unique.isBlank())throw new IllegalArgumentException("Missing biome identity");
+                    if(update("INSERT OR IGNORE INTO quest_visits VALUES(?,?,?,?)",player,week,g.id(),unique)==0)continue;
+                }
+                int after=before+1;
+                update("INSERT INTO quest_progress VALUES(?,?,?,?) ON CONFLICT(uuid,week,goal) DO UPDATE SET progress=excluded.progress",player,week,g.id(),after);
+                if(after==g.amount() && awardInternal(player,"quest:"+week+":"+g.id(),g.reward(),now))completed.add(g);
+            }
+            return completed;
+        });
+    }
+
     private synchronized <T> T tx(Work<T> work) throws SQLException {
         db.setAutoCommit(false);
         try { T result = work.run(); db.commit(); return result; }
