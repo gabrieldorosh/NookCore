@@ -95,7 +95,6 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
             rotation(System.currentTimeMillis());
             sender.sendMessage(Component.empty());sender.sendMessage(Component.text("NookQuests",NookUi.ACCENT).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD));
             for(var g:goals)if(g.reward()!=3000)sender.sendMessage(QuestUi.row(g,store.questProgress(player,week.id(),g.id())));
-            sender.sendMessage(Component.empty());
             for(var g:goals)if(g.reward()==3000)sender.sendMessage(QuestUi.row(g,store.questProgress(player,week.id(),g.id())));
             sender.sendMessage(Component.text("Resets "+NookUi.date(week.nextReset()),NookUi.MUTED));
         }catch(IllegalArgumentException e){sender.sendMessage(NookUi.error(e.getMessage()));}
