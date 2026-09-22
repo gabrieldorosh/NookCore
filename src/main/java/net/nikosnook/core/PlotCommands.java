@@ -1,0 +1,200 @@
+package net.nikosnook.core;
+
+
+
+import org.bukkit.Bukkit;
+
+import org.bukkit.command.*;
+
+import org.bukkit.entity.Player;
+
+import java.sql.SQLException;
+
+import java.util.*;
+
+import java.util.function.*;
+
+
+
+/** Commands stay disabled until explicitly enabled on staging with the protection bridge. */
+
+public final class PlotCommands implements CommandExecutor, TabCompleter {
+
+    private final NookStore store;
+
+    private final BooleanSupplier ready;
+
+    private final Runnable reconcile;
+
+    private final Consumer<Exception> failure;
+
+    private final Predicate<String> managed;
+
+    private final Runnable validate;
+
+    public PlotCommands(NookStore store,BooleanSupplier ready,Runnable reconcile,Consumer<Exception> failure,Predicate<String> managed,Runnable validate){this.store=store;this.ready=ready;this.reconcile=reconcile;this.failure=failure;this.managed=managed;this.validate=validate;}
+
+    static String role(String input){return input.equalsIgnoreCase("both")?"BUILD_STOCK":input.toUpperCase(Locale.ROOT);}
+
+    private UUID player(String text)throws SQLException {
+
+        UUID id;
+
+        try{id=UUID.fromString(text);}catch(IllegalArgumentException ex){return store.byName(text).orElseThrow(()->new IllegalArgumentException("Unknown or ambiguous player; use a known UUID.")).id();}
+
+        if(store.account(id).isEmpty())throw new IllegalArgumentException("That player has not joined this season.");return id;
+
+    }
+
+    @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
+
+        if(!ready.getAsBoolean()){sender.sendMessage("Plot rentals are not enabled, or are paused for a protection/storage check.");return true;}
+
+        if(!(sender instanceof Player p)){sender.sendMessage("Use the staff plot commands from console.");return true;}
+
+        try {
+
+            validate.run(); // No debit or membership mutation until live protection is verified.
+
+            long now=System.currentTimeMillis();UUID actor=p.getUniqueId();
+
+            if(args.length==0 || args.length==1 && args[0].equalsIgnoreCase("list")){
+
+                sender.sendMessage(NookUi.text("Shopping district plots"));
+
+                for(var plot:store.plots())if(managed.test(plot.id())){
+
+                    sender.sendMessage(NookUi.text("• ").append(NookUi.plot(store,plot)));
+
+                    for(var member:store.members(plot.id()).entrySet())if(!member.getKey().equals(plot.owner()))sender.sendMessage(NookUi.text("  Co-owner: ").append(NookUi.name(store,member.getKey())));
+
+                }
+
+                sender.sendMessage(NookUi.text("/nookplots help — commands and permissions"));return true;
+
+            }
+
+            if(args.length>1 && Set.of("rent","invite","role","remove","prepay","reopen").contains(args[0].toLowerCase(Locale.ROOT)) && !managed.test(args[1]))throw new IllegalArgumentException("That plot has no configured protection mapping.");
+
+            switch(args[0].toLowerCase(Locale.ROOT)){
+                case "leave" -> {
+                    if(args.length!=1)break;
+                    for(var plot:store.plots())if(managed.test(plot.id()) && !store.role(plot.id(),actor).equals("NONE")){
+                        store.leavePlot(plot.id(),actor,now);reconcile.run();sender.sendMessage(NookUi.text("You left "+plot.id()+". Your build and stock access has ended."));return true;
+                    }
+                    throw new IllegalArgumentException("You do not belong to a rented plot.");
+                }
+                case "rent" -> {if(args.length!=2)break;store.rent(args[1],actor,now);reconcile.run();sender.sendMessage("Rented "+args[1]+" for "+Money.format(store.plot(args[1]).weekly())+". Rent renews automatically while eligible; prepay up to four future weeks.");return true;}
+
+                case "invite" -> {
+
+                    if(args.length!=4)break;
+
+                    UUID member=player(args[2]);
+
+                    if(!store.role(args[1],member).equals("NONE")){store.changeRole(args[1],actor,member,role(args[3]),now);reconcile.run();sender.sendMessage(NookUi.text("Existing member's permissions updated to "+args[3].toLowerCase(Locale.ROOT)+". No new invitation needed."));return true;}
+
+                    var invite=store.invite(args[1],actor,member,role(args[3]),now);
+
+                    sender.sendMessage("Invitation sent; it expires in 24 hours and does not reserve membership.");
+
+                    Player target=Bukkit.getPlayer(invite.member());if(target!=null)showInvitation(target,invite);return true;
+
+                }
+
+                case "invitations" -> {
+
+                    if(args.length!=1)break;var invites=store.invitations(actor,now);
+
+                    if(invites.isEmpty())sender.sendMessage("No unexpired plot invitations.");
+
+                    for(var i:invites)showInvitation(sender,i);return true;
+
+                }
+
+                case "accept" -> {if(args.length>2)break;var invitation=resolveInvitation(actor,args.length==2?args[1]:"",now);if(!managed.test(invitation.plot()))throw new IllegalArgumentException("That plot has no configured protection mapping.");store.acceptInvitation(invitation.token(),actor,now);reconcile.run();sender.sendMessage(NookUi.text("Invitation accepted. You now co-own "+invitation.plot()+"."));return true;}
+
+                case "decline" -> {if(args.length>2)break;var invitation=resolveInvitation(actor,args.length==2?args[1]:"",now);store.declineInvitation(invitation.token(),actor,now);sender.sendMessage(NookUi.text("Invitation declined."));return true;}
+
+                case "role" -> {if(args.length!=4)break;store.changeRole(args[1],actor,player(args[2]),role(args[3]),now);reconcile.run();sender.sendMessage("Plot permissions updated.");return true;}
+
+                case "remove" -> {if(args.length!=3)break;store.removeMember(args[1],actor,player(args[2]),now);reconcile.run();sender.sendMessage("Member removed and any pending invitation withdrawn.");return true;}
+
+                case "prepay" -> {if(args.length!=3)break;store.prepay(args[1],actor,Integer.parseInt(args[2]),now);sender.sendMessage(NookUi.text("Rent prepaid · Paid until "+NookUi.date(store.plot(args[1]).paidUntil())+"."));return true;}
+
+                case "reopen" -> {if(args.length!=2)break;long charged=store.reopen(args[1],actor,now);sender.sendMessage("Shop reopened for "+Money.format(charged)+"; the original billing date is unchanged.");return true;}
+
+            }
+
+            NookUi.help(sender,"Plot commands","/nookplots leave — leave as a co-owner","/nookplots list — see prices, owners and availability","/nookplots rent <plot> — rent an available plot","/nookplots invite <plot> <player> <build|stock|both> — invite or update a member","/nookplots invitations — see your invitations","/nookplots accept [player] — accept; omit player if only one invitation","/nookplots decline [player] — decline an invitation","/nookplots role <plot> <player> <build|stock|both> — replace their permissions","/nookplots remove <plot> <player> — remove a member","/nookplots prepay <plot> <weeks> — pay ahead, up to four weeks","/nookplots reopen <plot> — pay remaining rent and resume sales");
+
+        }catch(IllegalArgumentException ex){sender.sendMessage(ex.getMessage());}
+
+        catch(Exception ex){failure.accept(ex);sender.sendMessage("Could not confirm the plot operation. Payments/protection are paused; contact staff before retrying.");}
+
+        return true;
+
+    }
+
+    NookStore.Invitation resolveInvitation(UUID actor,String selector,long now)throws SQLException {
+
+        var invitations=store.invitations(actor,now);
+
+        List<NookStore.Invitation> matches=new ArrayList<>();
+
+        for(var invite:invitations){String name=store.account(invite.inviter()).orElseThrow().name();if(selector.isEmpty() || name.equalsIgnoreCase(selector) || invite.token().toString().equalsIgnoreCase(selector))matches.add(invite);}
+
+        if(matches.isEmpty())throw new IllegalArgumentException(selector.isEmpty()?"You have no current plot invitations.":"No current invitation from that player. Try /nookplots invitations.");
+
+        if(matches.size()>1)throw new IllegalArgumentException("You have several invitations. Use /nookplots accept <player> to choose.");
+
+        return matches.getFirst();
+
+    }
+
+    private void showInvitation(CommandSender sender,NookStore.Invitation invite)throws SQLException {
+
+        String name=store.account(invite.inviter()).orElseThrow().name();
+
+        sender.sendMessage(NookUi.name(store,invite.inviter()).append(net.kyori.adventure.text.Component.text(" invited you to "+invite.plot()+" · "+(invite.role().equals("BUILD_STOCK")?"build and stock":invite.role().toLowerCase(Locale.ROOT))+" · expires in 24 hours or less.",net.kyori.adventure.text.format.NamedTextColor.GRAY)));
+
+        sender.sendMessage(NookUi.text("[Accept]").clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/nookplots accept "+invite.token())).append(net.kyori.adventure.text.Component.text("  /nookplots accept "+name,net.kyori.adventure.text.format.NamedTextColor.YELLOW)));
+
+        sender.sendMessage(net.kyori.adventure.text.Component.text("Joining uses your one-plot allowance. /nookplots decline "+name+" to decline.",net.kyori.adventure.text.format.NamedTextColor.GRAY));
+
+    }
+
+    @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args){
+
+        if(!ready.getAsBoolean() || !(sender instanceof Player player))return List.of();
+
+        try{
+
+            List<String> values=new ArrayList<>();String sub=args[0].toLowerCase(Locale.ROOT);
+
+            if(args.length==1)values.addAll(List.of("leave","list","help","rent","invite","invitations","accept","decline","role","remove","prepay","reopen"));
+
+            else if(args.length==2){
+
+                if(Set.of("accept","decline").contains(sub)){for(var i:store.invitations(player.getUniqueId(),System.currentTimeMillis()))values.add(store.account(i.inviter()).orElseThrow().name());}
+
+                else if(Set.of("rent","invite","role","remove","prepay","reopen").contains(sub)){for(var plot:store.plots())if(managed.test(plot.id()) && (sub.equals("rent")?plot.state().equals("AVAILABLE"):player.getUniqueId().equals(plot.owner())))values.add(plot.id());}
+
+            }else if(args.length==3){
+
+                if(sub.equals("invite")){for(var a:store.accounts())if(!a.id().equals(player.getUniqueId()))values.add(a.name());}
+
+                else if(Set.of("role","remove").contains(sub)){for(UUID member:store.members(args[1]).keySet())if(!member.equals(player.getUniqueId()))values.add(store.account(member).orElseThrow().name());}
+
+                else if(sub.equals("prepay"))values.addAll(List.of("1","2","3","4"));
+
+            }else if(args.length==4 && Set.of("invite","role").contains(sub))values.addAll(List.of("build","stock","both"));
+
+            return NookUi.complete(args[args.length-1],values);
+
+        }catch(SQLException e){failure.accept(e);return List.of();}
+
+    }
+
+}
+

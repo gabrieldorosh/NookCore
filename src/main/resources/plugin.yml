@@ -1,0 +1,34 @@
+name: NookCore
+version: 0.1.0-SNAPSHOT
+main: net.nikosnook.core.NookCorePlugin
+api-version: '26.2'
+description: Niko's Nook season-two economy foundation
+author: NikosNook
+softdepend: [Vault, WorldGuard, WorldEdit, PlaceholderAPI]
+loadbefore: [ChestShop]
+commands:
+  nookchat:
+    description: Set your chat name colour and pronouns
+    usage: /nookchat
+  nookplots:
+    description: Plot rentals, invitations, permissions and rent payments
+    usage: /nookplots
+  nooks:
+    description: Balance, transfers and transaction history
+    usage: /nooks [pay <player> <amount>|history]
+  nookadmin:
+    description: Audited economy administration
+    permission: nookcore.admin
+    usage: /nookadmin <balance|give|take|backup|awards> ...
+permissions:
+  nookcore.chat.rank.admin:
+    default: false
+  nookcore.chat.rank.helper:
+    default: false
+  nookcore.chat.rank.supporter:
+    default: false
+  nookcore.admin:
+    default: op
+  nookcore.travel.bypass:
+    description: Owner/admin moderation travel only; never grant to helpers
+    default: op

@@ -1,0 +1,151 @@
+# STAGING DEFAULTS. Values below are integer hundredths of a Nook.
+joining-bonus-cents: 6000
+advancement-rewards-enabled: true
+vault-enabled: true
+chat:
+  enabled: true
+  pronoun-options: [he/him, she/her, they/them, he/they, she/they, they/he, they/she, it/its, any, ask]
+  # Leave blank until the real rank pack is prepared. Must match its delivered pack UUID.
+  rank-images:
+    pack-id: ""
+    font: minecraft:default
+    glyphs: {}
+rental-commands-enabled: false
+# Staging-only: requires plot DB records and matching WorldGuard regions.
+shop-gate:
+  enabled: false
+  world-uuid: ""
+  deny-message: "&bNiko's Nook &8» &fThis spot is protected. Rent a plot or ask its owner for access."
+  district-region: nook_district
+  plot-regions: {}
+travel:
+  lock-nether: true
+  lock-end: true
+  block-command-teleports: true
+advancement-rewards:
+  "minecraft:adventure/adventuring_time": 4500
+  "minecraft:adventure/arbalistic": 1800
+  "minecraft:adventure/avoid_vibration": 450
+  "minecraft:adventure/blowback": 600
+  "minecraft:adventure/brush_armadillo": 150
+  "minecraft:adventure/bullseye": 600
+  "minecraft:adventure/craft_decorated_pot_using_only_sherds": 300
+  "minecraft:adventure/crafters_crafting_crafters": 300
+  "minecraft:adventure/fall_from_world_height": 600
+  "minecraft:adventure/heart_transplanter": 300
+  "minecraft:adventure/hero_of_the_village": 750
+  "minecraft:adventure/honey_block_slide": 150
+  "minecraft:adventure/kill_a_mob": 75
+  "minecraft:adventure/kill_all_mobs": 3500
+  "minecraft:adventure/kill_mob_near_sculk_catalyst": 300
+  "minecraft:adventure/lighten_up": 150
+  "minecraft:adventure/lightning_rod_with_villager_no_fire": 450
+  "minecraft:adventure/minecraft_trials_edition": 600
+  "minecraft:adventure/ol_betsy": 125
+  "minecraft:adventure/overoverkill": 1500
+  "minecraft:adventure/play_jukebox_in_meadows": 450
+  "minecraft:adventure/read_power_of_chiseled_bookshelf": 150
+  "minecraft:adventure/revaulting": 900
+  "minecraft:adventure/root": 50
+  "minecraft:adventure/salvage_sherd": 300
+  "minecraft:adventure/shoot_arrow": 125
+  "minecraft:adventure/sleep_in_bed": 75
+  "minecraft:adventure/sniper_duel": 600
+  "minecraft:adventure/spear_many_mobs": 600
+  "minecraft:adventure/spyglass_at_dragon": 150
+  "minecraft:adventure/spyglass_at_ghast": 150
+  "minecraft:adventure/spyglass_at_parrot": 150
+  "minecraft:adventure/summon_iron_golem": 300
+  "minecraft:adventure/throw_trident": 300
+  "minecraft:adventure/totem_of_undying": 375
+  "minecraft:adventure/trade": 75
+  "minecraft:adventure/trade_at_world_height": 600
+  "minecraft:adventure/trim_with_all_exclusive_armor_patterns": 4000
+  "minecraft:adventure/trim_with_any_armor_pattern": 225
+  "minecraft:adventure/two_birds_one_arrow": 600
+  "minecraft:adventure/under_lock_and_key": 450
+  "minecraft:adventure/use_lodestone": 150
+  "minecraft:adventure/very_very_frightening": 450
+  "minecraft:adventure/voluntary_exile": 150
+  "minecraft:adventure/walk_on_powder_snow_with_leather_boots": 150
+  "minecraft:adventure/who_needs_rockets": 300
+  "minecraft:adventure/whos_the_pillager_now": 300
+  "minecraft:end/dragon_breath": 300
+  "minecraft:end/dragon_egg": 3000
+  "minecraft:end/elytra": 1500
+  "minecraft:end/enter_end_gateway": 450
+  "minecraft:end/find_end_city": 900
+  "minecraft:end/kill_dragon": 2500
+  "minecraft:end/levitate": 1200
+  "minecraft:end/respawn_dragon": 2000
+  "minecraft:end/root": 150
+  "minecraft:husbandry/allay_deliver_cake_to_note_block": 450
+  "minecraft:husbandry/allay_deliver_item_to_player": 450
+  "minecraft:husbandry/axolotl_in_a_bucket": 300
+  "minecraft:husbandry/balanced_diet": 2500
+  "minecraft:husbandry/bred_all_animals": 3500
+  "minecraft:husbandry/breed_an_animal": 150
+  "minecraft:husbandry/complete_catalogue": 2000
+  "minecraft:husbandry/feed_snifflet": 300
+  "minecraft:husbandry/fishy_business": 125
+  "minecraft:husbandry/froglights": 1200
+  "minecraft:husbandry/kill_axolotl_target": 450
+  "minecraft:husbandry/leash_all_frog_variants": 750
+  "minecraft:husbandry/make_a_sign_glow": 75
+  "minecraft:husbandry/obtain_netherite_hoe": 1200
+  "minecraft:husbandry/obtain_sniffer_egg": 750
+  "minecraft:husbandry/place_dried_ghast_in_water": 450
+  "minecraft:husbandry/plant_any_sniffer_seed": 300
+  "minecraft:husbandry/plant_seed": 75
+  "minecraft:husbandry/remove_wolf_armor": 150
+  "minecraft:husbandry/repair_wolf_armor": 150
+  "minecraft:husbandry/ride_a_boat_with_a_goat": 300
+  "minecraft:husbandry/root": 50
+  "minecraft:husbandry/safely_harvest_honey": 150
+  "minecraft:husbandry/silk_touch_nest": 300
+  "minecraft:husbandry/tactical_fishing": 125
+  "minecraft:husbandry/tadpole_in_a_bucket": 225
+  "minecraft:husbandry/tame_an_animal": 150
+  "minecraft:husbandry/uh_oh": 300
+  "minecraft:husbandry/wax_off": 75
+  "minecraft:husbandry/wax_on": 75
+  "minecraft:husbandry/whole_pack": 2000
+  "minecraft:nether/all_effects": 9000
+  "minecraft:nether/all_potions": 3000
+  "minecraft:nether/brew_potion": 300
+  "minecraft:nether/charge_respawn_anchor": 300
+  "minecraft:nether/create_beacon": 750
+  "minecraft:nether/create_full_beacon": 1500
+  "minecraft:nether/distract_piglin": 150
+  "minecraft:nether/explore_nether": 1500
+  "minecraft:nether/fast_travel": 900
+  "minecraft:nether/find_bastion": 750
+  "minecraft:nether/find_fortress": 750
+  "minecraft:nether/get_wither_skull": 300
+  "minecraft:nether/loot_bastion": 450
+  "minecraft:nether/netherite_armor": 2500
+  "minecraft:nether/obtain_ancient_debris": 300
+  "minecraft:nether/obtain_blaze_rod": 225
+  "minecraft:nether/obtain_crying_obsidian": 125
+  "minecraft:nether/return_to_sender": 450
+  "minecraft:nether/ride_strider": 450
+  "minecraft:nether/ride_strider_in_overworld_lava": 900
+  "minecraft:nether/root": 150
+  "minecraft:nether/summon_wither": 900
+  "minecraft:nether/uneasy_alliance": 2000
+  "minecraft:story/cure_zombie_villager": 600
+  "minecraft:story/deflect_arrow": 150
+  "minecraft:story/enchant_item": 450
+  "minecraft:story/enter_the_end": 750
+  "minecraft:story/enter_the_nether": 600
+  "minecraft:story/follow_ender_eye": 750
+  "minecraft:story/form_obsidian": 150
+  "minecraft:story/iron_tools": 125
+  "minecraft:story/lava_bucket": 125
+  "minecraft:story/mine_diamond": 225
+  "minecraft:story/mine_stone": 50
+  "minecraft:story/obtain_armor": 125
+  "minecraft:story/root": 50
+  "minecraft:story/shiny_gear": 450
+  "minecraft:story/smelt_iron": 75
+  "minecraft:story/upgrade_tools": 75
