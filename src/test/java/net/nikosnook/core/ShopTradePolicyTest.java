@@ -66,4 +66,14 @@ class ShopTradePolicyTest {
         store.confirmCleared("small","staff","archive/one",late);
         assertThrows(IllegalArgumentException.class,()->policy.check(List.of("small","small"),owner,late));
     }
+
+    @Test void abandonedShopExplainsClearanceInsteadOfRequestingRent()throws Exception {
+        store.abandon(store.abandonmentQuote("small",owner,now),owner,now);
+        var error=assertThrows(IllegalArgumentException.class,()->policy.check(List.of("small","small"),owner,now));
+        assertEquals("This shop is closed and awaiting staff clearance.",error.getMessage());
+    }
+    @Test void availableShopExplainsMissingRental(){
+        var error=assertThrows(IllegalArgumentException.class,()->policy.check(List.of("other","other"),owner,now));
+        assertEquals("This plot is not currently rented.",error.getMessage());
+    }
 }

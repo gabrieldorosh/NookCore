@@ -15,7 +15,7 @@ rental-commands-enabled: false
 shop-gate:
   enabled: false
   world-uuid: ""
-  deny-message: "&bNiko's Nook &8» &fThis spot is protected. Rent a plot or ask its owner for access."
+  deny-message: "&bNiko's Nook &8» &fThe shopping district is protected. Build in a plot you have access to, or ask staff for help."
   district-region: nook_district
   plot-regions: {}
 travel:

@@ -12,7 +12,9 @@ public final class NookStore implements AutoCloseable {
     public record Account(UUID id, String name, long cents, long seen) {}
     public record Plot(String id, long weekly, UUID owner, long paidUntil, String state) {}
     public record Entry(long id, long time, long delta, String kind, String reference) {}
-    public record Invitation(UUID token, String plot, UUID inviter, UUID member, String role, long expires) {}
+    public record Invitation(UUID token, String plot, UUID inviter, UUID member, String role, long expires) {}
+
+    public record AbandonmentQuote(String plot, UUID owner, UUID lease, long paidUntil, long weekly, String state, long refund) {}
     public static final long INVITATION_LIFETIME = Duration.ofDays(1).toMillis();
     @FunctionalInterface private interface Work<T> { T run() throws SQLException; }
 
@@ -33,7 +35,13 @@ public final class NookStore implements AutoCloseable {
             s.execute("CREATE TABLE IF NOT EXISTS members (uuid TEXT PRIMARY KEY REFERENCES accounts(uuid), plot TEXT NOT NULL REFERENCES plots(id), role TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS plot_events (id INTEGER PRIMARY KEY AUTOINCREMENT, time INTEGER NOT NULL, plot TEXT NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS plot_invitations (token TEXT PRIMARY KEY, plot TEXT NOT NULL REFERENCES plots(id), inviter TEXT NOT NULL REFERENCES accounts(uuid), member TEXT NOT NULL REFERENCES accounts(uuid), role TEXT NOT NULL CHECK(role IN ('BUILD','STOCK','BUILD_STOCK')), expires INTEGER NOT NULL, UNIQUE(plot,member))");
-            s.execute("CREATE TABLE IF NOT EXISTS plot_absences (plot TEXT PRIMARY KEY REFERENCES plots(id), expires INTEGER NOT NULL)");
+            s.execute("CREATE TABLE IF NOT EXISTS plot_absences (plot TEXT PRIMARY KEY REFERENCES plots(id), expires INTEGER NOT NULL)");
+
+            s.execute("CREATE TABLE IF NOT EXISTS plot_leases (plot TEXT PRIMARY KEY REFERENCES plots(id), lease TEXT NOT NULL UNIQUE)");
+            s.execute("CREATE TABLE IF NOT EXISTS plot_abandonments (lease TEXT PRIMARY KEY, plot TEXT NOT NULL REFERENCES plots(id), owner TEXT NOT NULL REFERENCES accounts(uuid), time INTEGER NOT NULL, refund INTEGER NOT NULL)");
+            // Give existing leases an identity once; a new rental always replaces it.
+            for(Plot plot:plots())if(plot.owner()!=null)
+                update("INSERT OR IGNORE INTO plot_leases(plot,lease) VALUES(?,?)",plot.id(),UUID.randomUUID());
         }
     }
     private synchronized <T> T tx(Work<T> work) throws SQLException {
@@ -136,7 +144,9 @@ public final class NookStore implements AutoCloseable {
             requireNoMembership(actor);
             update("INSERT INTO members(uuid,plot,role) VALUES(?,?,'OWNER')",actor,id);
             mutate(actor,-p.weekly(),"rent",id,now);
-            update("UPDATE plots SET owner=?,paid_until=?,state='ACTIVE' WHERE id=?",actor,Math.addExact(now,WEEK),id);
+            update("UPDATE plots SET owner=?,paid_until=?,state='ACTIVE' WHERE id=?",actor,Math.addExact(now,WEEK),id);
+
+            update("INSERT INTO plot_leases(plot,lease) VALUES(?,?) ON CONFLICT(plot) DO UPDATE SET lease=excluded.lease",id,UUID.randomUUID());
             event(id,"RENT",actor.toString(),now);return null;
         });
     }
@@ -201,10 +211,47 @@ public final class NookStore implements AutoCloseable {
     }
     public void leavePlot(String id,UUID actor,long now)throws SQLException {
         tx(()->{Plot p=plot(id);
-            if(actor.equals(p.owner()))throw new IllegalArgumentException("You are the renter. Contact staff to close the lease and arrange collection of your shop belongings.");
+            if(actor.equals(p.owner()))throw new IllegalArgumentException("You are the renter. Use /nookplots abandon "+id+" to review closure and any prepaid-week refund.");
             if(update("DELETE FROM members WHERE uuid=? AND plot=?",actor,id)!=1)throw new IllegalArgumentException("You do not belong to this plot.");
             update("DELETE FROM plot_invitations WHERE member=? AND plot=?",actor,id);
             event(id,"LEAVE",actor.toString(),now);return null;});
+    }
+    public synchronized AbandonmentQuote abandonmentQuote(String id,UUID actor,long now)throws SQLException {
+        Plot p=plot(id);owner(p,actor);
+        if(!role(id,actor).equals("OWNER") || p.state().equals("AVAILABLE"))
+            throw new IllegalArgumentException("That lease has already ended. Contact staff to collect your belongings.");
+        UUID lease;
+        try(PreparedStatement query=db.prepareStatement("SELECT lease FROM plot_leases WHERE plot=?")){
+            bind(query,id);try(ResultSet result=query.executeQuery()){
+                if(!result.next())throw new SQLException("Missing lease identity for "+id);
+                lease=UUID.fromString(result.getString(1));
+            }
+        }
+        // At an exact rental anniversary the new current week has begun: no refund for it.
+        long remaining=Math.max(0,p.paidUntil()-now);
+        long weeks=p.state().equals("ACTIVE") && remaining>0?(remaining-1)/WEEK:0;
+        return new AbandonmentQuote(id,actor,lease,p.paidUntil(),p.weekly(),p.state(),Math.multiplyExact(weeks,p.weekly()));
+    }
+    public long abandon(AbandonmentQuote expected,UUID actor,long now)throws SQLException {
+        return tx(()->{
+            AbandonmentQuote current=abandonmentQuote(expected.plot(),actor,now);
+            if(!current.equals(expected))throw new IllegalArgumentException("The lease or refund changed. Review /nookplots abandon "+expected.plot()+" again before confirming.");
+            // Refund, audit, membership removal and closure commit together, or not at all.
+            if(current.refund()>0)mutate(actor,current.refund(),"rent-refund",current.plot()+" lease="+current.lease(),now);
+            update("INSERT INTO plot_abandonments(lease,plot,owner,time,refund) VALUES(?,?,?,?,?)",current.lease(),current.plot(),actor,now,current.refund());
+            event(current.plot(),"ABANDON",actor+" lease="+current.lease()+" refund="+current.refund()+" members="+members(current.plot()),now);
+            update("DELETE FROM plot_invitations WHERE plot=?",current.plot());
+            update("DELETE FROM plot_absences WHERE plot=?",current.plot());
+            update("DELETE FROM members WHERE plot=?",current.plot());
+            // Keep the former renter for collection/audit, but remove their direct access.
+            update("UPDATE plots SET state='RECLAIM',paid_until=? WHERE id=?",now,current.plot());
+            return current.refund();
+        });
+    }
+    public synchronized boolean abandoned(String id)throws SQLException {
+        try(PreparedStatement query=db.prepareStatement("SELECT 1 FROM plot_abandonments a JOIN plot_leases l ON a.lease=l.lease WHERE l.plot=?")){
+            bind(query,id);try(ResultSet result=query.executeQuery()){return result.next();}
+        }
     }
     public void removeMember(String id,UUID actor,UUID member,long now)throws SQLException {
         tx(()->{Plot p=plot(id);owner(p,actor);if(actor.equals(member))throw new IllegalArgumentException("Owner cannot leave without staff-assisted closure.");

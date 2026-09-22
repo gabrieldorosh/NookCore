@@ -56,8 +56,8 @@ public final class ChestShopRentalGate implements Listener {
             for(String location:locations)if(!permissions.allowed(location,event.getPlayer().getUniqueId(),PlotPermissions.Action.ALTER_CONTAINER))
                 throw new IllegalArgumentException("Creating a plot shop requires BUILD and STOCK permissions.");
             policy.check(locations,event.getOwnerAccount()==null?null:event.getOwnerAccount().getUuid(),System.currentTimeMillis());
-        }catch(IllegalArgumentException ex){event.setCancelled(true);event.getPlayer().sendMessage(ex.getMessage());}
-        catch(Exception ex){event.setCancelled(true);failure.accept(ex);event.getPlayer().sendMessage("Shop creation is paused; contact staff.");}
+        }catch(IllegalArgumentException ex){event.setCancelled(true);event.getPlayer().sendMessage(NookUi.error(ex.getMessage()));}
+        catch(Exception ex){event.setCancelled(true);failure.accept(ex);event.getPlayer().sendMessage(NookUi.text("Shop creation is paused; contact staff."));}
     }
     @EventHandler(priority=EventPriority.HIGHEST)
     public void stockAccess(ProtectionCheckEvent event){
@@ -86,12 +86,12 @@ public final class ChestShopRentalGate implements Listener {
         var loaded=Objects.requireNonNull(Bukkit.getWorld(world));
         regionAt(new Location(loaded,0,0,0));
         var manager=WorldGuard.getInstance().getPlatform().getRegionContainer().get(BukkitAdapter.adapt(loaded));
-        Objects.requireNonNull(manager.getRegion(district)).setFlag(Flags.DENY_MESSAGE,plugin.getConfig().getString("shop-gate.deny-message","&bNiko's Nook &8» &fThis spot is protected. Rent a plot or ask its owner for access."));
+        Objects.requireNonNull(manager.getRegion(district)).setFlag(Flags.DENY_MESSAGE,plugin.getConfig().getString("shop-gate.deny-message","&bNiko's Nook &8» &fThe shopping district is protected. Build in a plot you have access to, or ask staff for help."));
         for(var entry:regions.entrySet()) {
             var region=Objects.requireNonNull(manager.getRegion(entry.getKey()));
             var lease=store.plot(entry.getValue());
             DefaultDomain owners=new DefaultDomain(),members=new DefaultDomain();
-            if(lease.owner()!=null)owners.addPlayer(lease.owner());
+            if(lease.owner()!=null && store.role(entry.getValue(),lease.owner()).equals("OWNER"))owners.addPlayer(lease.owner());
             for(var member:store.members(entry.getValue()).entrySet())
                 if(!member.getKey().equals(lease.owner()))members.addPlayer(member.getKey());
             region.setOwners(owners);region.setMembers(members);
@@ -154,9 +154,9 @@ public final class ChestShopRentalGate implements Listener {
             containers(event.getOwnerInventory().getHolder(),locations);
             policy.checkCustomer(locations,event.getOwnerAccount()==null?null:event.getOwnerAccount().getUuid(),event.getClient().getUniqueId(),System.currentTimeMillis());
         }catch(IllegalArgumentException ex) {
-            event.setCancelled(true);event.getClient().sendMessage(ex.getMessage());
+            event.setCancelled(true);event.getClient().sendMessage(NookUi.error(ex.getMessage()));
         }catch(Exception ex) {
-            event.setCancelled(true);failure.accept(ex);event.getClient().sendMessage("Shop payments are paused; contact staff.");
+            event.setCancelled(true);failure.accept(ex);event.getClient().sendMessage(NookUi.text("Shop payments are paused; contact staff."));
         }
     }
 }
