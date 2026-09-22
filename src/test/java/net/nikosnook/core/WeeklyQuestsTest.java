@@ -62,4 +62,12 @@ class WeeklyQuestsTest {
         assertEquals(1,store.questProgress(id,week,"one"));store.adjust(id,-1500,"staff","space",now);
         assertEquals(List.of(goal),store.progressQuests(id,week,"KILL","SKELETON",null,now));assertEquals(Money.MAX,store.account(id).orElseThrow().cents());
     }
+
+    @Test void progressNotificationsReflectOnlyCommittedChanges()throws Exception{
+        var first=store.advanceQuests(id,week,"KILL","SKELETON",null,now);
+        assertEquals(List.of(new NookStore.QuestUpdate(goal,1,false)),first);
+        assertTrue(store.advanceQuests(id,week,"KILL","ZOMBIE",null,now).isEmpty());
+        assertEquals(List.of(new NookStore.QuestUpdate(goal,2,true)),store.advanceQuests(id,week,"KILL","SKELETON",null,now));
+        assertTrue(store.advanceQuests(id,week,"KILL","SKELETON",null,now).isEmpty());
+    }
 }

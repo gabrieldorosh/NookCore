@@ -61,7 +61,11 @@ public final class NookStore implements AutoCloseable {
             bind(p,player,week,goal);try(var rows=p.executeQuery()){return rows.next()?rows.getInt(1):0;}
         }
     }
+    public record QuestUpdate(QuestPlan.Goal goal,int progress,boolean paid) {}
     public List<QuestPlan.Goal> progressQuests(UUID player,String week,String kind,String target,String unique,long now)throws SQLException {
+        return advanceQuests(player,week,kind,target,unique,now).stream().filter(QuestUpdate::paid).map(QuestUpdate::goal).toList();
+    }
+    public List<QuestUpdate> advanceQuests(UUID player,String week,String kind,String target,String unique,long now)throws SQLException {
         // Load the authoritative snapshot, never accept caller-supplied payout amounts.
         return tx(()->{
             List<QuestPlan.Goal> goals;
@@ -69,7 +73,7 @@ public final class NookStore implements AutoCloseable {
                 bind(p,week);try(var rows=p.executeQuery()){if(!rows.next())throw new IllegalArgumentException("Unknown quest rotation");goals=QuestPlan.decode(rows.getString(1));}
             }
             if(!QuestPlan.week(now).id().equals(week))throw new IllegalArgumentException("Quest week has changed");
-            var completed=new ArrayList<QuestPlan.Goal>();
+            var updates=new ArrayList<QuestUpdate>();
             for(var g:goals){
                 if(!g.kind().equals(kind) || !(g.target().equals(target) || g.target().equals("ANY")))continue;
                 int before=questProgress(player,week,g.id());if(before>=g.amount())continue;
@@ -79,9 +83,10 @@ public final class NookStore implements AutoCloseable {
                 }
                 int after=before+1;
                 update("INSERT INTO quest_progress VALUES(?,?,?,?) ON CONFLICT(uuid,week,goal) DO UPDATE SET progress=excluded.progress",player,week,g.id(),after);
-                if(after==g.amount() && awardInternal(player,"quest:"+week+":"+g.id(),g.reward(),now))completed.add(g);
+                boolean paid=after==g.amount() && awardInternal(player,"quest:"+week+":"+g.id(),g.reward(),now);
+                updates.add(new QuestUpdate(g,after,paid));
             }
-            return completed;
+            return updates;
         });
     }
 

@@ -64,8 +64,8 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         if(!eligible(p))return;
         try{
             long now=System.currentTimeMillis();rotation(now);
-            for(var goal:store.progressQuests(p.getUniqueId(),week.id(),kind,target,unique,now))
-                p.sendMessage(Component.text("NookQuests » ",NookUi.ACCENT).append(NookUi.text(goal.title()+" complete · +"+Money.format(goal.reward()))));
+            for(var update:store.advanceQuests(p.getUniqueId(),week.id(),kind,target,unique,now))
+                p.sendMessage(QuestUi.progress(update));
         }catch(Exception e){failure.accept(e);}
     }
     @EventHandler public void death(EntityDeathEvent event){
@@ -93,10 +93,11 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
                 if(sender.hasPermission("nookcore.admin"))NookUi.help(sender,"Staff","/nookquests inspect <player> — view progress without changing it");return true;
             }
             rotation(System.currentTimeMillis());
-            sender.sendMessage(Component.empty());sender.sendMessage(Component.text("NookQuests · "+week.id(),NookUi.ACCENT));
-            for(var g:goals){int n=store.questProgress(player,week.id(),g.id());sender.sendMessage(NookUi.text((n==g.amount()?"✓ ":"• ")+(g.reward()==3000?"Challenge · ":"")+g.title()+" · "+n+"/"+g.amount()+" · "+Money.format(g.reward())+(n==g.amount()?" paid":"")));}
-            sender.sendMessage(Component.text("Resets "+NookUi.date(week.nextReset())+" · Overworld survival only",NookUi.MUTED));
-            sender.sendMessage(Component.text("Fish count when caught or killed. Biomes count once each. Rewards are automatic.",NookUi.MUTED));
+            sender.sendMessage(Component.empty());sender.sendMessage(Component.text("NookQuests",NookUi.ACCENT).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD));
+            for(var g:goals)if(g.reward()!=3000)sender.sendMessage(QuestUi.row(g,store.questProgress(player,week.id(),g.id())));
+            sender.sendMessage(Component.empty());
+            for(var g:goals)if(g.reward()==3000)sender.sendMessage(QuestUi.row(g,store.questProgress(player,week.id(),g.id())));
+            sender.sendMessage(Component.text("Resets "+NookUi.date(week.nextReset()),NookUi.MUTED));
         }catch(IllegalArgumentException e){sender.sendMessage(NookUi.error(e.getMessage()));}
         catch(Exception e){failure.accept(e);sender.sendMessage(NookUi.error("Could not read quests; please contact staff."));}
         return true;
