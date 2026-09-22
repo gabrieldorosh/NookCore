@@ -143,7 +143,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
                 }
                 if(args.length>=3 && args[0].equalsIgnoreCase("plotclear")){
                     if(!rentalsReady() || !plotGate.manages(args[1]))throw new IllegalArgumentException("A working configured rental bridge is required.");
-                    store.confirmCleared(args[1],sender.getName(),String.join(" ",Arrays.copyOfRange(args,2,args.length)),now);reconcilePlots();sender.sendMessage(NookUi.text("Recorded archive reference and released plot. This command did not pack items or clear world blocks."));return true;
+                    store.confirmCleared(args[1],sender.getName(),String.join(" ",Arrays.copyOfRange(args,2,args.length)),now);reconcilePlots();sender.sendMessage(NookUi.text("Plot is now available to rent. Your belongings-storage note was recorded; this command did not move items or clear blocks."));return true;
                 }
                 if(args.length==1 && args[0].equalsIgnoreCase("backup")){
                     Path folder=getDataFolder().toPath().resolve("backups");Files.createDirectories(folder);Path file=folder.resolve("nooks-"+now+".db");store.backup(file);sender.sendMessage(NookUi.text("Consistent economy backup saved: "+file.getFileName()));return true;
@@ -153,7 +153,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
                 }
                 if(args.length==2 && args[0].equalsIgnoreCase("balance")){var a=resolve(args[1]);sender.sendMessage(NookUi.name(a.id(),a.name()).append(NookUi.text(": "+Money.format(a.cents()))));return true;}
                 if(args.length>=4 && Set.of("give","take").contains(args[0].toLowerCase(Locale.ROOT))){var a=resolve(args[1]);long value=Money.parse(args[2]);if(args[0].equalsIgnoreCase("take"))value=-value;String reason=String.join(" ",Arrays.copyOfRange(args,3,args.length));store.adjust(a.id(),value,sender.getName(),reason,now);sender.sendMessage(NookUi.text("Recorded adjustment for ").append(NookUi.name(a.id(),a.name())).append(NookUi.text(": "+Money.format(value))));return true;}
-                NookUi.help(sender,"Staff commands","/nookadmin balance <player> — inspect a balance","/nookadmin give <player> <amount> <reason> — credit Nooks","/nookadmin take <player> <amount> <reason> — debit Nooks","/nookadmin backup — save an economy snapshot","/nookadmin awards <on|off> — toggle advancement payments","/nookadmin plotdefine <id> <weekly-price> — create a plot record","/nookadmin plotclear <id> <archive-reference> — release an archived, cleared plot","/nookadmin plotabsence <id> <days|off> <reason> — record an absence");return true;
+                NookUi.help(sender,"Staff commands","/nookadmin balance <player> — inspect a balance","/nookadmin give <player> <amount> <reason> — credit Nooks","/nookadmin take <player> <amount> <reason> — debit Nooks","/nookadmin backup — save an economy snapshot","/nookadmin awards <on|off> — toggle advancement payments","/nookadmin plotdefine <id> <weekly-price> — create a plot record","/nookadmin plotclear <id> <storage-note> — release a cleared plot; record where belongings are stored","/nookadmin plotabsence <id> <days|off> <reason> — record an absence");return true;
             }
             if(!(sender instanceof Player p)){sender.sendMessage(NookUi.text("Use /nookadmin balance <player> from console."));return true;}
             CommandSyntax.check("nooks",args);

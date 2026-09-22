@@ -38,7 +38,7 @@ final class CommandSyntax {
             Map.entry("backup",exact(1,"/nookadmin backup","Backup does not take any extra words.")),
             Map.entry("awards",exact(2,"/nookadmin awards <on|off>","Choose on or off.")),
             Map.entry("plotdefine",exact(3,"/nookadmin plotdefine <id> <weekly-price>","Enter a plot ID and weekly rent.")),
-            Map.entry("plotclear",new Shape(3,Integer.MAX_VALUE,"/nookadmin plotclear <plot> <archive-reference>","Enter a plot and the collection archive reference after saving and clearing belongings.")),
+            Map.entry("plotclear",new Shape(3,Integer.MAX_VALUE,"/nookadmin plotclear <plot> <storage-note>","This makes a cleared plot available to rent again; it does not clear blocks. First store the former renter's belongings, then describe where they are kept (for example: staff storage, chest A3).")),
             Map.entry("plotabsence",new Shape(4,Integer.MAX_VALUE,"/nookadmin plotabsence <plot> <days|off> <reason>","Enter a plot, absence duration and an audit reason.")))
     );
     static void check(String command,String[] args){
