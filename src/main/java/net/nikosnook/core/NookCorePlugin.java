@@ -18,8 +18,11 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     private boolean healthy=true, awardsEnabled;
     private ChestShopRentalGate plotGate;
     private NookChat chat;
+    private AdminTeleports adminTeleports;
     @Override public void onEnable(){
         saveDefaultConfig();
+        adminTeleports=new AdminTeleports(Bukkit::getPlayerExact,message->getLogger().info(message));
+        getServer().getPluginManager().registerEvents(adminTeleports,this);
         try {
             Files.createDirectories(getDataFolder().toPath());
             store=new NookStore(getDataFolder().toPath().resolve("nooks.db"));
@@ -115,7 +118,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void teleport(PlayerTeleportEvent e){
-        if(e.getTo()==null || e.getPlayer().hasPermission("nookcore.travel.bypass"))return;
+        if(e.getTo()==null || adminTeleports.consume(e) || e.getPlayer().hasPermission("nookcore.travel.bypass"))return;
         World.Environment env=e.getTo().getWorld().getEnvironment();
         if((env==World.Environment.NETHER && getConfig().getBoolean("travel.lock-nether",true)) || (env==World.Environment.THE_END && getConfig().getBoolean("travel.lock-end",true))){e.setCancelled(true);e.getPlayer().sendMessage(NookUi.text("That dimension has not opened yet."));return;}
         if(getConfig().getBoolean("travel.block-command-teleports",true) && (e.getCause()==PlayerTeleportEvent.TeleportCause.COMMAND || e.getCause()==PlayerTeleportEvent.TeleportCause.PLUGIN)){
@@ -127,6 +130,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         catch(IllegalArgumentException e){return store.byName(input).orElseThrow(()->new IllegalArgumentException("Player must have joined this season. Use their current name or UUID."));}
     }
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
+        if(command.getName().equals("nookadmin") && args.length>0 && args[0].equalsIgnoreCase("teleport")){adminTeleports.execute(sender,args);return true;}
         if(!healthy){sender.sendMessage(NookUi.text("The economy is paused. Please contact an admin."));return true;}
         try{
             long now=System.currentTimeMillis();
@@ -154,7 +158,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
                 }
                 if(args.length==2 && args[0].equalsIgnoreCase("balance")){var a=resolve(args[1]);sender.sendMessage(NookUi.name(a.id(),a.name()).append(NookUi.text(": "+Money.format(a.cents()))));return true;}
                 if(args.length>=4 && Set.of("give","take").contains(args[0].toLowerCase(Locale.ROOT))){var a=resolve(args[1]);long value=Money.parse(args[2]);if(args[0].equalsIgnoreCase("take"))value=-value;String reason=String.join(" ",Arrays.copyOfRange(args,3,args.length));store.adjust(a.id(),value,sender.getName(),reason,now);sender.sendMessage(NookUi.text("Recorded adjustment for ").append(NookUi.name(a.id(),a.name())).append(NookUi.text(": "+Money.format(value))));return true;}
-                NookUi.help(sender,"Staff commands","/nookadmin balance <player> — inspect a balance","/nookadmin give <player> <amount> <reason> — credit Nooks","/nookadmin take <player> <amount> <reason> — debit Nooks","/nookadmin backup — save an economy snapshot","/nookadmin awards <on|off> — toggle advancement payments","/nookadmin plotdefine <id> <weekly-price> — create a plot record","/nookadmin plotclear <id> <storage-note> — release a cleared plot; record where belongings are stored","/nookadmin plotabsence <id> <days|off> <reason> — record an absence");return true;
+                NookUi.help(sender,"Staff commands","/nookadmin teleport <player> <destination-player> — moderation teleport between online players","/nookadmin balance <player> — inspect a balance","/nookadmin give <player> <amount> <reason> — credit Nooks","/nookadmin take <player> <amount> <reason> — debit Nooks","/nookadmin backup — save an economy snapshot","/nookadmin awards <on|off> — toggle advancement payments","/nookadmin plotdefine <id> <weekly-price> — create a plot record","/nookadmin plotclear <id> <storage-note> — release a cleared plot; record where belongings are stored","/nookadmin plotabsence <id> <days|off> <reason> — record an absence");return true;
             }
             if(!(sender instanceof Player p)){sender.sendMessage(NookUi.text("Use /nookadmin balance <player> from console."));return true;}
             CommandSyntax.check("nooks",args);
@@ -174,9 +178,10 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args){
         boolean admin=command.getName().equals("nookadmin");if(!healthy || admin && !sender.hasPermission("nookcore.admin"))return List.of();
+        if(admin && args.length>=2 && args.length<=3 && args[0].equalsIgnoreCase("teleport"))return AdminTeleports.authorised(sender)?NookUi.complete(args[args.length-1],Bukkit.getOnlinePlayers().stream().map(Player::getName).toList()):List.of();
         List<String> values=new ArrayList<>();
         try{
-            if(args.length==1)values.addAll(admin?List.of("balance","give","take","backup","awards","plotdefine","plotclear","plotabsence","help"):List.of("pay","history","help"));
+            if(args.length==1)values.addAll(admin?List.of("balance","give","take","backup","awards","plotdefine","plotclear","plotabsence","help","teleport"):List.of("pay","history","help"));
             else if(args.length==2){
                 if(Set.of("pay","balance","give","take").contains(args[0].toLowerCase(Locale.ROOT))){for(var a:store.accounts())values.add(a.name());}
                 else if(admin && args[0].equalsIgnoreCase("awards"))values.addAll(List.of("on","off"));
