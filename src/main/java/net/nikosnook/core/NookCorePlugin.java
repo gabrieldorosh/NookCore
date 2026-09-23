@@ -50,6 +50,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
                 if(player!=null)player.sendMessage(PlotCommands.expiryNotice(plot));
             }),20,20);
             for(Player p:Bukkit.getOnlinePlayers())joinPlayer(p);
+            new WeeklyQuests(this,store,()->healthy,this::fail);
             Bukkit.getScheduler().runTaskTimer(this,()->{
                 if(!healthy)return;
                 try {

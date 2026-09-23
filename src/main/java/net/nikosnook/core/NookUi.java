@@ -23,7 +23,7 @@ final class NookUi {
     static Component error(String message){return Component.text(message,BAD);}
     static Component history(NookStore.Entry entry){
         String description=switch(entry.kind()){
-            case "award"->entry.reference().equals("joining")?"Welcome bonus":"Advancement reward";
+            case "award"->entry.reference().equals("joining")?"Welcome bonus":entry.reference().startsWith("quest:")?"Weekly quest reward":"Advancement reward";
             case "transfer"->entry.delta()<0?"Payment sent to a player":"Payment received from a player";
             case "rent"->"Plot rent · "+entry.reference();
             case "rent-prepay"->"Rent paid in advance · "+entry.reference();
