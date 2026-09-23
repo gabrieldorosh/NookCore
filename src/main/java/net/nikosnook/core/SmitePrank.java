@@ -22,17 +22,17 @@ final class SmitePrank implements CommandExecutor,TabCompleter,Listener {
     }
     SmitePrank(LongSupplier clock,Consumer<Player> effect,Consumer<Exception> visualFailure){this.clock=clock;this.effect=effect;this.visualFailure=visualFailure;}
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
-        if(!(sender instanceof Player player)){sender.sendMessage(NookUi.text("Use /smite <player> in game."));return true;}
-        if(args.length!=1){sender.sendMessage(NookUi.text("Use /smite <player>."));return true;}
-        if(player.isDead()){sender.sendMessage(NookUi.text("Wait until you have respawned."));return true;}
+        if(!(sender instanceof Player player)){sender.sendMessage(NookUi.message("NookCore","Use /smite <player> in game."));return true;}
+        if(args.length!=1){sender.sendMessage(NookUi.message("NookCore","Use /smite <player>."));return true;}
+        if(player.isDead()){sender.sendMessage(NookUi.message("NookCore","Wait until you have respawned."));return true;}
         long now=clock.getAsLong();cooldowns.values().removeIf(until->until<=now);
         Long until=cooldowns.get(player.getUniqueId());
-        if(until!=null){sender.sendMessage(NookUi.text("The heavens need "+((until-now+999)/1000)+" more seconds."));return true;}
+        if(until!=null){sender.sendMessage(NookUi.message("NookCore","The heavens need "+((until-now+999)/1000)+" more seconds."));return true;}
         cooldowns.put(player.getUniqueId(),now+30_000);
         // The argument is intentionally never resolved to another player.
         try{effect.accept(player);}catch(RuntimeException e){visualFailure.accept(e);}
         player.damage(4.0);
-        sender.sendMessage(NookUi.text("The heavens have terrible aim."));return true;
+        sender.sendMessage(NookUi.message("NookCore","The heavens have terrible aim."));return true;
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void command(PlayerCommandPreprocessEvent event){

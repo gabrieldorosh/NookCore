@@ -88,7 +88,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
             }
             return true;
         }catch(NookStore.BalanceCapacityException e){
-            if(capacityNotified.add(p.getUniqueId()))p.sendMessage(Component.text("NookQuests » ",NookUi.ACCENT).append(NookUi.text("Your balance has no room for this reward. Spend or send some Nooks, then repeat the action. Your earlier progress is safe.")));
+            if(capacityNotified.add(p.getUniqueId()))p.sendMessage(NookUi.prefix("NookQuests").append(NookUi.text("Your balance has no room for this reward. Spend or send some Nooks, then repeat the action. Your earlier progress is safe.")));
             return false;
         }catch(Exception e){failure.accept(e);return false;}
     }
@@ -107,13 +107,13 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
     }
     @EventHandler public void quit(PlayerQuitEvent event){lastBiome.remove(event.getPlayer().getUniqueId());capacityNotified.remove(event.getPlayer().getUniqueId());}
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
-        if(!enabled){sender.sendMessage(NookUi.text("Weekly quests are not open yet."));return true;}
-        if(!healthy.getAsBoolean()){sender.sendMessage(NookUi.error("Quests are paused; please contact staff."));return true;}
+        if(!enabled){sender.sendMessage(NookUi.message("NookQuests","Weekly quests are not open yet."));return true;}
+        if(!healthy.getAsBoolean()){sender.sendMessage(NookUi.problem("NookQuests","Quests are paused; please contact staff."));return true;}
         try{
             UUID player;
             if(args.length==2 && args[0].equalsIgnoreCase("inspect") && sender.hasPermission("nookcore.admin"))player=store.byName(args[1]).orElseThrow(()->new IllegalArgumentException("Unknown player")).id();
             else if(args.length==0 || args.length==1 && args[0].equalsIgnoreCase("list")){
-                if(!(sender instanceof Player p)){sender.sendMessage(NookUi.text("Use nookquests inspect <player> from console."));return true;}player=p.getUniqueId();
+                if(!(sender instanceof Player p)){sender.sendMessage(NookUi.message("NookQuests","Use nookquests inspect <player> from console."));return true;}player=p.getUniqueId();
             }else{
                 NookUi.help(sender,"Weekly quests","/nookquests — view your progress and rewards");
                 if(sender.hasPermission("nookcore.admin"))NookUi.help(sender,"Staff","/nookquests inspect <player> — view progress without changing it");return true;
@@ -123,8 +123,8 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
             for(var g:goals)if(g.reward()!=3000)sender.sendMessage(QuestUi.row(g,store.questProgress(player,week.id(),g.id())));
             for(var g:goals)if(g.reward()==3000)sender.sendMessage(QuestUi.row(g,store.questProgress(player,week.id(),g.id())));
             sender.sendMessage(Component.text("Resets "+NookUi.date(week.nextReset()),NookUi.MUTED));
-        }catch(IllegalArgumentException e){sender.sendMessage(NookUi.error(e.getMessage()));}
-        catch(Exception e){failure.accept(e);sender.sendMessage(NookUi.error("Could not read quests; please contact staff."));}
+        }catch(IllegalArgumentException e){sender.sendMessage(NookUi.problem("NookQuests",e.getMessage()));}
+        catch(Exception e){failure.accept(e);sender.sendMessage(NookUi.problem("NookQuests","Could not read quests; please contact staff."));}
         return true;
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args){

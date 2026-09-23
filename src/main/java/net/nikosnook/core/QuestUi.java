@@ -15,7 +15,7 @@ final class QuestUi {
     }
     static Component progress(NookStore.QuestUpdate update){
         var goal=update.goal();
-        return Component.text("NookQuests » ",NookUi.ACCENT)
+        return NookUi.prefix("NookQuests")
             .append(Component.text(goal.title(),goal.reward()==3000?CHALLENGE:NookUi.BODY))
             .append(update.paid()?Component.text(" complete · +"+Money.format(goal.reward()),NookUi.GOOD)
                 :Component.text(" · "+update.progress()+"/"+goal.amount(),NookUi.COMMAND));

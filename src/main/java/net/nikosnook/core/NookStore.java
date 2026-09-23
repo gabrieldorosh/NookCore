@@ -205,7 +205,7 @@ public final class NookStore implements AutoCloseable {
         }
     }
     private static void memberRole(String role) {
-        if(!Set.of("BUILD","STOCK","BUILD_STOCK").contains(role))throw new IllegalArgumentException("Unknown member role.");
+        if(!Set.of("BUILD","STOCK","BUILD_STOCK").contains(role))throw new IllegalArgumentException("Choose build, stock or both for plot permissions.");
     }
     private void requireOpen(Plot plot,long now) {
         if(!plot.state().equals("ACTIVE") || now>=plot.paidUntil())throw new IllegalArgumentException("Reopen the plot first.");
@@ -303,7 +303,7 @@ public final class NookStore implements AutoCloseable {
         }
     }
     public void removeMember(String id,UUID actor,UUID member,long now)throws SQLException {
-        tx(()->{Plot p=plot(id);owner(p,actor);if(actor.equals(member))throw new IllegalArgumentException("Owner cannot leave without staff-assisted closure.");
+        tx(()->{Plot p=plot(id);owner(p,actor);if(actor.equals(member))throw new IllegalArgumentException("The renter cannot remove themselves. Use /nookplots abandon to review closing the shop.");
             update("DELETE FROM members WHERE uuid=? AND plot=?",member,id);
             update("DELETE FROM plot_invitations WHERE member=? AND plot=?",member,id);
             event(id,"REMOVE_MEMBER",member.toString(),now);return null;});
@@ -325,7 +325,7 @@ public final class NookStore implements AutoCloseable {
     }
     public void setAbsence(String id,long expires,String staff,String reason,long now)throws SQLException {
         if(reason.isBlank() || staff.isBlank() || expires!=0 && expires<=now)throw new IllegalArgumentException("Supply a future expiry and an audit reason, or clear the exception.");
-        tx(()->{Plot p=plot(id);if(p.owner()==null || p.state().equals("RECLAIM"))throw new IllegalArgumentException("An absence exception requires a current lease before reclamation.");
+        tx(()->{Plot p=plot(id);if(p.owner()==null || p.state().equals("RECLAIM"))throw new IllegalArgumentException("Absence exceptions apply only to rented plots that are not awaiting staff clearance.");
             if(expires==0)update("DELETE FROM plot_absences WHERE plot=?",id);
             else update("INSERT INTO plot_absences(plot,expires) VALUES(?,?) ON CONFLICT(plot) DO UPDATE SET expires=excluded.expires",id,expires);
             event(id,"ABSENCE",staff+" expires="+expires+" reason="+reason,now);return null;
@@ -370,8 +370,8 @@ public final class NookStore implements AutoCloseable {
         });
     }
     public void confirmCleared(String id,String staff,String collectionReference,long now)throws SQLException {
-        if(collectionReference.isBlank())throw new IllegalArgumentException("Supply the indefinite-storage collection reference.");
-        tx(()->{Plot p=plot(id);if(!p.state().equals("RECLAIM"))throw new IllegalArgumentException("Plot is not awaiting reclamation.");
+        if(collectionReference.isBlank())throw new IllegalArgumentException("Describe where the former renter's belongings are stored, for example: staff storage, chest A3.");
+        tx(()->{Plot p=plot(id);if(!p.state().equals("RECLAIM"))throw new IllegalArgumentException("This plot is not awaiting staff clearance.");
             event(id,"CLEARED",staff+" owner="+p.owner()+" collection="+collectionReference,now);
             update("DELETE FROM plot_invitations WHERE plot=?",id);
             update("DELETE FROM plot_absences WHERE plot=?",id);

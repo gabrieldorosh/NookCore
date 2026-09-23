@@ -27,26 +27,26 @@ final class AdminTeleports implements Listener {
         permits.remove(event.getPlayer().getUniqueId());return true;
     }
     void execute(CommandSender sender,String[] args){
-        if(!authorised(sender)){sender.sendMessage(NookUi.error("Only console and authorised admins can use moderation teleports."));return;}
-        if(args.length!=3){sender.sendMessage(NookUi.text("Use /nookadmin teleport <player> <destination-player>. Both players must be online; use their exact names."));return;}
+        if(!authorised(sender)){sender.sendMessage(NookUi.problem("NookAdmin","Only console and authorised admins can use moderation teleports."));return;}
+        if(args.length!=3){sender.sendMessage(NookUi.message("NookAdmin","Use /nookadmin teleport <player> <destination-player>. Both players must be online; use their exact names."));return;}
         Player moved=players.apply(args[1]),destination=players.apply(args[2]);
-        if(moved==null || destination==null){sender.sendMessage(NookUi.error("Both players must be online. Use their exact names, without selectors."));return;}
-        if(moved.getUniqueId().equals(destination.getUniqueId())){sender.sendMessage(NookUi.error("Choose two different players."));return;}
+        if(moved==null || destination==null){sender.sendMessage(NookUi.problem("NookAdmin","Both players must be online. Use their exact names, without selectors."));return;}
+        if(moved.getUniqueId().equals(destination.getUniqueId())){sender.sendMessage(NookUi.problem("NookAdmin","Choose two different players."));return;}
         Location location=destination.getLocation().clone();
-        if(location.getWorld()==null){sender.sendMessage(NookUi.error("The destination world is unavailable."));return;}
+        if(location.getWorld()==null){sender.sendMessage(NookUi.problem("NookAdmin","The destination world is unavailable."));return;}
         UUID id=moved.getUniqueId();
-        if(permits.containsKey(id)){sender.sendMessage(NookUi.error("A moderation teleport is already in progress for that player."));return;}
+        if(permits.containsKey(id)){sender.sendMessage(NookUi.problem("NookAdmin","A moderation teleport is already in progress for that player."));return;}
         Permit permit=new Permit(location.clone());permits.put(id,permit);
         try{
             boolean success=moved.teleport(location,PlayerTeleportEvent.TeleportCause.PLUGIN);
             audit.accept("Moderation teleport by "+sender.getName()+": "+moved.getName()+" to "+destination.getName()+" ["+(success?"completed":"cancelled")+"]");
             if(success){
-                sender.sendMessage(NookUi.text("Teleported ").append(NookUi.name(id,moved.getName())).append(NookUi.text(" to ")).append(NookUi.name(destination.getUniqueId(),destination.getName())).append(NookUi.text(".")));
-                moved.sendMessage(NookUi.text("An admin moved you to "+destination.getName()+" for moderation."));
-            }else sender.sendMessage(NookUi.error("The teleport was cancelled. Check protection rules or other plugins."));
+                sender.sendMessage(NookUi.message("NookAdmin","Teleported ").append(NookUi.name(id,moved.getName())).append(NookUi.text(" to ")).append(NookUi.name(destination.getUniqueId(),destination.getName())).append(NookUi.text(".")));
+                moved.sendMessage(NookUi.message("NookAdmin","An admin moved you to ").append(NookUi.name(destination.getUniqueId(),destination.getName())).append(NookUi.text(" for moderation.")));
+            }else sender.sendMessage(NookUi.problem("NookAdmin","The teleport was cancelled. Check protection rules or other plugins."));
         }catch(RuntimeException e){
             audit.accept("Moderation teleport by "+sender.getName()+" for "+moved.getName()+" failed: "+e.getClass().getSimpleName());
-            sender.sendMessage(NookUi.error("The teleport could not be confirmed. Check the player's position before retrying."));
+            sender.sendMessage(NookUi.problem("NookAdmin","The teleport could not be confirmed. Check the player's position before retrying."));
         }finally{permits.remove(id,permit);}
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)

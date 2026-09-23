@@ -20,6 +20,10 @@ final class NookUi {
         }
         return result.append(Component.text(text.substring(end)));
     }
+    static Component prefix(String section){return Component.text(section+" » ",ACCENT);}
+    static Component message(String section,String message){return prefix(section).append(text(message));}
+    static Component problem(String section,String message){return prefix(section).append(error(message));}
+    static Component heading(String text){return Component.text(text,ACCENT).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD);}
     static Component error(String message){return Component.text(message,BAD);}
     static Component history(NookStore.Entry entry){
         String description=switch(entry.kind()){
@@ -50,7 +54,8 @@ final class NookUi {
         return plot.owner()==null?result.append(Component.text(" · ",MUTED)).append(Component.text(Money.format(plot.weekly())+"/week",PRICE)):result;
     }
     static void help(CommandSender sender,String heading,String... lines){
-        sender.sendMessage(Component.text(heading,ACCENT).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD));
+        sender.sendMessage(Component.empty());
+        sender.sendMessage(heading(heading));
         for(String line:lines){
             int split=line.indexOf(" — ");String command=split<0?line:line.substring(0,split);
             int argument=command.indexOf(" <");int optional=command.indexOf(" [");

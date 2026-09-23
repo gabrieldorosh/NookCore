@@ -15,7 +15,9 @@ rental-commands-enabled: false
 shop-gate:
   enabled: false
   world-uuid: ""
-  deny-message: "&bNiko's Nook &8» &fThe shopping district is protected. Build in a plot you have access to, or ask staff for help."
+  deny-message: "&dNookPlots &7» &fThis area is protected. Build in your rented plot, or ask staff for help."
+  # subtitle has a native fade; actionbar keeps the old position; off hides entry notices.
+  entry-notices: subtitle
   district-region: nook_district
   plot-regions: {}
 travel:
