@@ -19,6 +19,8 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
     private final List<QuestPlan.Goal> proposed;
     private final boolean enabled;
     private final LongSupplier clock;
+    private BiConsumer<Player,Boolean> celebration=(player,challenge)->{};
+    private Consumer<Exception> cosmeticFailure=error->{};
     private final Set<UUID> capacityNotified=new HashSet<>();
     private QuestPlan.Week week;
     private List<QuestPlan.Goal> goals=List.of();
@@ -28,6 +30,8 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         this.store=store;this.healthy=healthy;this.failure=failure;this.clock=System::currentTimeMillis;
         var file=new java.io.File(plugin.getDataFolder(),"quests.yml");if(!file.exists())plugin.saveResource("quests.yml",false);
         var config=new YamlConfiguration();config.load(file);enabled=config.getBoolean("enabled",false);
+        if(config.getBoolean("celebrations-enabled",true))celebration=QuestCelebrations::play;
+        cosmeticFailure=e->plugin.getLogger().warning("Quest celebration failed: "+e.getClass().getSimpleName());
         var section=Objects.requireNonNull(config.getConfigurationSection("goals"),"Missing quest goals");
         var parsed=new ArrayList<QuestPlan.Goal>();
         for(String id:section.getKeys(false)){
@@ -68,7 +72,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
     private void rotation(long now)throws Exception {
         var current=QuestPlan.week(now);
         if(week==null || !week.id().equals(current.id())){
-            goals=store.questRotation(current.id(),proposed);week=current;lastBiome.clear();
+            goals=store.questRotation(current.id(),proposed);week=current;lastBiome.clear();capacityNotified.clear();
         }
     }
     private boolean eligible(Player p){return enabled && healthy.getAsBoolean() && p.getGameMode()==GameMode.SURVIVAL && p.getWorld().getEnvironment()==World.Environment.NORMAL;}
@@ -77,14 +81,19 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         try{
             long now=clock.getAsLong();rotation(now);
             var updates=store.advanceQuests(p.getUniqueId(),week.id(),kind,target,unique,now);
-            if(!updates.isEmpty())capacityNotified.remove(p.getUniqueId());
-            for(var update:updates)p.sendMessage(QuestUi.progress(update));
+            if(updates.stream().anyMatch(NookStore.QuestUpdate::paid))capacityNotified.remove(p.getUniqueId());
+            for(var update:updates){
+                p.sendMessage(QuestUi.progress(update));
+                if(update.paid())celebrate(p,update.goal().reward()==3000);
+            }
             return true;
         }catch(NookStore.BalanceCapacityException e){
             if(capacityNotified.add(p.getUniqueId()))p.sendMessage(Component.text("NookQuests » ",NookUi.ACCENT).append(NookUi.text("Your balance has no room for this reward. Spend or send some Nooks, then repeat the action. Your earlier progress is safe.")));
             return false;
         }catch(Exception e){failure.accept(e);return false;}
     }
+    void setCelebration(BiConsumer<Player,Boolean> celebration,Consumer<Exception> error){this.celebration=celebration;this.cosmeticFailure=error;}
+    private void celebrate(Player player,boolean challenge){try{celebration.accept(player,challenge);}catch(RuntimeException e){cosmeticFailure.accept(e);}}
     @EventHandler public void death(EntityDeathEvent event){
         Player p=event.getEntity().getKiller();if(p==null || !eligible(p))return;
         EntityType type=event.getEntityType();record(p,"KILL",type.name(),null);

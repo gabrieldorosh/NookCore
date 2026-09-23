@@ -21,6 +21,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     private AdminTeleports adminTeleports;
     @Override public void onEnable(){
         saveDefaultConfig();
+        new SmitePrank(this);
         adminTeleports=new AdminTeleports(Bukkit::getPlayerExact,message->getLogger().info(message));
         getServer().getPluginManager().registerEvents(adminTeleports,this);
         try {

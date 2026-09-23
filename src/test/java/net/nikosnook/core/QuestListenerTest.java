@@ -69,4 +69,18 @@ class QuestListenerTest {
         var q=quests(goal("hunt","KILL","SKELETON"));mode=GameMode.CREATIVE;q.death(death(player));mode=GameMode.SURVIVAL;environment=World.Environment.NETHER;q.death(death(player));
         environment=World.Environment.NORMAL;q.death(death(null));assertEquals(6000,store.account(id).orElseThrow().cents());assertTrue(messages.isEmpty());
     }
+
+    @Test void cosmeticFailureCannotPauseEconomyOrRepeatReward()throws Exception{
+        var q=quests(goal("hunt","KILL","SKELETON"));AtomicInteger effects=new AtomicInteger(),cosmeticErrors=new AtomicInteger();
+        q.setCelebration((p,challenge)->{effects.incrementAndGet();throw new IllegalStateException("visual unavailable");},e->cosmeticErrors.incrementAndGet());
+        q.record(player,"KILL","SKELETON",null);q.record(player,"KILL","SKELETON",null);
+        assertEquals(1,effects.get());assertEquals(1,cosmeticErrors.get());assertTrue(healthy.get());assertEquals(0,failures.get());assertEquals(7500,store.account(id).orElseThrow().cents());
+    }
+
+    @Test void unrelatedPartialProgressDoesNotResetCapacityWarning()throws Exception{
+        var q=quests(goal("hunt","KILL","SKELETON"),new QuestPlan.Goal("other","Other","KILL","ZOMBIE",2,1500));
+        store.adjust(id,Money.MAX-6000,"staff","capacity test",now.get());
+        q.record(player,"KILL","SKELETON",null);q.record(player,"KILL","ZOMBIE",null);q.record(player,"KILL","SKELETON",null);
+        assertEquals(1,messages.stream().filter(m->m.contains("no room for this reward")).count());assertTrue(healthy.get());
+    }
 }

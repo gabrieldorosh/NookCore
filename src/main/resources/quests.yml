@@ -2,6 +2,7 @@
 # Definitions freeze for the current Wednesday 02:00 UK rotation once enabled.
 # Changes then apply to the next week; never edit stored progress to reset rewards.
 enabled: false
+celebrations-enabled: true
 goals:
   skeletons:
     title: Defeat 32 skeletons

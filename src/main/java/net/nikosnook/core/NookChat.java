@@ -17,7 +17,7 @@ import net.kyori.adventure.key.Key;
 
 /** Main-thread permission snapshots keep asynchronous chat free of Bukkit permission/storage calls. */
 final class NookChat implements Listener, CommandExecutor, TabCompleter {
-    private record Snapshot(String name,String rank,ChatPreferences.Preference preference){}
+    private record Snapshot(String name,String rank,ChatPreferences.Preference preference,int deaths){}
     private final JavaPlugin plugin;
     private final ChatPreferences preferences;
     private final Map<UUID,Snapshot> snapshots=new ConcurrentHashMap<>();
@@ -56,13 +56,22 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
     }
     void close(){unregister.run();NookUi.preferences=null;}
     String placeholder(UUID id,String key){
-        Snapshot s=snapshots.get(id);if(s==null)return "";
-        return switch(key){case "name"->"&"+s.preference().textColour().asHexString()+s.name()+"&r";case "pronouns"->s.preference().pronouns().isEmpty()?"":" &7· "+s.preference().pronouns()+"&r";case "rank"->("&"+(s.rank().equals("nookling")?NookUi.GOOD:NookUi.ACCENT).asHexString())+"["+s.rank()+"] &r";default->null;};
+        Snapshot s=snapshots.get(id);if(s==null)return key.equals("deaths")?"0":"";
+        return switch(key){case "deaths"->Integer.toString(s.deaths());case "name"->"&"+s.preference().textColour().asHexString()+s.name()+"&r";case "pronouns"->s.preference().pronouns().isEmpty()?"":" &7· "+s.preference().pronouns()+"&r";case "rank"->("&"+(s.rank().equals("nookling")?NookUi.GOOD:NookUi.ACCENT).asHexString())+"["+s.rank()+"] &r";default->null;};
     }
     private void refresh(Player player){
         String rank="nookling";
         for(String candidate:List.of("admin","helper","supporter"))if(player.hasPermission("nookcore.chat.rank."+candidate)){rank=candidate;break;}
-        snapshots.put(player.getUniqueId(),new Snapshot(player.getName(),rank,preferences.get(player.getUniqueId())));
+        snapshots.put(player.getUniqueId(),new Snapshot(player.getName(),rank,preferences.get(player.getUniqueId()),player.getStatistic(org.bukkit.Statistic.DEATHS)));
+    }
+    @EventHandler(priority=EventPriority.HIGH)
+    public void death(org.bukkit.event.entity.PlayerDeathEvent event){
+        var player=event.getEntity();var message=event.deathMessage();
+        if(message==null)return;
+        message=PlayerPresentation.colourName(message,player.getName(),preferences.get(player.getUniqueId()).textColour());
+        var killer=player.getKiller();
+        if(killer!=null)message=PlayerPresentation.colourName(message,killer.getName(),preferences.get(killer.getUniqueId()).textColour());
+        event.deathMessage(message);
     }
     @EventHandler public void join(PlayerJoinEvent event){refresh(event.getPlayer());}
     @EventHandler public void quit(PlayerQuitEvent event){snapshots.remove(event.getPlayer().getUniqueId());rankPackLoaded.remove(event.getPlayer().getUniqueId());}
