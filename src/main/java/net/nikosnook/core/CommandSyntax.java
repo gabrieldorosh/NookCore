@@ -31,6 +31,7 @@ final class CommandSyntax {
             Map.entry("decline",new Shape(1,2,"/nookplots decline [player]","Choose one inviter, or omit the name when you have one invitation.")),
             Map.entry("abandon",new Shape(2,3,"/nookplots abandon <plot>","Enter the plot to review before confirming abandonment."))),
         "nookadmin",Map.ofEntries(
+            Map.entry("teleport",exact(3,"/nookadmin teleport <player> <destination-player>","Enter the online player to move and the online player to move them to.")),
             Map.entry("help",exact(1,"/nookadmin help","Help does not take any extra words.")),
             Map.entry("balance",exact(2,"/nookadmin balance <player>","Enter the player whose balance you want to inspect.")),
             Map.entry("give",new Shape(4,Integer.MAX_VALUE,"/nookadmin give <player> <amount> <reason>","Enter a player, amount and an audit reason.")),
