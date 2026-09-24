@@ -24,20 +24,36 @@ final class AdminTeleports implements Listener {
     private final Consumer<String> audit;
     AdminTeleports(Function<String,Player> players,Consumer<String> audit){this(players,audit,System::currentTimeMillis,AdminTeleports::safeReturn);}
     AdminTeleports(Function<String,Player> players,Consumer<String> audit,LongSupplier clock,Predicate<Location> safeReturn){this.players=players;this.audit=audit;this.clock=clock;this.safeReturn=safeReturn;}
-    static boolean safeReturn(Location location){return safeReturn(location,org.bukkit.Material::isOccluding);}
-    static boolean safeReturn(Location location,Predicate<org.bukkit.Material> occluding){
-        var world=location.getWorld();
-        if(world==null || location.getY()<world.getMinHeight()+1 || location.getY()+1>=world.getMaxHeight() || !world.getWorldBorder().isInside(location))return false;
-        // The origin was visited already; do not generate new terrain during a return.
-        int y=location.getBlockY(),top=(int)Math.floor(location.getY()+1.8);
-        for(double dx:new double[]{-.3,.3})for(double dz:new double[]{-.3,.3}){
-            int x=(int)Math.floor(location.getX()+dx),z=(int)Math.floor(location.getZ()+dz);
-            if(!world.isChunkGenerated(x>>4,z>>4) || !world.getWorldBorder().isInside(new Location(world,location.getX()+dx,location.getY(),location.getZ()+dz)))return false;
-            var floor=world.getBlockAt(x,y-1,z);
-            if(!occluding.test(floor.getType()) || floor.getType()==org.bukkit.Material.MAGMA_BLOCK)return false;
-            for(int checkY=y;checkY<=top;checkY++)if(!Set.of(org.bukkit.Material.AIR,org.bukkit.Material.CAVE_AIR,org.bukkit.Material.VOID_AIR).contains(world.getBlockAt(x,checkY,z).getType()))return false;
+    static boolean safeReturn(Location location){
+        var world=location.getWorld();double x=location.getX(),y=location.getY(),z=location.getZ();
+        if(world==null || !Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z) || y<world.getMinHeight() || y+1.8>world.getMaxHeight())return false;
+        double epsilon=0.00001;
+        var body=new org.bukkit.util.BoundingBox(x-.3+epsilon,y+epsilon,z-.3+epsilon,x+.3-epsilon,y+1.8-epsilon,z+.3-epsilon);
+        for(double dx:new double[]{-.3,.3})for(double dz:new double[]{-.3,.3})if(!world.getWorldBorder().isInside(new Location(world,x+dx,y,z+dz)))return false;
+        int minX=(int)Math.floor(body.getMinX()),maxX=(int)Math.floor(body.getMaxX()),minZ=(int)Math.floor(body.getMinZ()),maxZ=(int)Math.floor(body.getMaxZ());
+        for(int bx=minX;bx<=maxX;bx++)for(int bz=minZ;bz<=maxZ;bz++)if(!world.isChunkGenerated(bx>>4,bz>>4))return false;
+        boolean supported=false;
+        for(int bx=minX;bx<=maxX;bx++)for(int bz=minZ;bz<=maxZ;bz++)for(int by=Math.max(world.getMinHeight(),(int)Math.floor(y)-1);by<=Math.min(world.getMaxHeight()-1,(int)Math.floor(y+1.8));by++){
+            var block=world.getBlockAt(bx,by,bz);
+            var volume=new org.bukkit.util.BoundingBox(bx,by,bz,bx+1,by+1,bz+1);
+            boolean dangerous=Set.of(org.bukkit.Material.WATER,org.bukkit.Material.LAVA,org.bukkit.Material.POWDER_SNOW,org.bukkit.Material.FIRE,org.bukkit.Material.SOUL_FIRE,org.bukkit.Material.CACTUS,org.bukkit.Material.MAGMA_BLOCK,org.bukkit.Material.CAMPFIRE,org.bukkit.Material.SOUL_CAMPFIRE,org.bukkit.Material.SWEET_BERRY_BUSH,org.bukkit.Material.WITHER_ROSE).contains(block.getType());
+            boolean wet=block.getBlockData() instanceof org.bukkit.block.data.Waterlogged water && water.isWaterlogged();
+            if((dangerous || wet) && volume.overlaps(body))return false;
+            // Paper's collision boxes are block-local; translate them to world coordinates.
+            for(var local:block.getCollisionShape().getBoundingBoxes()){
+                var shape=local.clone().shift(bx,by,bz);
+                if(shape.overlaps(body))return false;
+                if(Math.abs(shape.getMaxY()-y)<.0001 && shape.getMaxX()>body.getMinX() && shape.getMinX()<body.getMaxX() && shape.getMaxZ()>body.getMinZ() && shape.getMinZ()<body.getMaxZ()){
+                    if(dangerous)return false;supported=true;
+                }
+            }
         }
-        return true;
+        return supported;
+    }
+    static String destinationDescription(Location point){
+        String world="unavailable world";
+        try{if(point.getWorld()!=null && point.getWorld().getName()!=null)world=point.getWorld().getName();}catch(RuntimeException ignored){}
+        return String.format(Locale.ROOT,"%s · X %.3f, Y %.3f, Z %.3f",world,point.getX(),point.getY(),point.getZ());
     }
     void forget(UUID player){returns.remove(player);}
     @EventHandler public void quit(org.bukkit.event.player.PlayerQuitEvent event){forget(event.getPlayer().getUniqueId());}
@@ -52,9 +68,9 @@ final class AdminTeleports implements Listener {
         }
         try{
             Location destination=point.location().clone();
-            if(!safeReturn.test(destination)){sender.sendMessage(NookUi.problem("NookAdmin","The previous position is not a clear, solid-floor landing inside the world border. The return point is kept; check the area before retrying."));return;}
+            if(!safeReturn.test(destination)){sender.sendMessage(NookUi.problem("NookAdmin","Cannot safely return to "+destinationDescription(destination)+". Check the landing, hazards and border. The return point is kept."));return;}
             if(move(sender,player,destination,NookUi.text("their previous position"),false))returns.remove(player.getUniqueId(),point);
-        }catch(RuntimeException e){audit.accept("Return check by "+sender.getName()+" failed: "+e.getClass().getSimpleName());sender.sendMessage(NookUi.problem("NookAdmin","The return position could not be checked. No return was confirmed."));}
+        }catch(RuntimeException e){audit.accept("Return check by "+sender.getName()+" failed: "+e.getClass().getSimpleName());sender.sendMessage(NookUi.problem("NookAdmin","Could not check "+destinationDescription(point.location())+". No return was confirmed; the point is kept."));}
     }
     static boolean authorised(CommandSender sender){
         return sender instanceof ConsoleCommandSender || sender instanceof RemoteConsoleCommandSender

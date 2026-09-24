@@ -27,7 +27,7 @@ class AdminTeleportsTest {
         });
     }
     @BeforeEach void setup(){
-        UUID worldId=UUID.randomUUID();World world=proxy(World.class,(o,m,a)->switch(m.getName()){case "equals"->o==a[0];case "hashCode"->1;case "getUID"->worldId;default->null;});
+        UUID worldId=UUID.randomUUID();World world=proxy(World.class,(o,m,a)->switch(m.getName()){case "equals"->o==a[0];case "hashCode"->1;case "getUID"->worldId;case "getName"->"test_world";default->null;});
         location=new Location(world,12,70,25,90,0);
         moved=player("Moved",Set.of());target=player("Target",Set.of());players.put("Moved",moved);players.put("Target",target);
         console=proxy(ConsoleCommandSender.class,(o,m,a)->switch(m.getName()){case "getName"->"CONSOLE";case "sendMessage"->message(a);default->null;});
@@ -146,15 +146,18 @@ class AdminTeleportsTest {
         location=location.clone().add(20,0,0);attempt=to->false;run(console);
         attempt=to->{assertEquals(second,to);return true;};teleports.execute(console,new String[]{"return","Moved"});assertEquals(4,calls);
     }
-    // Material occlusion uses Paper registries; supply the fixture classification without a running server.
-    boolean safeLanding(Location location){return AdminTeleports.safeReturn(location,material->material==Material.STONE || material==Material.MAGMA_BLOCK);}
-    Location landing(Material floor,Material body,boolean generated,boolean inside){
+    boolean safeLanding(Location location){return AdminTeleports.safeReturn(location);}
+    Location landing(Material floor,Material body,boolean generated,boolean inside){return shapedLanding(floor,body,generated,inside,1,70);}
+    Location shapedLanding(Material floor,Material body,boolean generated,boolean inside,double height,double feet){
         var border=proxy(WorldBorder.class,(o,m,a)->m.getName().equals("isInside")?inside:null);
         World world=proxy(World.class,(o,m,a)->switch(m.getName()){
             case "getMinHeight"->-64;case "getMaxHeight"->320;case "getWorldBorder"->border;case "isChunkGenerated"->generated;
-            case "getBlockAt"->proxy(org.bukkit.block.Block.class,(block,method,args)->method.getName().equals("getType")?((int)a[1]<70?floor:body):null);
+            case "getBlockAt"->{int by=(int)a[1];Material type=by==69?floor:by>=70?body:Material.AIR;
+                var boxes=type==Material.AIR || type==Material.WATER?List.<org.bukkit.util.BoundingBox>of():List.of(new org.bukkit.util.BoundingBox(0,0,0,1,by==69?height:1,1));
+                var shape=proxy(org.bukkit.util.VoxelShape.class,(v,method,args)->method.getName().equals("getBoundingBoxes")?boxes:null);
+                yield proxy(org.bukkit.block.Block.class,(block,method,args)->switch(method.getName()){case "getType"->type;case "getCollisionShape"->shape;default->null;});}
             default->null;
-        });return new Location(world,12.5,70,25.5);
+        });return new Location(world,12.5,feet,25.5);
     }
     @Test void landingRequiresAirAndSolidNonHazardousFloor(){
         assertTrue(safeLanding(landing(Material.STONE,Material.AIR,true,true)));
@@ -168,5 +171,19 @@ class AdminTeleportsTest {
         assertFalse(safeLanding(landing(Material.STONE,Material.AIR,true,false)));
         var low=landing(Material.STONE,Material.AIR,true,true);low.setY(-64);assertFalse(safeLanding(low));
         var high=landing(Material.STONE,Material.AIR,true,true);high.setY(320);assertFalse(safeLanding(high));
+    }
+    @Test void returnAcceptsPathsSlabsGlassAndCarpetAtTheirActualSurface(){
+        assertTrue(safeLanding(shapedLanding(Material.DIRT_PATH,Material.AIR,true,true,.9375,69.9375)));
+        assertTrue(safeLanding(shapedLanding(Material.STONE_SLAB,Material.AIR,true,true,.5,69.5)));
+        assertTrue(safeLanding(shapedLanding(Material.GLASS,Material.AIR,true,true,1,70)));
+        assertTrue(safeLanding(shapedLanding(Material.WHITE_CARPET,Material.AIR,true,true,.0625,69.0625)));
+    }
+    @Test void returnRejectsEmbeddingAndFloatingAboveChangedSurface(){
+        assertFalse(safeLanding(shapedLanding(Material.STONE,Material.AIR,true,true,1,69.9375)));
+        assertFalse(safeLanding(shapedLanding(Material.STONE_SLAB,Material.AIR,true,true,.5,70)));
+    }
+    @Test void rejectionIncludesSavedWorldAndCoordinates(){
+        teleports=new AdminTeleports(players::get,audit::add,()->100L,p->false);run(console);messages.clear();
+        teleports.execute(console,new String[]{"return","Moved"});assertTrue(messages.getFirst().contains("test_world · X 12.000, Y 70.000, Z 25.000"));assertEquals(1,calls);
     }
 }

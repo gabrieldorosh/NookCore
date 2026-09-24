@@ -55,7 +55,31 @@ final class PlotSetup implements CommandExecutor,TabCompleter,Listener {
         }
     }
     private static PlotLayout box(com.sk89q.worldguard.protection.regions.ProtectedRegion r){return new PlotLayout(r.getMinimumPoint().x(),r.getMinimumPoint().z(),r.getMaximumPoint().x(),r.getMaximumPoint().z());}
+    private void status(CommandSender sender){
+        sender.sendMessage(NookUi.heading("NookPlots · Setup status"));
+        sender.sendMessage(NookUi.text("Economy healthy: "+healthy.getAsBoolean()+" · Rental commands: "+plugin.getConfig().getBoolean("rental-commands-enabled")+" · Shop gate enabled: "+plugin.getConfig().getBoolean("shop-gate.enabled")));
+        String uuid=plugin.getConfig().getString("shop-gate.world-uuid","");
+        String district=plugin.getConfig().getString("shop-gate.district-region","");
+        sender.sendMessage(NookUi.text("Configured world UUID: "+uuid));
+        org.bukkit.World world;
+        try{world=plugin.getServer().getWorld(UUID.fromString(uuid));}catch(IllegalArgumentException e){sender.sendMessage(NookUi.problem("NookPlots","The world UUID is missing or invalid."));return;}
+        if(world==null){sender.sendMessage(NookUi.problem("NookPlots","That world UUID is not loaded. Check whether the world was replaced."));return;}
+        sender.sendMessage(NookUi.text("Loaded world: "+world.getName()));
+        var manager=WorldGuard.getInstance().getPlatform().getRegionContainer().get(BukkitAdapter.adapt(world));
+        if(manager==null){sender.sendMessage(NookUi.problem("NookPlots","WorldGuard region storage is unavailable."));return;}
+        var parent=manager.getRegion(district);
+        sender.sendMessage(NookUi.text("District region: "+district+(parent==null?" (missing)":" (present)")));
+        var mappings=plugin.getConfig().getConfigurationSection("shop-gate.plot-regions");
+        if(mappings==null || mappings.getKeys(false).isEmpty()){sender.sendMessage(NookUi.text("No plot mappings configured. Create the first plot inside the district, then restart."));return;}
+        for(String id:mappings.getKeys(false)){
+            String plot=mappings.getString(id);var region=manager.getRegion(id);String record;
+            try{record=store.plot(plot).state();}catch(Exception e){record="missing/unreadable plot record";}
+            sender.sendMessage(NookUi.text(id+" → "+plot+" · "+(region==null?"region missing":parent==null || region.getParent()!=parent?"wrong/missing parent":"region present")+" · "+record));
+        }
+        sender.sendMessage(NookUi.text("Read-only report. Configuration changes need a restart; startup errors remain in console."));
+    }
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
+        if(args.length==1 && args[0].equalsIgnoreCase("status") && (sender instanceof ConsoleCommandSender || sender.hasPermission("nookcore.admin"))){status(sender);return true;}
         if(!(sender instanceof Player p) || !p.hasPermission("nookcore.admin")){sender.sendMessage(NookUi.problem("NookPlots","An admin must run setup in game."));return true;}
         if(!healthy.getAsBoolean()){sender.sendMessage(NookUi.problem("NookPlots","Setup is paused. Resolve the server startup/storage error first."));return true;}
         try{
@@ -88,7 +112,7 @@ final class PlotSetup implements CommandExecutor,TabCompleter,Listener {
                 if(!district)p.sendMessage(NookUi.text(d.address()+" · Weekly rent: "+Money.format(rent)+(args.length==3?" (explicit price)":" (area suggestion)")));
                 p.sendMessage(NookUi.message("NookPlots","Run /nooksetup confirm within 60 seconds. Nothing changes until confirmed; new plots need a restart before renting."));return true;
             }
-            NookUi.help(p,"NookPlots · Setup","//wand — select two opposite corners; Y is expanded automatically","/nooksetup district <id> — preview a new district","/nooksetup plot [id] [weekly-rent] — preview a plot; omitted values are generated","/nooksetup confirm — save the preview","/nooksetup cancel — discard the preview");
+            NookUi.help(p,"NookPlots · Setup","/nooksetup status — inspect the configured district and rental gate","//wand — select two opposite corners; Y is expanded automatically","/nooksetup district <id> — preview a new district","/nooksetup plot [id] [weekly-rent] — preview a plot; omitted values are generated","/nooksetup confirm — save the preview","/nooksetup cancel — discard the preview");
         }catch(com.sk89q.worldedit.IncompleteRegionException e){p.sendMessage(NookUi.problem("NookPlots","Select both corners with //wand in this world first."));}
         catch(IllegalArgumentException e){p.sendMessage(NookUi.problem("NookPlots",e.getMessage()));}
         catch(Exception e){failure.accept(e);plugin.getLogger().log(java.util.logging.Level.SEVERE,"Plot setup failed",e);p.sendMessage(NookUi.problem("NookPlots","Setup could not be confirmed. Check console and the setup journal before retrying."));}
@@ -127,5 +151,5 @@ final class PlotSetup implements CommandExecutor,TabCompleter,Listener {
             throw e;
         }
     }
-    @Override public List<String> onTabComplete(CommandSender sender,Command command,String label,String[] args){return sender.hasPermission("nookcore.admin") && args.length==1?NookUi.complete(args[0],List.of("district","plot","confirm","cancel","help")):List.of();}
+    @Override public List<String> onTabComplete(CommandSender sender,Command command,String label,String[] args){return sender.hasPermission("nookcore.admin") && args.length==1?NookUi.complete(args[0],List.of("district","plot","confirm","cancel","status","help")):List.of();}
 }
