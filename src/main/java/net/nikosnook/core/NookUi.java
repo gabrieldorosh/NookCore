@@ -20,6 +20,7 @@ final class NookUi {
         }
         return result.append(Component.text(text.substring(end)));
     }
+    static Component command(String command){return Component.text(command,COMMAND).clickEvent(ClickEvent.suggestCommand(command));}
     static Component prefix(String section){return Component.text(section+" » ",ACCENT);}
     static Component message(String section,String message){return prefix(section).append(text(message));}
     static Component problem(String section,String message){return prefix(section).append(error(message));}

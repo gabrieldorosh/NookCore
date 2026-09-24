@@ -19,6 +19,34 @@ class PlotCommandsTest {
     @AfterEach void close()throws Exception {store.close();}
     PlotCommands commands(boolean enabled,boolean mapped,Runnable validate,Runnable reconcile){return new PlotCommands(store,()->enabled,reconcile,e->failures.incrementAndGet(),p->mapped,validate,System::currentTimeMillis,(recipient,message)->notices.computeIfAbsent(recipient,key->new ArrayList<>()).add(net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(message)));}
     void rent(PlotCommands commands){commands.onCommand(player,null,"nookplots",new String[]{"rent","one"});}
+    @Test void unmappedOwnerCanConfirmAbandonmentAndRentElsewhere()throws Exception {
+        store.rent("one",id,System.currentTimeMillis());
+        var c=commands(true,false,()->{},()->{});
+        assertTrue(c.onTabComplete(player,null,"nookplots",new String[]{"abandon",""}).contains("one"));
+        c.onCommand(player,null,"nookplots",new String[]{"abandon","one"});
+        assertEquals("OWNER",store.role("one",id));
+        c.onCommand(player,null,"nookplots",new String[]{"abandon","one","confirm"});
+        assertEquals("NONE",store.role("one",id));assertTrue(store.abandoned("one"));
+        store.definePlot("new",3000);store.rent("new",id,System.currentTimeMillis());
+        assertEquals("OWNER",store.role("new",id));assertEquals(0,failures.get());
+    }
+    @Test void unmappedAbandonmentCannotReleaseAnotherPlayersMembership()throws Exception {
+        UUID other=UUID.randomUUID();long now=System.currentTimeMillis();store.join(other,"Other",now,6000);store.rent("one",other,now);
+        var c=commands(true,false,()->{},()->{});
+        c.onCommand(player,null,"nookplots",new String[]{"abandon","one"});
+        c.onCommand(player,null,"nookplots",new String[]{"abandon","one","confirm"});
+        assertEquals("OWNER",store.role("one",other));assertFalse(store.abandoned("one"));assertEquals(0,failures.get());
+    }
+    @Test void addressAliasRentsMappedPlotButCannotBypassMapping()throws Exception {
+        store.addressPlot("one","Willow Way");
+        var blocked=commands(true,false,()->{},()->{});
+        blocked.onCommand(player,null,"nookplots",new String[]{"rent","willow-way"});
+        assertEquals("AVAILABLE",store.plot("one").state());
+        var c=commands(true,true,()->{},()->{});
+        assertTrue(c.onTabComplete(player,null,"nookplots",new String[]{"rent","willow"}).contains("willow-way"));
+        c.onCommand(player,null,"nookplots",new String[]{"rent","willow-way"});
+        assertEquals("OWNER",store.role("one",id));assertEquals(0,failures.get());
+    }
     @Test void malformedRentalCommandsCannotSpendMoneyOrGrantMembership()throws Exception {
         var c=commands(true,true,()->{},()->reconciles.incrementAndGet());
         for(String[] args:new String[][]{{"rent"},{"rent","one","extra"},{"prepay","one","1.5"},{"invite","one","Player"}})

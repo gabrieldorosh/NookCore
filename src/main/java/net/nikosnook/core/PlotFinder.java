@@ -38,7 +38,8 @@ final class PlotFinder {
         player.sendMessage(NookUi.message("NookPlots",plot+" · "+description(bounds,player.getLocation())));
         BukkitTask previous=markers.remove(player.getUniqueId());if(previous!=null)previous.cancel();
         if(!bounds.world().equals(player.getWorld().getUID()))return;
-        player.sendMessage(NookUi.message("NookPlots","A gold marker will appear over the plot for 10 seconds if it is loaded and within 128 blocks. Run /nookplots find "+plot+" again as you get closer."));
+        if(bounds.contains(player.getLocation().getX(),player.getLocation().getZ()))return;
+        player.sendMessage(NookUi.message("NookPlots","A gold marker will appear over the plot for 10 seconds if it is loaded and within 128 blocks. Run ").append(NookUi.command("/nookplots find "+plot)).append(NookUi.text(" again as you get closer.")));
         BukkitRunnable pulse=new BukkitRunnable(){
             int remaining=10;
             public void run(){

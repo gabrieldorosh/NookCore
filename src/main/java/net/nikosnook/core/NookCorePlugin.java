@@ -25,6 +25,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         try{new org.bukkit.configuration.file.YamlConfiguration().load(getDataFolder().toPath().resolve("config.yml").toFile());}
         catch(Exception e){getLogger().log(Level.SEVERE,"NookCore could not initialise: invalid config.yml",e);blockStartup("Invalid config.yml; restore a valid configuration before restarting.");return;}
         new SmitePrank(this);
+        if(getConfig().getBoolean("exact-world-spawn-enabled",false))getServer().getPluginManager().registerEvents(new ExactWorldSpawn(AdminTeleports::safeReturn,message->getLogger().warning(message)),this);
         adminTeleports=new AdminTeleports(Bukkit::getPlayerExact,message->getLogger().info(message));
         getServer().getPluginManager().registerEvents(adminTeleports,this);
         getCommand("return").setExecutor((sender,command,label,args)->{
@@ -192,7 +193,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
                 }
                 if(args.length>=3 && args[0].equalsIgnoreCase("plotclear")){
                     if(!rentalsReady() || !plotGate.manages(args[1]))throw new IllegalArgumentException("A working configured rental bridge is required.");
-                    store.confirmCleared(args[1],sender.getName(),String.join(" ",Arrays.copyOfRange(args,2,args.length)),now);reconcilePlots();sender.sendMessage(NookUi.message(section,"Plot "+args[1]+" is now available to rent. Storage note saved; view it with /nookadmin plotstorage "+args[1]+". No blocks or items were moved."));return true;
+                    store.confirmCleared(args[1],sender.getName(),String.join(" ",Arrays.copyOfRange(args,2,args.length)),now);reconcilePlots();sender.sendMessage(NookUi.message(section,"Plot "+args[1]+" is now available to rent. Storage note saved; view it with ").append(NookUi.command("/nookadmin plotstorage "+args[1])).append(NookUi.text(". No blocks or items were moved.")));return true;
                 }
                 if(args.length==1 && args[0].equalsIgnoreCase("backup")){
                     Path folder=getDataFolder().toPath().resolve("backups");Files.createDirectories(folder);Path file=folder.resolve("nooks-"+now+".db");store.backup(file);sender.sendMessage(NookUi.message(section,"Consistent economy backup saved: "+file.getFileName()));return true;
@@ -230,7 +231,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             else if(args.length==2){
                 if(Set.of("pay","balance","give","take").contains(args[0].toLowerCase(Locale.ROOT))){for(var a:store.accounts())values.add(a.name());}
                 else if(admin && args[0].equalsIgnoreCase("awards"))values.addAll(List.of("on","off"));
-                else if(admin && Set.of("plotclear","plotstorage","plotabsence").contains(args[0].toLowerCase(Locale.ROOT)))for(var p:store.plots())values.add(p.id());
+                else if(admin && Set.of("plotclear","plotstorage","plotabsence").contains(args[0].toLowerCase(Locale.ROOT)))for(var p:store.plots())if(!args[0].equalsIgnoreCase("plotclear") || rentalsReady() && plotGate.manages(p.id()))values.add(p.id());
             }
         }catch(SQLException e){fail(e);}
         return NookUi.complete(args[args.length-1],values);

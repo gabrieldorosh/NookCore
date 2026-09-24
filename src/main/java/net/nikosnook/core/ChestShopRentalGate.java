@@ -87,6 +87,8 @@ public final class ChestShopRentalGate implements Listener {
         regionAt(new Location(loaded,0,0,0));
         var manager=WorldGuard.getInstance().getPlatform().getRegionContainer().get(BukkitAdapter.adapt(loaded));
         Objects.requireNonNull(manager.getRegion(district)).setFlag(Flags.DENY_MESSAGE,NookUi.protectionMessage(plugin.getConfig().getString("shop-gate.deny-message","&#e5b95cNookPlots » &#ddd6dfThis area is protected. Build in your rented plot, or ask staff for help.")));
+        Objects.requireNonNull(manager.getRegion(district)).setFlag(Flags.USE,com.sk89q.worldguard.protection.flags.StateFlag.State.ALLOW);
+        Objects.requireNonNull(manager.getRegion(district)).setFlag(Flags.USE.getRegionGroupFlag(),com.sk89q.worldguard.protection.flags.RegionGroup.ALL);
         for(var entry:regions.entrySet()) {
             var region=Objects.requireNonNull(manager.getRegion(entry.getKey()));
             var lease=store.plot(entry.getValue());
@@ -95,6 +97,8 @@ public final class ChestShopRentalGate implements Listener {
             for(var member:store.members(entry.getValue()).entrySet())
                 if(!member.getKey().equals(lease.owner()))members.addPlayer(member.getKey());
             region.setOwners(owners);region.setMembers(members);
+            region.setFlag(Flags.USE,com.sk89q.worldguard.protection.flags.StateFlag.State.ALLOW);
+            region.setFlag(Flags.USE.getRegionGroupFlag(),com.sk89q.worldguard.protection.flags.RegionGroup.ALL);
         }
         manager.save(); // Caller must keep payments/commands paused on failure.
     }
