@@ -73,8 +73,13 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
         if(killer!=null)message=PlayerPresentation.colourName(message,killer.getName(),preferences.get(killer.getUniqueId()).textColour());
         event.deathMessage(message);
     }
-    @EventHandler public void join(PlayerJoinEvent event){refresh(event.getPlayer());}
-    @EventHandler public void quit(PlayerQuitEvent event){snapshots.remove(event.getPlayer().getUniqueId());rankPackLoaded.remove(event.getPlayer().getUniqueId());}
+    @EventHandler(priority=EventPriority.HIGH) public void join(PlayerJoinEvent event){
+        refresh(event.getPlayer());
+        event.joinMessage(PlayerPresentation.colourName(event.joinMessage(),event.getPlayer().getName(),preferences.get(event.getPlayer().getUniqueId()).textColour()));
+    }
+    @EventHandler(priority=EventPriority.HIGH) public void quit(PlayerQuitEvent event){
+        event.quitMessage(PlayerPresentation.colourName(event.quitMessage(),event.getPlayer().getName(),preferences.get(event.getPlayer().getUniqueId()).textColour()));
+        snapshots.remove(event.getPlayer().getUniqueId());rankPackLoaded.remove(event.getPlayer().getUniqueId());}
     @EventHandler public void pack(PlayerResourcePackStatusEvent event){
         if(rankPack==null || !rankPack.equals(event.getID()))return;
         if(event.getStatus()==PlayerResourcePackStatusEvent.Status.SUCCESSFULLY_LOADED)rankPackLoaded.add(event.getPlayer().getUniqueId());

@@ -24,6 +24,11 @@ final class NookUi {
     static Component message(String section,String message){return prefix(section).append(text(message));}
     static Component problem(String section,String message){return prefix(section).append(error(message));}
     static Component heading(String text){return Component.text(text,ACCENT).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD);}
+    static String protectionMessage(String configured){
+        var text=net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacyAmpersand().deserialize(configured);
+        return net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.builder().character('§')
+            .hexColors().useUnusualXRepeatedCharacterHexFormat().build().serialize(text);
+    }
     static Component error(String message){return Component.text(message,BAD);}
     static Component history(NookStore.Entry entry){
         String description=switch(entry.kind()){
@@ -47,6 +52,13 @@ final class NookUi {
     static Component status(NookStore.Plot plot,long now){
         String state=plot.state();if(state.equals("ACTIVE") && now>=plot.paidUntil())state="GRACE";
         return switch(state){case "AVAILABLE"->Component.text("Available to rent",GOOD);case "ACTIVE"->Component.text("Open",GOOD);case "GRACE"->Component.text("Closed · rent overdue",WARNING);default->Component.text("Closed · awaiting clearance",BAD);};
+    }
+    static Component overdue(NookStore.Plot plot){
+        String command="/nookplots reopen "+plot.id();
+        return prefix("NookPlots").append(Component.text(plot.id(),COMMAND))
+            .append(text(" is overdue; sales are closed. The original renter can run "))
+            .append(Component.text(command,COMMAND).clickEvent(ClickEvent.suggestCommand(command)))
+            .append(text(" before "+date(plot.paidUntil()+NookStore.WEEK)+". Only the remaining part of the week is charged."));
     }
     static Component plot(NookStore store,NookStore.Plot plot)throws SQLException {
         Component result=text(plot.id()).append(Component.text(" · ",MUTED)).append(status(plot,System.currentTimeMillis()));

@@ -20,6 +20,8 @@ final class CommandSyntax {
             Map.entry("help",exact(1,"/nookplots help","Help does not take any extra words.")),
             Map.entry("list",exact(1,"/nookplots list","List does not take any extra words.")),
             Map.entry("leave",exact(1,"/nookplots leave","Leave applies to the plot you currently co-own.")),
+            Map.entry("find",new Shape(1,2,"/nookplots find [plot]","Find your own plot, or enter a plot name.")),
+            Map.entry("info",exact(2,"/nookplots info <plot>","Choose a plot to see its rent and prepaid weeks.")),
             Map.entry("rent",exact(2,"/nookplots rent <plot>","Enter the plot you want to rent.")),
             Map.entry("invite",exact(4,"/nookplots invite <plot> <player> <build|stock|both>","Enter a plot, player and the permissions to give them.")),
             Map.entry("role",exact(4,"/nookplots role <plot> <player> <build|stock|both>","Enter a plot, member and their new permissions.")),
@@ -31,7 +33,8 @@ final class CommandSyntax {
             Map.entry("decline",new Shape(1,2,"/nookplots decline [player]","Choose one inviter, or omit the name when you have one invitation.")),
             Map.entry("abandon",new Shape(2,3,"/nookplots abandon <plot>","Enter the plot to review before confirming abandonment."))),
         "nookadmin",Map.ofEntries(
-            Map.entry("teleport",exact(3,"/nookadmin teleport <player> <destination-player>","Enter the online player to move and the online player to move them to.")),
+            Map.entry("return",new Shape(1,2,"/nookadmin return [player]","Return yourself, or name one online player.")),
+            Map.entry("teleport",new Shape(2,5,"/nookadmin teleport <player> [destination-player]","Use one name to visit a player, or two names to move one player to another.")),
             Map.entry("help",exact(1,"/nookadmin help","Help does not take any extra words.")),
             Map.entry("balance",exact(2,"/nookadmin balance <player>","Enter the player whose balance you want to inspect.")),
             Map.entry("give",new Shape(4,Integer.MAX_VALUE,"/nookadmin give <player> <amount> <reason>","Enter a player, amount and an audit reason.")),
@@ -39,6 +42,7 @@ final class CommandSyntax {
             Map.entry("backup",exact(1,"/nookadmin backup","Backup does not take any extra words.")),
             Map.entry("awards",exact(2,"/nookadmin awards <on|off>","Choose on or off.")),
             Map.entry("plotdefine",exact(3,"/nookadmin plotdefine <id> <weekly-price>","Enter a plot ID and weekly rent.")),
+            Map.entry("plotstorage",exact(2,"/nookadmin plotstorage <plot>","Choose a plot to read its recorded storage notes.")),
             Map.entry("plotclear",new Shape(3,Integer.MAX_VALUE,"/nookadmin plotclear <plot> <storage-note>","This makes a cleared plot available to rent again; it does not clear blocks. First store the former renter's belongings, then describe where they are kept (for example: staff storage, chest A3).")),
             Map.entry("plotabsence",new Shape(4,Integer.MAX_VALUE,"/nookadmin plotabsence <plot> <days|off> <reason>","Enter a plot, absence duration and an audit reason.")))
     );

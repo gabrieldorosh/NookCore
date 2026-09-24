@@ -34,6 +34,11 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
     private final LongSupplier clock;
     private final BiConsumer<UUID,net.kyori.adventure.text.Component> notifyPlayer;
+    private BiConsumer<Player,String> locator=(player,plot)->player.sendMessage(NookUi.message("NookPlots","Plot directions are unavailable right now."));
+    void locator(BiConsumer<Player,String> locator){this.locator=locator;}
+    static net.kyori.adventure.text.Component findLink(String plot){
+        return net.kyori.adventure.text.Component.text(" [Find]",NookUi.COMMAND).clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/nookplots find "+plot));
+    }
     private record PendingAbandonment(NookStore.AbandonmentQuote quote,long expires) {}
     private final Map<UUID,PendingAbandonment> pendingAbandonments=new HashMap<>();
 
@@ -89,7 +94,7 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
                 for(var plot:store.plots())if(managed.test(plot.id())){
 
-                    sender.sendMessage(NookUi.text("• ").append(NookUi.plot(store,plot)));
+                    sender.sendMessage(NookUi.text("• ").append(NookUi.plot(store,plot)).append(findLink(plot.id())));
 
                     for(var member:store.members(plot.id()).entrySet())if(!member.getKey().equals(plot.owner()))sender.sendMessage(NookUi.text("  Co-owner: ").append(NookUi.name(store,member.getKey())));
 
@@ -99,6 +104,16 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
             }
 
+            if(args.length==2 && args[0].equalsIgnoreCase("info")){
+                if(!managed.test(args[1]))throw new IllegalArgumentException("That plot is not part of the shopping district.");
+                var plot=store.plot(args[1]);sender.sendMessage(NookUi.heading("NookPlots · "+plot.id()));
+                sender.sendMessage(NookUi.plot(store,plot));
+                if(plot.owner()!=null){
+                    sender.sendMessage(NookUi.text("Paid until: "+NookUi.date(plot.paidUntil())));
+                    sender.sendMessage(NookUi.text("Future prepaid weeks: "+NookStore.prepaidWeeks(plot,clock.getAsLong())+"/4 · excludes the current rental week"));
+                }
+                return true;
+            }
             if(!(sender instanceof Player p)){
                 NookUi.help(sender,"NookPlots · Console","/nookplots list — view plots, owners and availability","/nookadmin plotclear <plot> <storage-note> — release a plot after saving belongings and clearing it");
                 sender.sendMessage(NookUi.message("NookPlots","Renting and reopening require the renter to run /nookplots in game."));return true;
@@ -115,6 +130,15 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
             if(args.length>1 && Set.of("rent","invite","role","remove","prepay","reopen","abandon").contains(args[0].toLowerCase(Locale.ROOT)) && !managed.test(args[1]))throw new IllegalArgumentException("That plot has no configured protection mapping.");
 
             switch(args[0].toLowerCase(Locale.ROOT)){
+                case "find" -> {
+                    String plot=args.length==2?args[1]:null;
+                    if(plot==null){
+                        for(var candidate:store.plots())if(managed.test(candidate.id()) && store.members(candidate.id()).containsKey(actor)){plot=candidate.id();break;}
+                        if(plot==null)throw new IllegalArgumentException("You do not belong to a plot. Use /nookplots find <plot> to locate one from the list.");
+                    }
+                    if(!managed.test(plot))throw new IllegalArgumentException("That plot is not part of the shopping district.");
+                    locator.accept(p,plot);return true;
+                }
                 case "abandon" -> {
                     if(args.length<2 || args.length>3)throw new IllegalArgumentException("Use /nookplots abandon <plot> to review the refund before confirming.");
                     if(args.length==2){
@@ -145,7 +169,7 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
                     }
                     throw new IllegalArgumentException("You do not belong to a rented plot.");
                 }
-                case "rent" -> {if(args.length!=2)break;store.rent(args[1],actor,now);reconcile.run();sender.sendMessage(NookUi.message("NookPlots","Rented "+args[1]+" for "+Money.format(store.plot(args[1]).weekly())+". Rent renews automatically while you remain active and have enough Nooks. You can prepay up to four future weeks."));return true;}
+                case "rent" -> {if(args.length!=2)break;store.rent(args[1],actor,now);reconcile.run();sender.sendMessage(NookUi.message("NookPlots","Rented "+args[1]+" for "+Money.format(store.plot(args[1]).weekly())+". Rent renews automatically while you remain active and have enough Nooks. You can prepay up to four future weeks.").append(findLink(args[1])));return true;}
 
                 case "invite" -> {
 
@@ -181,13 +205,13 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
                 case "remove" -> {if(args.length!=3)break;UUID member=player(args[2]);store.removeMember(args[1],actor,member,now);reconcile.run();notifyPlayer.accept(member,notice().append(NookUi.text("Your access to "+args[1]+" was removed. You can no longer build or manage stock there.")));sender.sendMessage(NookUi.message("NookPlots","Member removed and any pending invitation withdrawn."));return true;}
 
-                case "prepay" -> {if(args.length!=3)break;store.prepay(args[1],actor,Integer.parseInt(args[2]),now);sender.sendMessage(NookUi.message("NookPlots","Rent prepaid · paid until "+NookUi.date(store.plot(args[1]).paidUntil())+"."));return true;}
+                case "prepay" -> {if(args.length!=3)break;store.prepay(args[1],actor,Integer.parseInt(args[2]),now);sender.sendMessage(NookUi.message("NookPlots","Rent prepaid · paid until "+NookUi.date(store.plot(args[1]).paidUntil())+" · Future prepaid weeks: "+NookStore.prepaidWeeks(store.plot(args[1]),now)+"/4."));return true;}
 
                 case "reopen" -> {if(args.length!=2)break;long charged=store.reopen(args[1],actor,now);sender.sendMessage(NookUi.message("NookPlots","Shop reopened for "+Money.format(charged)+"; the original billing date is unchanged."));return true;}
 
             }
 
-            NookUi.help(sender,"NookPlots","/nookplots abandon <plot> — review closure and a prepaid-week refund","/nookplots leave — leave as a co-owner","/nookplots list — see prices, owners and availability","/nookplots rent <plot> — rent an available plot","/nookplots invite <plot> <player> <build|stock|both> — invite or update a member","/nookplots invitations — see your invitations","/nookplots accept [player] — accept; omit player if only one invitation","/nookplots decline [player] — decline an invitation","/nookplots role <plot> <player> <build|stock|both> — replace their permissions","/nookplots remove <plot> <player> — remove a member","/nookplots prepay <plot> <weeks> — pay ahead, up to four weeks","/nookplots reopen <plot> — pay remaining rent and resume sales");
+            NookUi.help(sender,"NookPlots","/nookplots abandon <plot> — review closure and a prepaid-week refund","/nookplots leave — leave as a co-owner","/nookplots list — see prices, owners and availability","/nookplots find [plot] — locate your plot or a named plot","/nookplots info <plot> — check paid-through date and prepaid weeks","/nookplots rent <plot> — rent an available plot","/nookplots invite <plot> <player> <build|stock|both> — invite or update a member","/nookplots invitations — see your invitations","/nookplots accept [player] — accept; omit player if only one invitation","/nookplots decline [player] — decline an invitation","/nookplots role <plot> <player> <build|stock|both> — replace their permissions","/nookplots remove <plot> <player> — remove a member","/nookplots prepay <plot> <weeks> — pay ahead, up to four weeks","/nookplots reopen <plot> — pay remaining rent and resume sales");
 
         }catch(NumberFormatException ex){sender.sendMessage(NookUi.problem("NookPlots","Choose a whole number of weeks from 1 to 4."));}
         catch(IllegalArgumentException ex){sender.sendMessage(NookUi.problem("NookPlots",ex.getMessage()));}
@@ -238,12 +262,13 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
             List<String> values=new ArrayList<>();String sub=args[0].toLowerCase(Locale.ROOT);
 
-            if(args.length==1)values.addAll(List.of("abandon","leave","list","help","rent","invite","invitations","accept","decline","role","remove","prepay","reopen"));
+            if(args.length==1)values.addAll(List.of("abandon","leave","list","info","find","help","rent","invite","invitations","accept","decline","role","remove","prepay","reopen"));
 
             else if(args.length==2){
 
                 if(Set.of("accept","decline").contains(sub)){for(var i:store.invitations(player.getUniqueId(),System.currentTimeMillis()))values.add(store.account(i.inviter()).orElseThrow().name());}
 
+                else if((sub.equals("info") || sub.equals("find"))){for(var plot:store.plots())if(managed.test(plot.id()))values.add(plot.id());}
                 else if(Set.of("rent","invite","role","remove","prepay","reopen","abandon").contains(sub)){for(var plot:store.plots())if(managed.test(plot.id()) && (sub.equals("rent")?plot.state().equals("AVAILABLE"):player.getUniqueId().equals(plot.owner()) && store.role(plot.id(),player.getUniqueId()).equals("OWNER")))values.add(plot.id());}
 
             }else if(args.length==3){

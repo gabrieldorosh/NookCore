@@ -48,6 +48,6 @@ class PlotEntryNoticesTest {
         });
         var message=Component.text("Available");PlotEntryNotices.show(audience,message,PlotEntryNotices.Display.ACTIONBAR);
         PlotEntryNotices.show(audience,message,PlotEntryNotices.Display.OFF);assertEquals(List.of(message),sent);
-        assertEquals(PlotEntryNotices.Display.SUBTITLE,PlotEntryNotices.Display.parse("typo"));
+        assertEquals(PlotEntryNotices.Display.ACTIONBAR,PlotEntryNotices.Display.parse("typo"));
     }
 }

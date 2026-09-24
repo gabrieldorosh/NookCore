@@ -72,4 +72,17 @@ class AbandonmentCommandsTest {
         command("abandon","one");command("abandon","one","confirm");time.addAndGet(60000);
         commands.expireConfirmations((id,plot)->fail("Completed confirmation must not expire"));
     }
+    @Test void findOwnPlotDoesNotChangeBalanceOrMembership()throws Exception {
+        var found=new ArrayList<String>();commands.locator((p,id)->found.add(id));
+        long balance=store.account(owner).orElseThrow().cents();command("find");
+        assertEquals(List.of("one"),found);assertEquals(balance,store.account(owner).orElseThrow().cents());assertEquals(0,reconciles.get());
+    }
+    @Test void findRejectsUnmappedPlotsAndMalformedArguments(){
+        var found=new ArrayList<String>();commands.locator((p,id)->found.add(id));
+        command("find","unknown");command("find","one","extra");assertTrue(found.isEmpty());assertEquals(0,failures.get());
+    }
+    @Test void namedPlotLookupAndCompletionWork(){
+        var found=new ArrayList<String>();commands.locator((p,id)->found.add(id));command("find","one");
+        assertEquals(List.of("one"),found);assertEquals(List.of("one"),commands.onTabComplete(player,null,"nookplots",new String[]{"find",""}));
+    }
 }

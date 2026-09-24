@@ -24,6 +24,10 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         new SmitePrank(this);
         adminTeleports=new AdminTeleports(Bukkit::getPlayerExact,message->getLogger().info(message));
         getServer().getPluginManager().registerEvents(adminTeleports,this);
+        getCommand("return").setExecutor((sender,command,label,args)->{
+            String[] routed=new String[args.length+1];routed[0]="return";System.arraycopy(args,0,routed,1,args.length);adminTeleports.execute(sender,routed);return true;
+        });
+        getCommand("return").setTabCompleter((sender,command,label,args)->AdminTeleports.authorised(sender) && args.length==1?NookUi.complete(args[0],Bukkit.getOnlinePlayers().stream().map(Player::getName).toList()):List.of());
         try {
             Files.createDirectories(getDataFolder().toPath());
             store=new NookStore(getDataFolder().toPath().resolve("nooks.db"));
@@ -48,6 +52,19 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             Objects.requireNonNull(getCommand("nookadmin")).setExecutor(this);
             getCommand("nooks").setTabCompleter(this);getCommand("nookadmin").setTabCompleter(this);
             var plots=new PlotCommands(store,this::rentalsReady,this::reconcilePlots,this::fail,id->plotGate!=null && plotGate.manages(id),()->plotGate.validateConfiguration());
+            new ShopSetup(this,(player,block)->{
+                if(!rentalsReady())throw new IllegalArgumentException("Rentals must be available before previewing a district shop.");
+                try{
+                    plotGate.validateConfiguration();
+                    String plot=plotGate.regionAt(block.getLocation());
+                    if(!plotGate.manages(plot) || !store.role(plot,player.getUniqueId()).equals("OWNER") || !store.canTrade(plot,System.currentTimeMillis()))throw new IllegalArgumentException("Preview setup in your own active rented plot. Co-owner and town setup will follow later.");
+                    if(block.getState() instanceof org.bukkit.block.Chest chest && chest.getInventory().getHolder() instanceof org.bukkit.block.DoubleChest pair){
+                        for(var side:List.of(pair.getLeftSide(),pair.getRightSide()))if(!(side instanceof org.bukkit.block.Chest half) || !plot.equals(plotGate.regionAt(half.getLocation())))throw new IllegalArgumentException("Both halves of the chest must be inside your plot.");
+                    }
+                }catch(java.sql.SQLException e){throw new IllegalStateException("Could not read rental",e);}
+            });
+            var finder=new PlotFinder(this,id->plotGate.bounds(id),this::rentalsReady);
+            plots.locator(finder::show);
             Objects.requireNonNull(getCommand("nookplots")).setExecutor(plots);getCommand("nookplots").setTabCompleter(plots);
             Bukkit.getScheduler().runTaskTimer(this,()->plots.expireConfirmations((id,plot)->{
                 Player player=Bukkit.getPlayer(id);
@@ -99,7 +116,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     }
     private void plotNotice(Player player,NookStore.Plot plot)throws SQLException {
         if(!plotGate.manages(plot.id()) || store.role(plot.id(),player.getUniqueId()).equals("NONE"))return;
-        if(plot.state().equals("GRACE"))player.sendMessage(NookUi.message("NookPlots","Plot "+plot.id()+" is overdue and sales are closed. The original renter can /nookplots reopen "+plot.id()+" before "+NookUi.date(plot.paidUntil()+NookStore.WEEK)+". Only the remaining part of the week is charged."));
+        if(plot.state().equals("GRACE"))player.sendMessage(NookUi.overdue(plot));
         else if(plot.state().equals("RECLAIM"))player.sendMessage(NookUi.message("NookPlots","Plot "+plot.id()+" is awaiting staff reclamation. Sales are closed; contact staff about collecting your belongings. Nothing is automatically deleted."));
     }
     @EventHandler public void join(PlayerJoinEvent e){try{joinPlayer(e.getPlayer());}catch(SQLException ex){fail(ex);}}
@@ -132,7 +149,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     }
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
         String section=command.getName().equals("nookadmin")?"NookAdmin":"Nooks";
-        if(command.getName().equals("nookadmin") && args.length>0 && args[0].equalsIgnoreCase("teleport")){adminTeleports.execute(sender,args);return true;}
+        if(command.getName().equals("nookadmin") && args.length>0 && Set.of("teleport","return").contains(args[0].toLowerCase(Locale.ROOT))){adminTeleports.execute(sender,args);return true;}
         if(!healthy){sender.sendMessage(NookUi.message(section,"The economy is paused. Please contact an admin."));return true;}
         try{
             long now=System.currentTimeMillis();
@@ -148,9 +165,15 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
                     store.setAbsence(args[1],expires,sender.getName(),String.join(" ",Arrays.copyOfRange(args,3,args.length)),now);
                     sender.sendMessage(NookUi.message(section,"Absence exception recorded. Rent still requires funds; this does not reopen a closed shop or waive rent."));return true;
                 }
+                if(args.length==2 && args[0].equalsIgnoreCase("plotstorage")){
+                    var notes=store.storageNotes(args[1]);sender.sendMessage(NookUi.heading("NookAdmin · Storage notes for "+args[1]));
+                    if(notes.isEmpty())sender.sendMessage(NookUi.text("No clearance storage notes have been recorded for this plot."));
+                    for(var note:notes)sender.sendMessage(NookUi.text(NookUi.date(note.time())+" · "+note.detail()));
+                    return true;
+                }
                 if(args.length>=3 && args[0].equalsIgnoreCase("plotclear")){
                     if(!rentalsReady() || !plotGate.manages(args[1]))throw new IllegalArgumentException("A working configured rental bridge is required.");
-                    store.confirmCleared(args[1],sender.getName(),String.join(" ",Arrays.copyOfRange(args,2,args.length)),now);reconcilePlots();sender.sendMessage(NookUi.message(section,"Plot is now available to rent. Your belongings-storage note was recorded; this command did not move items or clear blocks."));return true;
+                    store.confirmCleared(args[1],sender.getName(),String.join(" ",Arrays.copyOfRange(args,2,args.length)),now);reconcilePlots();sender.sendMessage(NookUi.message(section,"Plot "+args[1]+" is now available to rent. Storage note saved; view it with /nookadmin plotstorage "+args[1]+". No blocks or items were moved."));return true;
                 }
                 if(args.length==1 && args[0].equalsIgnoreCase("backup")){
                     Path folder=getDataFolder().toPath().resolve("backups");Files.createDirectories(folder);Path file=folder.resolve("nooks-"+now+".db");store.backup(file);sender.sendMessage(NookUi.message(section,"Consistent economy backup saved: "+file.getFileName()));return true;
@@ -160,7 +183,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
                 }
                 if(args.length==2 && args[0].equalsIgnoreCase("balance")){var a=resolve(args[1]);sender.sendMessage(NookUi.prefix(section).append(NookUi.name(a.id(),a.name())).append(NookUi.text(": "+Money.format(a.cents()))));return true;}
                 if(args.length>=4 && Set.of("give","take").contains(args[0].toLowerCase(Locale.ROOT))){var a=resolve(args[1]);long value=Money.parse(args[2]);if(args[0].equalsIgnoreCase("take"))value=-value;String reason=String.join(" ",Arrays.copyOfRange(args,3,args.length));store.adjust(a.id(),value,sender.getName(),reason,now);sender.sendMessage(NookUi.message(section,"Recorded adjustment for ").append(NookUi.name(a.id(),a.name())).append(NookUi.text(": "+Money.format(value))));return true;}
-                NookUi.help(sender,"NookAdmin","/nookadmin teleport <player> <destination-player> — moderation teleport between online players","/nookadmin balance <player> — inspect a balance","/nookadmin give <player> <amount> <reason> — credit Nooks","/nookadmin take <player> <amount> <reason> — debit Nooks","/nookadmin backup — save an economy snapshot","/nookadmin awards <on|off> — toggle advancement payments","/nookadmin plotdefine <id> <weekly-price> — create a plot record","/nookadmin plotclear <id> <storage-note> — release a cleared plot; record where belongings are stored","/nookadmin plotabsence <id> <days|off> <reason> — record an absence");return true;
+                NookUi.help(sender,"NookAdmin","/nookadmin teleport <player> [destination-player] — visit a player, or move one player to another","/nookadmin return [player] — return after a staff teleport (30-minute window)","/nookadmin balance <player> — inspect a balance","/nookadmin give <player> <amount> <reason> — credit Nooks","/nookadmin take <player> <amount> <reason> — debit Nooks","/nookadmin backup — save an economy snapshot","/nookadmin awards <on|off> — toggle advancement payments","/nookadmin plotdefine <id> <weekly-price> — create a plot record","/nookadmin plotclear <id> <storage-note> — release a cleared plot; record where belongings are stored","/nookadmin plotstorage <id> — read the latest 10 clearance storage notes","/nookadmin plotabsence <id> <days|off> <reason> — record an absence");return true;
             }
             if(!(sender instanceof Player p)){sender.sendMessage(NookUi.message(section,"Use /nookadmin balance <player> from console."));return true;}
             CommandSyntax.check("nooks",args);
@@ -181,14 +204,14 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args){
         boolean admin=command.getName().equals("nookadmin");if(!healthy || admin && !sender.hasPermission("nookcore.admin"))return List.of();
-        if(admin && args.length>=2 && args.length<=3 && args[0].equalsIgnoreCase("teleport"))return AdminTeleports.authorised(sender)?NookUi.complete(args[args.length-1],Bukkit.getOnlinePlayers().stream().map(Player::getName).toList()):List.of();
+        if(admin && args.length>=2 && args.length<=3 && Set.of("teleport","return").contains(args[0].toLowerCase(Locale.ROOT)))return AdminTeleports.authorised(sender)?NookUi.complete(args[args.length-1],Bukkit.getOnlinePlayers().stream().map(Player::getName).toList()):List.of();
         List<String> values=new ArrayList<>();
         try{
-            if(args.length==1)values.addAll(admin?List.of("balance","give","take","backup","awards","plotdefine","plotclear","plotabsence","help","teleport"):List.of("pay","history","help"));
+            if(args.length==1)values.addAll(admin?List.of("balance","give","take","backup","awards","plotdefine","plotclear","plotstorage","plotabsence","help","teleport","return"):List.of("pay","history","help"));
             else if(args.length==2){
                 if(Set.of("pay","balance","give","take").contains(args[0].toLowerCase(Locale.ROOT))){for(var a:store.accounts())values.add(a.name());}
                 else if(admin && args[0].equalsIgnoreCase("awards"))values.addAll(List.of("on","off"));
-                else if(admin && Set.of("plotclear","plotabsence").contains(args[0].toLowerCase(Locale.ROOT)))for(var p:store.plots())values.add(p.id());
+                else if(admin && Set.of("plotclear","plotstorage","plotabsence").contains(args[0].toLowerCase(Locale.ROOT)))for(var p:store.plots())values.add(p.id());
             }
         }catch(SQLException e){fail(e);}
         return NookUi.complete(args[args.length-1],values);

@@ -5,6 +5,7 @@ import org.bukkit.command.*;
 import org.bukkit.entity.Player;
 import org.bukkit.event.*;
 import org.bukkit.event.player.PlayerTeleportEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.server.ServerCommandEvent;
 import org.bukkit.event.server.RemoteServerCommandEvent;
 import java.util.*;
@@ -13,10 +14,48 @@ import java.util.function.*;
 /** A one-use exception for an explicitly authorised, synchronous moderation teleport. */
 final class AdminTeleports implements Listener {
     private record Permit(Location destination) {}
+    private record ReturnPoint(Location location,long expires){}
+    static final long RETURN_LIFETIME=30*60_000L;
+    private final Map<UUID,ReturnPoint> returns=new HashMap<>();
+    private final LongSupplier clock;
+    private final Predicate<Location> safeReturn;
     private final Map<UUID,Permit> permits=new HashMap<>();
     private final Function<String,Player> players;
     private final Consumer<String> audit;
-    AdminTeleports(Function<String,Player> players,Consumer<String> audit){this.players=players;this.audit=audit;}
+    AdminTeleports(Function<String,Player> players,Consumer<String> audit){this(players,audit,System::currentTimeMillis,AdminTeleports::safeReturn);}
+    AdminTeleports(Function<String,Player> players,Consumer<String> audit,LongSupplier clock,Predicate<Location> safeReturn){this.players=players;this.audit=audit;this.clock=clock;this.safeReturn=safeReturn;}
+    static boolean safeReturn(Location location){return safeReturn(location,org.bukkit.Material::isOccluding);}
+    static boolean safeReturn(Location location,Predicate<org.bukkit.Material> occluding){
+        var world=location.getWorld();
+        if(world==null || location.getY()<world.getMinHeight()+1 || location.getY()+1>=world.getMaxHeight() || !world.getWorldBorder().isInside(location))return false;
+        // The origin was visited already; do not generate new terrain during a return.
+        int y=location.getBlockY(),top=(int)Math.floor(location.getY()+1.8);
+        for(double dx:new double[]{-.3,.3})for(double dz:new double[]{-.3,.3}){
+            int x=(int)Math.floor(location.getX()+dx),z=(int)Math.floor(location.getZ()+dz);
+            if(!world.isChunkGenerated(x>>4,z>>4) || !world.getWorldBorder().isInside(new Location(world,location.getX()+dx,location.getY(),location.getZ()+dz)))return false;
+            var floor=world.getBlockAt(x,y-1,z);
+            if(!occluding.test(floor.getType()) || floor.getType()==org.bukkit.Material.MAGMA_BLOCK)return false;
+            for(int checkY=y;checkY<=top;checkY++)if(!Set.of(org.bukkit.Material.AIR,org.bukkit.Material.CAVE_AIR,org.bukkit.Material.VOID_AIR).contains(world.getBlockAt(x,checkY,z).getType()))return false;
+        }
+        return true;
+    }
+    void forget(UUID player){returns.remove(player);}
+    @EventHandler public void quit(org.bukkit.event.player.PlayerQuitEvent event){forget(event.getPlayer().getUniqueId());}
+    @EventHandler public void death(org.bukkit.event.entity.PlayerDeathEvent event){forget(event.getEntity().getUniqueId());}
+    private void returnPlayer(CommandSender sender,String[] args){
+        if(args.length<1 || args.length>2){sender.sendMessage(NookUi.message("NookAdmin","Use /nookadmin return [player]. Console must name a player."));return;}
+        Player player=args.length==2?players.apply(args[1]):sender instanceof Player self?self:null;
+        if(player==null){sender.sendMessage(NookUi.problem("NookAdmin","Choose an online player. Console must use /nookadmin return <player>."));return;}
+        ReturnPoint point=returns.get(player.getUniqueId());
+        if(point==null || clock.getAsLong()>=point.expires()){
+            forget(player.getUniqueId());sender.sendMessage(NookUi.message("NookAdmin","No current return point for "+player.getName()+". Points last 30 minutes and clear on death, logout or restart."));return;
+        }
+        try{
+            Location destination=point.location().clone();
+            if(!safeReturn.test(destination)){sender.sendMessage(NookUi.problem("NookAdmin","The previous position is not a clear, solid-floor landing inside the world border. The return point is kept; check the area before retrying."));return;}
+            if(move(sender,player,destination,NookUi.text("their previous position"),false))returns.remove(player.getUniqueId(),point);
+        }catch(RuntimeException e){audit.accept("Return check by "+sender.getName()+" failed: "+e.getClass().getSimpleName());sender.sendMessage(NookUi.problem("NookAdmin","The return position could not be checked. No return was confirmed."));}
+    }
     static boolean authorised(CommandSender sender){
         return sender instanceof ConsoleCommandSender || sender instanceof RemoteConsoleCommandSender
             || sender instanceof Player && sender.hasPermission("nookcore.admin") && sender.hasPermission("nookcore.travel.bypass");
@@ -28,26 +67,52 @@ final class AdminTeleports implements Listener {
     }
     void execute(CommandSender sender,String[] args){
         if(!authorised(sender)){sender.sendMessage(NookUi.problem("NookAdmin","Only console and authorised admins can use moderation teleports."));return;}
-        if(args.length!=3){sender.sendMessage(NookUi.message("NookAdmin","Use /nookadmin teleport <player> <destination-player>. Both players must be online; use their exact names."));return;}
+        if(args.length>0 && args[0].equalsIgnoreCase("return")){returnPlayer(sender,args);return;}
+        if(args.length==4 || args.length==5){
+            Player moved=args.length==5?players.apply(args[1]):sender instanceof Player self?self:null;
+            if(moved==null){sender.sendMessage(NookUi.problem("NookAdmin","Specify an online player: /nookadmin teleport <player> <x> <y> <z>."));return;}
+            Location location=moved.getLocation().clone();int start=args.length-3;
+            try{
+                location.setX(coordinate(args[start],location.getX()));
+                location.setY(coordinate(args[start+1],location.getY()));
+                location.setZ(coordinate(args[start+2],location.getZ()));
+            }catch(IllegalArgumentException e){sender.sendMessage(NookUi.problem("NookAdmin","Use finite coordinates between -30,000,000 and 30,000,000, or ~ offsets from the player being moved."));return;}
+            move(sender,moved,location,net.kyori.adventure.text.Component.text(location.getX()+", "+location.getY()+", "+location.getZ(),NookUi.ACCENT),true);return;
+        }
+        if(args.length==2 && sender instanceof Player self)args=new String[]{"teleport",self.getName(),args[1]};
+        if(args.length!=3){sender.sendMessage(NookUi.message("NookAdmin","Use /nookadmin teleport <player> [destination-player]. With one name, an admin moves to that player. Console requires both names. Coordinates: /nookadmin teleport [player] <x> <y> <z>."));return;}
         Player moved=players.apply(args[1]),destination=players.apply(args[2]);
         if(moved==null || destination==null){sender.sendMessage(NookUi.problem("NookAdmin","Both players must be online. Use their exact names, without selectors."));return;}
         if(moved.getUniqueId().equals(destination.getUniqueId())){sender.sendMessage(NookUi.problem("NookAdmin","Choose two different players."));return;}
         Location location=destination.getLocation().clone();
-        if(location.getWorld()==null){sender.sendMessage(NookUi.problem("NookAdmin","The destination world is unavailable."));return;}
+        move(sender,moved,location,NookUi.name(destination.getUniqueId(),destination.getName()),true);
+    }
+    static double coordinate(String input,double origin){
+        boolean relative=input.startsWith("~");String number=relative?input.substring(1):input;
+        double result=(relative?origin:0)+(relative && number.isEmpty()?0:Double.parseDouble(number));
+        if(!Double.isFinite(result) || Math.abs(result)>30_000_000)throw new IllegalArgumentException("Coordinate out of range");
+        return result;
+    }
+    private boolean move(CommandSender sender,Player moved,Location location,net.kyori.adventure.text.Component destinationLabel,boolean remember){
+        if(location.getWorld()==null){sender.sendMessage(NookUi.problem("NookAdmin","The destination world is unavailable."));return false;}
         UUID id=moved.getUniqueId();
-        if(permits.containsKey(id)){sender.sendMessage(NookUi.problem("NookAdmin","A moderation teleport is already in progress for that player."));return;}
+        if(permits.containsKey(id)){sender.sendMessage(NookUi.problem("NookAdmin","A moderation teleport is already in progress for that player."));return false;}
+        Location origin=moved.getLocation().clone();
         Permit permit=new Permit(location.clone());permits.put(id,permit);
         try{
             boolean success=moved.teleport(location,PlayerTeleportEvent.TeleportCause.PLUGIN);
-            audit.accept("Moderation teleport by "+sender.getName()+": "+moved.getName()+" to "+destination.getName()+" ["+(success?"completed":"cancelled")+"]");
+            audit.accept("Moderation teleport by "+sender.getName()+": "+moved.getName()+" to "+net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(destinationLabel)+" ["+(success?"completed":"cancelled")+"]");
             if(success){
-                sender.sendMessage(NookUi.message("NookAdmin","Teleported ").append(NookUi.name(id,moved.getName())).append(NookUi.text(" to ")).append(NookUi.name(destination.getUniqueId(),destination.getName())).append(NookUi.text(".")));
-                moved.sendMessage(NookUi.message("NookAdmin","An admin moved you to ").append(NookUi.name(destination.getUniqueId(),destination.getName())).append(NookUi.text(" for moderation.")));
+                if(remember){returns.entrySet().removeIf(e->clock.getAsLong()>=e.getValue().expires());returns.put(id,new ReturnPoint(origin,clock.getAsLong()+RETURN_LIFETIME));}
+                sender.sendMessage(NookUi.message("NookAdmin","Teleported ").append(NookUi.name(id,moved.getName())).append(NookUi.text(" to ")).append(destinationLabel).append(NookUi.text(".")));
+                if(!moved.getUniqueId().equals(sender instanceof Player actor?actor.getUniqueId():null))moved.sendMessage(NookUi.message("NookAdmin","An admin moved you to ").append(destinationLabel).append(NookUi.text(".")));
+                return true;
             }else sender.sendMessage(NookUi.problem("NookAdmin","The teleport was cancelled. Check protection rules or other plugins."));
         }catch(RuntimeException e){
             audit.accept("Moderation teleport by "+sender.getName()+" for "+moved.getName()+" failed: "+e.getClass().getSimpleName());
             sender.sendMessage(NookUi.problem("NookAdmin","The teleport could not be confirmed. Check the player's position before retrying."));
         }finally{permits.remove(id,permit);}
+        return false;
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void consoleCommand(ServerCommandEvent event){
@@ -55,6 +120,16 @@ final class AdminTeleports implements Listener {
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void remoteCommand(RemoteServerCommandEvent event){consoleCommand(event);}
+    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
+    public void playerCommand(PlayerCommandPreprocessEvent event){
+        if(!authorised(event.getPlayer()))return;
+        String[] words=event.getMessage().trim().split("\\s+");
+        if(!Set.of("/tp","/teleport","/minecraft:tp","/minecraft:teleport","/essentials:tp","/essentials:teleport").contains(words[0].toLowerCase(Locale.ROOT)))return;
+        // Leave coordinates, selectors and other plugin grammars with their existing handlers.
+        if(words.length<2 || words.length>3 || Arrays.stream(words,1,words.length).anyMatch(w->!w.matches("[A-Za-z0-9_.]{1,32}")))return;
+        event.setCancelled(true);
+        String[] args=Arrays.copyOf(words,words.length);args[0]="teleport";execute(event.getPlayer(),args);
+    }
     void routeConsole(CommandSender sender,String command,Runnable cancel){
         if(!(sender instanceof ConsoleCommandSender || sender instanceof RemoteConsoleCommandSender))return;
         String[] words=command.trim().split("\\s+");

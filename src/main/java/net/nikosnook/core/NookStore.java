@@ -354,18 +354,31 @@ public final class NookStore implements AutoCloseable {
     }
     public long reopen(String id,UUID actor,long now)throws SQLException {
         return tx(()->{Plot p=plot(id);owner(p,actor);
-            if(!p.state().equals("GRACE") || now>=p.paidUntil()+WEEK)throw new IllegalArgumentException("This plot cannot be reopened; contact staff.");
+            if(p.state().equals("ACTIVE") && now<p.paidUntil())throw new IllegalArgumentException("This shop is already open. Use /nookplots info "+id+" to check its rent.");
+            if(!p.state().equals("GRACE") || now>=p.paidUntil()+WEEK)throw new IllegalArgumentException("This plot cannot be reopened; contact staff.");
             long cost=Money.prorate(p.weekly(),p.paidUntil()+WEEK-now,WEEK);
             mutate(actor,-cost,"rent-reopen",id,now);update("UPDATE plots SET state='ACTIVE',paid_until=? WHERE id=?",p.paidUntil()+WEEK,id);event(id,"REOPEN",Long.toString(cost),now);return cost;
         });
     }
+    public static int prepaidWeeks(Plot plot,long now){
+        long remaining=plot.paidUntil()-now;
+        return plot.state().equals("ACTIVE") && remaining>0?(int)((remaining-1)/WEEK):0;
+    }
+    public record StorageNote(long time,String detail) {}
+    public synchronized List<StorageNote> storageNotes(String id)throws SQLException {
+        plot(id);List<StorageNote> notes=new ArrayList<>();
+        try(var p=db.prepareStatement("SELECT time,detail FROM plot_events WHERE plot=? AND kind='CLEARED' ORDER BY id DESC LIMIT 10")){
+            bind(p,id);try(var rows=p.executeQuery()){while(rows.next())notes.add(new StorageNote(rows.getLong(1),rows.getString(2)));}
+        }
+        return notes;
+    }
     public void prepay(String id,UUID actor,int weeks,long now)throws SQLException {
         if(weeks<1 || weeks>4)throw new IllegalArgumentException("Prepay one to four weeks.");
         tx(()->{Plot p=plot(id);owner(p,actor);
             long until=Math.addExact(p.paidUntil(),WEEK*weeks);
             if(!p.state().equals("ACTIVE") || now>=p.paidUntil())throw new IllegalArgumentException("Reopen the plot first.");
             // Four additional weeks beyond the current rental week, not unlimited repeated calls.
-            if(until-now>WEEK*5)throw new IllegalArgumentException("At most four future weeks may be prepaid.");
+            if(until-now>WEEK*5)throw new IllegalArgumentException("You already have "+prepaidWeeks(p,now)+" future prepaid weeks. The limit is four; use /nookplots info "+id+" for your paid-through date.");
             mutate(actor,-Math.multiplyExact(p.weekly(),weeks),"rent-prepay",id,now);update("UPDATE plots SET paid_until=? WHERE id=?",until,id);event(id,"PREPAY",Integer.toString(weeks),now);return null;
         });
     }

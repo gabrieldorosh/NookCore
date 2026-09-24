@@ -7,6 +7,13 @@ author: NikosNook
 softdepend: [Vault, WorldGuard, WorldEdit, PlaceholderAPI]
 loadbefore: [ChestShop]
 commands:
+  return:
+    description: Return after a staff teleport
+    permission: nookcore.admin
+    usage: /return [player]
+  nookshops:
+    description: Preview guided shop setup
+    usage: /nookshops help
   smite:
     description: Call down the heavens
     usage: /smite <player>

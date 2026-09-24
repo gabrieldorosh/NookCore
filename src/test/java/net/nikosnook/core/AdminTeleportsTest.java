@@ -79,4 +79,94 @@ class AdminTeleportsTest {
             assertFalse(route(console,command));
         }assertEquals(0,calls);
     }
+    @Test void singleNameMovesAdminWithoutDuplicateMovedMessage(){
+        Player admin=player("Admin",Set.of("nookcore.admin","nookcore.travel.bypass"));players.put("Admin",admin);
+        attempt=to->teleports.consume(event(admin,to,PlayerTeleportEvent.TeleportCause.PLUGIN));
+        teleports.execute(admin,new String[]{"teleport","Target"});assertEquals(1,calls);
+        assertEquals(1,messages.size());assertTrue(messages.getFirst().startsWith("NookAdmin » Teleported Admin"));
+    }
+    @Test void adminPlayerAliasCanMoveOrdinaryPlayer(){
+        Player admin=player("Admin",Set.of("nookcore.admin","nookcore.travel.bypass"));
+        for(String root:List.of("/tp","/teleport","/minecraft:tp","/essentials:tp")){
+            var event=new org.bukkit.event.player.PlayerCommandPreprocessEvent(admin,root+" Moved Target",Set.of());
+            teleports.playerCommand(event);assertTrue(event.isCancelled());
+        }
+        assertEquals(4,calls);assertFalse(teleports.consume(event(moved,location,PlayerTeleportEvent.TeleportCause.PLUGIN)));
+    }
+    @Test void helperAliasesCannotAcquirePermit(){
+        var event=new org.bukkit.event.player.PlayerCommandPreprocessEvent(moved,"/tp Moved Target",Set.of());
+        teleports.playerCommand(event);assertFalse(event.isCancelled());assertEquals(0,calls);
+    }
+    @Test void coordinatesUseScopedPermitAndPreserveRotation(){
+        attempt=to->{assertEquals(100.5,to.getX());assertEquals(72,to.getY());assertEquals(25,to.getZ());assertEquals(90,to.getYaw());return teleports.consume(event(moved,to,PlayerTeleportEvent.TeleportCause.PLUGIN));};
+        teleports.execute(console,new String[]{"teleport","Moved","100.5","~2","~"});assertEquals(1,calls);assertTrue(audit.getFirst().contains("completed"));
+    }
+    @Test void invalidCoordinatesAndUnauthorisedRequestsDoNotMove(){
+        for(String x:List.of("NaN","Infinity","30000001","^1","no"))teleports.execute(console,new String[]{"teleport","Moved",x,"70","25"});
+        teleports.execute(moved,new String[]{"teleport","1","70","25"});
+        teleports.execute(console,new String[]{"teleport","1","70","25"});assertEquals(0,calls);
+    }
+    @Test void adminCanTeleportSelfToCoordinates(){
+        Player admin=player("Admin",Set.of("nookcore.admin","nookcore.travel.bypass"));
+        attempt=to->teleports.consume(event(admin,to,PlayerTeleportEvent.TeleportCause.PLUGIN));
+        teleports.execute(admin,new String[]{"teleport","10","70","20"});assertEquals(1,calls);assertEquals(1,messages.size());
+    }
+    @Test void successfulReturnUsesOriginalLocationAndIsSingleUse(){
+        teleports=new AdminTeleports(players::get,audit::add,()->100L,p->true);
+        Location original=location.clone();run(console);location=location.clone().add(50,0,50);
+        attempt=to->{assertEquals(original,to);return teleports.consume(event(moved,to,PlayerTeleportEvent.TeleportCause.PLUGIN));};
+        teleports.execute(console,new String[]{"return","Moved"});assertEquals(2,calls);
+        teleports.execute(console,new String[]{"return","Moved"});assertEquals(2,calls);
+    }
+    @Test void cancelledTeleportDoesNotCreateReturnPoint(){
+        teleports=new AdminTeleports(players::get,audit::add,()->100L,p->true);attempt=to->false;run(console);
+        teleports.execute(console,new String[]{"return","Moved"});assertEquals(1,calls);
+    }
+    @Test void unsafeAndCancelledReturnsKeepPointForRetry(){
+        var safe=new java.util.concurrent.atomic.AtomicBoolean(false);
+        teleports=new AdminTeleports(players::get,audit::add,()->100L,p->safe.get());run(console);
+        teleports.execute(console,new String[]{"return","Moved"});assertEquals(1,calls);
+        safe.set(true);attempt=to->false;teleports.execute(console,new String[]{"return","Moved"});assertEquals(2,calls);
+        attempt=to->true;teleports.execute(console,new String[]{"return","Moved"});assertEquals(3,calls);
+        teleports.execute(console,new String[]{"return","Moved"});assertEquals(3,calls);
+    }
+    @Test void returnExpiresExactlyAtDeadline(){
+        var time=new java.util.concurrent.atomic.AtomicLong(100);
+        teleports=new AdminTeleports(players::get,audit::add,time::get,p->true);run(console);
+        time.addAndGet(AdminTeleports.RETURN_LIFETIME);teleports.execute(console,new String[]{"return","Moved"});assertEquals(1,calls);
+    }
+    @Test void forgetAndUnauthorisedReturnCannotMovePlayer(){
+        teleports=new AdminTeleports(players::get,audit::add,()->100L,p->true);run(console);
+        teleports.execute(moved,new String[]{"return","Moved"});assertEquals(1,calls);
+        teleports.forget(moved.getUniqueId());teleports.execute(console,new String[]{"return","Moved"});assertEquals(1,calls);
+    }
+    @Test void latestSuccessfulTeleportReplacesOriginButFailureDoesNot(){
+        teleports=new AdminTeleports(players::get,audit::add,()->100L,p->true);run(console);
+        location=location.clone().add(20,0,0);Location second=location.clone();run(console);
+        location=location.clone().add(20,0,0);attempt=to->false;run(console);
+        attempt=to->{assertEquals(second,to);return true;};teleports.execute(console,new String[]{"return","Moved"});assertEquals(4,calls);
+    }
+    // Material occlusion uses Paper registries; supply the fixture classification without a running server.
+    boolean safeLanding(Location location){return AdminTeleports.safeReturn(location,material->material==Material.STONE || material==Material.MAGMA_BLOCK);}
+    Location landing(Material floor,Material body,boolean generated,boolean inside){
+        var border=proxy(WorldBorder.class,(o,m,a)->m.getName().equals("isInside")?inside:null);
+        World world=proxy(World.class,(o,m,a)->switch(m.getName()){
+            case "getMinHeight"->-64;case "getMaxHeight"->320;case "getWorldBorder"->border;case "isChunkGenerated"->generated;
+            case "getBlockAt"->proxy(org.bukkit.block.Block.class,(block,method,args)->method.getName().equals("getType")?((int)a[1]<70?floor:body):null);
+            default->null;
+        });return new Location(world,12.5,70,25.5);
+    }
+    @Test void landingRequiresAirAndSolidNonHazardousFloor(){
+        assertTrue(safeLanding(landing(Material.STONE,Material.AIR,true,true)));
+        assertFalse(safeLanding(landing(Material.AIR,Material.AIR,true,true)));
+        assertFalse(safeLanding(landing(Material.MAGMA_BLOCK,Material.AIR,true,true)));
+        assertFalse(safeLanding(landing(Material.STONE,Material.STONE,true,true)));
+        assertFalse(safeLanding(landing(Material.STONE,Material.WATER,true,true)));
+    }
+    @Test void landingRejectsUnGeneratedTerrainBorderAndHeight(){
+        assertFalse(safeLanding(landing(Material.STONE,Material.AIR,false,true)));
+        assertFalse(safeLanding(landing(Material.STONE,Material.AIR,true,false)));
+        var low=landing(Material.STONE,Material.AIR,true,true);low.setY(-64);assertFalse(safeLanding(low));
+        var high=landing(Material.STONE,Material.AIR,true,true);high.setY(320);assertFalse(safeLanding(high));
+    }
 }

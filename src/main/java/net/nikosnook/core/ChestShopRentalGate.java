@@ -86,7 +86,7 @@ public final class ChestShopRentalGate implements Listener {
         var loaded=Objects.requireNonNull(Bukkit.getWorld(world));
         regionAt(new Location(loaded,0,0,0));
         var manager=WorldGuard.getInstance().getPlatform().getRegionContainer().get(BukkitAdapter.adapt(loaded));
-        Objects.requireNonNull(manager.getRegion(district)).setFlag(Flags.DENY_MESSAGE,plugin.getConfig().getString("shop-gate.deny-message","&dNookPlots &7» &fThis area is protected. Build in your rented plot, or ask staff for help."));
+        Objects.requireNonNull(manager.getRegion(district)).setFlag(Flags.DENY_MESSAGE,NookUi.protectionMessage(plugin.getConfig().getString("shop-gate.deny-message","&#e5b95cNookPlots » &#ddd6dfThis area is protected. Build in your rented plot, or ask staff for help.")));
         for(var entry:regions.entrySet()) {
             var region=Objects.requireNonNull(manager.getRegion(entry.getKey()));
             var lease=store.plot(entry.getValue());
@@ -99,6 +99,15 @@ public final class ChestShopRentalGate implements Listener {
         manager.save(); // Caller must keep payments/commands paused on failure.
     }
     boolean manages(String plot){return regions.containsValue(plot);}
+    PlotFinder.Bounds bounds(String plot){
+        String regionId=regions.entrySet().stream().filter(e->e.getValue().equals(plot)).map(Map.Entry::getKey).findFirst().orElseThrow(()->new IllegalArgumentException("That plot is not part of the shopping district."));
+        var loaded=Objects.requireNonNull(Bukkit.getWorld(world),"District world is not loaded");
+        var manager=WorldGuard.getInstance().getPlatform().getRegionContainer().get(BukkitAdapter.adapt(loaded));
+        var region=Objects.requireNonNull(manager).getRegion(regionId);
+        if(!(region instanceof ProtectedCuboidRegion))throw new IllegalStateException("Plot region is unavailable.");
+        var min=region.getMinimumPoint();var max=region.getMaximumPoint();
+        return new PlotFinder.Bounds(world,min.x(),min.z(),max.x(),max.z());
+    }
     Set<String> managedPlots(){return Set.copyOf(regions.values());}
     void validateConfiguration(){
         var loaded=Objects.requireNonNull(Bukkit.getWorld(world),"District world is not loaded");

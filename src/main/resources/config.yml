@@ -15,9 +15,9 @@ rental-commands-enabled: false
 shop-gate:
   enabled: false
   world-uuid: ""
-  deny-message: "&dNookPlots &7» &fThis area is protected. Build in your rented plot, or ask staff for help."
+  deny-message: "&#e5b95cNookPlots » &#ddd6dfThis area is protected. Build in your rented plot, or ask staff for help."
   # subtitle has a native fade; actionbar keeps the old position; off hides entry notices.
-  entry-notices: subtitle
+  entry-notices: actionbar
   district-region: nook_district
   plot-regions: {}
 travel:
@@ -86,7 +86,7 @@ advancement-rewards:
   "minecraft:husbandry/axolotl_in_a_bucket": 300
   "minecraft:husbandry/balanced_diet": 2500
   "minecraft:husbandry/bred_all_animals": 3500
-  "minecraft:husbandry/breed_an_animal": 150
+  "minecraft:husbandry/breed_an_animal": 69
   "minecraft:husbandry/complete_catalogue": 2000
   "minecraft:husbandry/feed_snifflet": 300
   "minecraft:husbandry/fishy_business": 125
@@ -151,3 +151,6 @@ advancement-rewards:
   "minecraft:story/shiny_gear": 450
   "minecraft:story/smelt_iron": 75
   "minecraft:story/upgrade_tools": 75
+
+# Optional read-only shop creation rehearsal. Does not publish shops or move items/money.
+shop-setup-preview-enabled: false

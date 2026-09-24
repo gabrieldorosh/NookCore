@@ -15,11 +15,11 @@ final class PlotEntryNotices {
     enum Display { SUBTITLE, ACTIONBAR, OFF;
         static Display parse(String value){
             try{return valueOf(value.toUpperCase(Locale.ROOT));}
-            catch(IllegalArgumentException | NullPointerException e){return SUBTITLE;}
+            catch(IllegalArgumentException | NullPointerException e){return ACTIONBAR;}
         }
     }
     PlotEntryNotices(JavaPlugin plugin,NookStore store,ChestShopRentalGate gate,BooleanSupplier ready,Consumer<Exception> failure){
-        Display display=Display.parse(plugin.getConfig().getString("shop-gate.entry-notices","subtitle"));
+        Display display=Display.parse(plugin.getConfig().getString("shop-gate.entry-notices","actionbar"));
         if(display==Display.OFF)return;
         Bukkit.getScheduler().runTaskTimer(plugin,()->{
             if(!ready.getAsBoolean()){tracker.clear();return;}
