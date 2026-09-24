@@ -89,8 +89,10 @@ public final class ChestShopRentalGate implements Listener {
         Objects.requireNonNull(manager.getRegion(district)).setFlag(Flags.DENY_MESSAGE,NookUi.protectionMessage(plugin.getConfig().getString("shop-gate.deny-message","&#e5b95cNookPlots » &#ddd6dfThis area is protected. Build in your rented plot, or ask staff for help.")));
         Objects.requireNonNull(manager.getRegion(district)).setFlag(Flags.USE,com.sk89q.worldguard.protection.flags.StateFlag.State.ALLOW);
         Objects.requireNonNull(manager.getRegion(district)).setFlag(Flags.USE.getRegionGroupFlag(),com.sk89q.worldguard.protection.flags.RegionGroup.ALL);
+        Objects.requireNonNull(manager.getRegion(district)).setFlag(Flags.WATER_FLOW,com.sk89q.worldguard.protection.flags.StateFlag.State.ALLOW);
         for(var entry:regions.entrySet()) {
             var region=Objects.requireNonNull(manager.getRegion(entry.getKey()));
+            region.setFlag(Flags.WATER_FLOW,com.sk89q.worldguard.protection.flags.StateFlag.State.ALLOW);
             var lease=store.plot(entry.getValue());
             DefaultDomain owners=new DefaultDomain(),members=new DefaultDomain();
             if(lease.owner()!=null && store.role(entry.getValue(),lease.owner()).equals("OWNER"))owners.addPlayer(lease.owner());

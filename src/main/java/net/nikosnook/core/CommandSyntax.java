@@ -19,7 +19,7 @@ final class CommandSyntax {
             "pay",exact(3,"/nooks pay <player> <amount>","Enter a player and the amount to send.")),
         "nookplots",Map.ofEntries(
             Map.entry("help",exact(1,"/nookplots help","Help does not take any extra words.")),
-            Map.entry("list",exact(1,"/nookplots list","List does not take any extra words.")),
+            Map.entry("list",new Shape(1,2,"/nookplots list [page]","Choose an optional page number.")),
             Map.entry("leave",exact(1,"/nookplots leave","Leave applies to the plot you currently co-own.")),
             Map.entry("find",new Shape(1,2,"/nookplots find [plot]","Find your own plot, or enter a plot name.")),
             Map.entry("name",new Shape(3,34,"/nookplots name <plot> <name|reset>","Enter a plot ID and shop name, or reset.")),

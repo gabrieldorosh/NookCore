@@ -135,7 +135,16 @@ public final class PlotProtectionListener implements Listener {
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void blockExplosion(BlockExplodeEvent event){event.blockList().removeIf(block->protectedLocation(block.getLocation()));}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
-    public void flow(BlockFromToEvent event){if(protectedLocation(event.getBlock().getLocation()) || protectedLocation(event.getToBlock().getLocation()))event.setCancelled(true);}
+    public void flow(BlockFromToEvent event){
+        try {
+            String from=regions.regionAt(event.getBlock().getLocation()),to=regions.regionAt(event.getToBlock().getLocation());
+            if(!allowsFlow(event.getBlock().getType()==Material.WATER,from,to))event.setCancelled(true);
+        }catch(Exception ex){event.setCancelled(true);failure.accept(ex);}
+    }
+    static boolean allowsFlow(boolean water,String from,String to){
+        if(water)return from.equals(to);
+        return from.equals(ShopTradePolicy.TOWN) && to.equals(ShopTradePolicy.TOWN);
+    }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void burn(BlockBurnEvent event){if(protectedLocation(event.getBlock().getLocation()))event.setCancelled(true);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)

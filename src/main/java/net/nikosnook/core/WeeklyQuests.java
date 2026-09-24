@@ -25,11 +25,14 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
     private Consumer<Exception> cosmeticFailure=error->{};
     private final Set<UUID> capacityNotified=new HashSet<>();
     private QuestPlan.Week week;
+    private java.nio.file.Path backupFolder;
+    private record Activation(String week,long expires) {}
+    private final Map<String,Activation> activations=new HashMap<>();
     private List<QuestPlan.Goal> goals=List.of();
     private final Map<UUID,String> lastBiome=new HashMap<>();
     private static final Set<EntityType> HOSTILES=Set.of(EntityType.ZOMBIE,EntityType.SKELETON,EntityType.SPIDER,EntityType.CAVE_SPIDER,EntityType.CREEPER,EntityType.HUSK,EntityType.STRAY,EntityType.DROWNED,EntityType.WITCH,EntityType.PHANTOM,EntityType.PILLAGER);
     WeeklyQuests(JavaPlugin plugin,NookStore store,BooleanSupplier healthy,Consumer<Exception> failure)throws Exception {
-        this.store=store;this.healthy=healthy;this.failure=failure;this.clock=System::currentTimeMillis;
+        this.store=store;this.healthy=healthy;this.failure=failure;this.clock=System::currentTimeMillis;backupFolder=plugin.getDataFolder().toPath().resolve("backups");
         var file=new java.io.File(plugin.getDataFolder(),"quests.yml");if(!file.exists())plugin.saveResource("quests.yml",false);
         var config=new YamlConfiguration();config.load(file);enabled=config.getBoolean("enabled",false);
         if(config.getBoolean("celebrations-enabled",true))celebration=QuestCelebrations::play;
@@ -176,6 +179,26 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         if(!enabled){sender.sendMessage(NookUi.message("NookQuests","Weekly quests are not open yet."));return true;}
         if(!healthy.getAsBoolean()){sender.sendMessage(NookUi.problem("NookQuests","Quests are paused; please contact staff."));return true;}
         try{
+            if(args.length>=1 && args[0].equalsIgnoreCase("activate-config")){
+                if(!sender.hasPermission("nookcore.admin"))throw new IllegalArgumentException("Only admins can activate configured quests.");
+                long now=clock.getAsLong();rotation(now);
+                String actor=sender instanceof Player p?p.getUniqueId().toString():"console";
+                if(args.length==1){
+                    sender.sendMessage(NookUi.heading("NookQuests · Activate configured goals"));
+                    for(var goal:proposed)sender.sendMessage(NookUi.text(goal.title()+" · "+Money.format(goal.reward())));
+                    sender.sendMessage(NookUi.message("NookQuests","This replaces this week's goals for everyone with fresh progress. Old progress, rewards, balances and contributed stock are retained. New goals can pay again. Use only for the prelaunch switch; once per week."));
+                    sender.sendMessage(NookUi.command("/nookquests activate-config confirm"));
+                    activations.put(actor,new Activation(week.id(),now+60000));return true;
+                }
+                if(args.length!=2 || !args[1].equalsIgnoreCase("confirm"))throw new IllegalArgumentException("Use /nookquests activate-config to preview the change.");
+                var pending=activations.remove(actor);
+                if(pending==null || pending.expires()<now || !pending.week().equals(week.id()))throw new IllegalArgumentException("Confirmation expired. Run /nookquests activate-config again.");
+                java.nio.file.Files.createDirectories(backupFolder);
+                var backup=backupFolder.resolve("quests-before-activation-"+UUID.randomUUID()+".db");store.backup(backup);
+                goals=store.activateQuestConfig(week.id(),proposed,now);lastBiome.clear();capacityNotified.clear();
+                sender.sendMessage(NookUi.message("NookQuests","Configured goals are now active. Backup: "+backup.getFileName()));
+                Bukkit.broadcast(NookUi.message("NookQuests","The launch quests are now available. View them with ").append(NookUi.command("/nookquests")));return true;
+            }
             if(args.length==1 && args[0].equalsIgnoreCase("contribute")){
                 if(!(sender instanceof Player donor))throw new IllegalArgumentException("Contribute in game.");
                 contribute(donor);return true;
@@ -206,7 +229,8 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         return true;
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args){
-        if(args.length==1)return NookUi.complete(args[0],sender.hasPermission("nookcore.admin")?List.of("list","help","inspect","contribute","contributions","collect"):List.of("list","help","contribute"));
+        if(args.length==1)return NookUi.complete(args[0],sender.hasPermission("nookcore.admin")?List.of("list","help","inspect","contribute","contributions","collect","activate-config"):List.of("list","help","contribute"));
+        if(args.length==2 && args[0].equalsIgnoreCase("activate-config") && sender.hasPermission("nookcore.admin"))return NookUi.complete(args[1],List.of("confirm"));
         if(args.length==2 && args[0].equalsIgnoreCase("inspect") && sender.hasPermission("nookcore.admin"))try{return NookUi.complete(args[1],store.accounts().stream().map(NookStore.Account::name).toList());}catch(Exception e){failure.accept(e);}
         return List.of();
     }

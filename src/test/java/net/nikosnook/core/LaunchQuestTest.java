@@ -56,4 +56,48 @@ class LaunchQuestTest {
         assertFalse(ShopSetup.stockContainer(org.bukkit.Material.HOPPER));
         assertEquals("COAL",WeeklyQuests.ore(org.bukkit.Material.DEEPSLATE_COAL_ORE));assertNull(WeeklyQuests.ore(org.bukkit.Material.STONE));
     }
+    List<QuestPlan.Goal> launch(){
+        var result=new ArrayList<QuestPlan.Goal>();
+        for(int i=0;i<6;i++)result.add(new QuestPlan.Goal("goal"+i,"Mine coal","MINE","COAL",64,1500));
+        result.add(new QuestPlan.Goal("community","Contribute","DEPOSIT","COBBLESTONE",2048,3000));return result;
+    }
+    @Test void activationPreservesOldPaymentsStockAndPlotsAndSurvivesRestart()throws Exception{
+        store.definePlot("shop",3000);store.rent("shop",player,now);
+        store.finishQuestDeposit(deposit(10),now);
+        long balance=store.account(player).orElseThrow().cents();
+        var activated=store.activateQuestConfig(week,launch(),now);
+        assertEquals(balance,store.account(player).orElseThrow().cents());
+        assertEquals(player,store.plot("shop").owner());
+        assertEquals(10,store.questProgress(player,week,"community"));
+        assertEquals(0,store.questProgress(player,week,activated.getLast().id()));
+        assertEquals(2048,activated.getLast().amount());
+        store.beginQuestClaim(UUID.randomUUID(),"COBBLESTONE",10,"staff");
+        store.close();store=new NookStore(dir.resolve("test.db"));
+        assertEquals(activated,store.questRotation(week,launch()));
+        assertThrows(IllegalArgumentException.class,()->store.activateQuestConfig(week,launch(),now));
+    }
+    @Test void activationRefusesPendingDepositsWithoutChangingRotation()throws Exception{
+        deposit(4);assertThrows(IllegalArgumentException.class,()->store.activateQuestConfig(week,launch(),now));
+        assertEquals("mine",store.questRotation(week,launch()).getFirst().id());
+    }
+    @Test void activationRefusesPendingCollectionsAndWrongWeek()throws Exception{
+        store.finishQuestDeposit(deposit(10),now);var claim=UUID.randomUUID();store.beginQuestClaim(claim,"COBBLESTONE",1,"staff");
+        assertThrows(IllegalArgumentException.class,()->store.activateQuestConfig(week,launch(),now));
+        store.finishQuestClaim(claim,false);
+        assertThrows(IllegalArgumentException.class,()->store.activateQuestConfig("2026-09-16",launch(),now));
+        assertEquals(7,store.activateQuestConfig(week,launch(),now).size());
+    }
+    @Test void alreadyConfiguredWeekCannotBeReset()throws Exception{
+        String next=QuestPlan.week(now+NookStore.WEEK).id();store.questRotation(next,launch());
+        assertThrows(IllegalArgumentException.class,()->store.activateQuestConfig(next,launch(),now+NookStore.WEEK));
+    }
+    @Test void waterStaysWithinEachRegionAndLavaRemainsBlocked(){
+        for(String region:List.of(ShopTradePolicy.TOWN,ShopTradePolicy.ROAD,"one","two")){
+            assertTrue(PlotProtectionListener.allowsFlow(true,region,region));
+            for(String other:List.of(ShopTradePolicy.TOWN,ShopTradePolicy.ROAD,"one","two")){
+                if(!region.equals(other))assertFalse(PlotProtectionListener.allowsFlow(true,region,other));
+                assertEquals(region.equals(ShopTradePolicy.TOWN)&&other.equals(ShopTradePolicy.TOWN),PlotProtectionListener.allowsFlow(false,region,other));
+            }
+        }
+    }
 }

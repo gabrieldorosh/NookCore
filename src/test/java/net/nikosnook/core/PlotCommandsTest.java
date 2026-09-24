@@ -158,4 +158,22 @@ class PlotCommandsTest {
         c.onCommand(player,null,"nookplots",new String[]{"remove","one","Member"});
         assertTrue(notices.get(member).getLast().contains("access to one was removed"));assertEquals("NONE",store.role("one",member));
     }
+    @Test void plotListPagesAreBoundedAndRejectInvalidPages()throws Exception{
+        for(int i=0;i<11;i++)store.definePlot("test"+i,3000);
+        var lines=new ArrayList<String>();
+        org.bukkit.command.CommandSender viewer=(org.bukkit.command.CommandSender)Proxy.newProxyInstance(getClass().getClassLoader(),new Class[]{org.bukkit.command.CommandSender.class},(o,m,a)->{
+            if(m.getName().equals("sendMessage") && a[0] instanceof net.kyori.adventure.text.Component component)lines.add(net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(component));return null;
+        });
+        var c=commands(true,true,()->{},()->{});
+        for(int page=1;page<=3;page++){
+            lines.clear();c.onCommand(viewer,null,"nookplots",new String[]{"list",""+page});
+            assertEquals(page==3?2:5,lines.stream().filter(line->line.contains("[Find]")).count(),lines.toString());
+            assertTrue(lines.getFirst().contains(page+"/3"));
+        }
+        for(String invalid:List.of("0","4","-1","abc","999999999999999999")){
+            lines.clear();c.onCommand(viewer,null,"nookplots",new String[]{"list",invalid});assertEquals(1,lines.size());
+            assertTrue(lines.getFirst().contains("page"));
+        }
+        assertEquals(0,failures.get());
+    }
 }

@@ -96,18 +96,25 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
             validate.run(); // No debit or membership mutation until live protection is verified.
 
-            if(args.length==0 || args.length==1 && args[0].equalsIgnoreCase("list")){
+            if(args.length==0 || args.length<=2 && args[0].equalsIgnoreCase("list")){
 
-                sender.sendMessage(NookUi.heading("NookPlots · Shopping district"));
+                var listed=store.plots().stream().filter(plot->managed.test(plot.id())).sorted(Comparator.comparingInt((NookStore.Plot plot)->listOrder(plot,clock.getAsLong())).thenComparing(NookStore.Plot::id)).toList();
+                int pages=Math.max(1,(listed.size()+4)/5),page=1;
+                if(args.length==2){try{page=Integer.parseInt(args[1]);}catch(NumberFormatException e){throw new IllegalArgumentException("Use /nookplots list <page> with a whole page number.");}}
+                if(page<1 || page>pages)throw new IllegalArgumentException("Choose a plot page between 1 and "+pages+".");
+                sender.sendMessage(NookUi.heading("NookPlots · Shopping district · "+page+"/"+pages));
 
-                for(var plot:store.plots().stream().sorted(Comparator.comparingInt((NookStore.Plot plot)->listOrder(plot,clock.getAsLong())).thenComparing(NookStore.Plot::id)).toList())if(managed.test(plot.id())){
+                for(var plot:listed.subList((page-1)*5,Math.min(page*5,listed.size()))){
 
                     sender.sendMessage(NookUi.text("• ").append(NookUi.plot(store,plot)).append(findLink(plot.id())));
 
-                    for(var member:store.members(plot.id()).entrySet())if(!member.getKey().equals(plot.owner()))sender.sendMessage(NookUi.text("  Co-owner: ").append(NookUi.name(store,member.getKey())));
+                    var coowners=store.members(plot.id()).keySet().stream().filter(id->!id.equals(plot.owner())).toList();
+                    if(!coowners.isEmpty())sender.sendMessage(NookUi.text("  Co-owners: "+coowners.size()+" · ").append(NookUi.command("/nookplots info "+store.plotAddress(plot.id()))));
 
                 }
 
+                if(page>1)sender.sendMessage(NookUi.command("← Previous", "/nookplots list "+(page-1)).clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/nookplots list "+(page-1))));
+                if(page<pages)sender.sendMessage(NookUi.command("Next →", "/nookplots list "+(page+1)).clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/nookplots list "+(page+1))));
                 sender.sendMessage(net.kyori.adventure.text.Component.text("/nookplots help — commands and permissions",NookUi.MUTED).clickEvent(net.kyori.adventure.text.event.ClickEvent.suggestCommand("/nookplots help")));return true;
 
             }
@@ -122,6 +129,7 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
                 var plot=store.plot(args[1]);sender.sendMessage(NookUi.heading("NookPlots · "+store.plotLabel(plot.id())));
                 sender.sendMessage(NookUi.plot(store,plot));
                 sender.sendMessage(NookUi.text("Address: "+store.plotAddress(plot.id())));
+                for(var member:store.members(plot.id()).keySet())if(!member.equals(plot.owner()))sender.sendMessage(NookUi.text("Co-owner: ").append(NookUi.name(store,member)));
                 if(plot.owner()!=null){
                     sender.sendMessage(NookUi.text("Paid until: "+NookUi.date(plot.paidUntil())));
 
@@ -129,7 +137,7 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
                 return true;
             }
             if(!(sender instanceof Player p)){
-                NookUi.help(sender,"NookPlots · Console","/nookplots list — view plots, owners and availability","/nookadmin plotclear <plot> <storage-note> — release a plot after saving belongings and clearing it");
+                NookUi.help(sender,"NookPlots · Console","/nookplots list [page] — view plots, owners and availability","/nookadmin plotclear <plot> <storage-note> — release a plot after saving belongings and clearing it");
                 sender.sendMessage(NookUi.message("NookPlots","Renting and reopening require the renter to run /nookplots in game."));return true;
             }
 
@@ -231,7 +239,7 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
             }
 
-            NookUi.help(sender,"NookPlots","/nookplots abandon <plot> — review closure and a prepaid-week refund","/nookplots leave — leave as a co-owner","/nookplots list — see prices, owners and availability","/nookplots find [plot] — locate your plot or a named plot","/nookplots name <plot> <name|reset> — set your shop display name","/nookplots info [address] — inspect this plot or another address","/nookplots rent <plot> — rent an available plot","/nookplots invite <plot> <player> <build|stock|both> — invite or update a member","/nookplots invitations — see your invitations","/nookplots accept [player] — accept; omit player if only one invitation","/nookplots decline [player] — decline an invitation","/nookplots role <plot> <player> <build|stock|both> — replace their permissions","/nookplots remove <plot> <player> — remove a member","/nookplots prepay <plot> <weeks> — pay ahead, up to four weeks","/nookplots reopen <plot> — pay remaining rent and resume sales");
+            NookUi.help(sender,"NookPlots","/nookplots abandon <plot> — review closure and a prepaid-week refund","/nookplots leave — leave as a co-owner","/nookplots list [page] — see prices, owners and availability","/nookplots find [plot] — locate your plot or a named plot","/nookplots name <plot> <name|reset> — set your shop display name","/nookplots info [address] — inspect this plot or another address","/nookplots rent <plot> — rent an available plot","/nookplots invite <plot> <player> <build|stock|both> — invite or update a member","/nookplots invitations — see your invitations","/nookplots accept [player] — accept; omit player if only one invitation","/nookplots decline [player] — decline an invitation","/nookplots role <plot> <player> <build|stock|both> — replace their permissions","/nookplots remove <plot> <player> — remove a member","/nookplots prepay <plot> <weeks> — pay ahead, up to four weeks","/nookplots reopen <plot> — pay remaining rent and resume sales");
 
         }catch(NumberFormatException ex){sender.sendMessage(NookUi.problem("NookPlots","Choose a whole number of weeks from 1 to 4."));}
         catch(IllegalArgumentException ex){sender.sendMessage(NookUi.problem("NookPlots",ex.getMessage()));}

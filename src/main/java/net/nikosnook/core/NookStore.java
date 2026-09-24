@@ -60,6 +60,30 @@ public final class NookStore implements AutoCloseable {
                 update("INSERT OR IGNORE INTO plot_leases(plot,lease) VALUES(?,?)",plot.id(),UUID.randomUUID());
         }
     }
+    public synchronized List<QuestPlan.Goal> activateQuestConfig(String week,List<QuestPlan.Goal> proposed,long now)throws SQLException {
+        return tx(()->{
+            if(!QuestPlan.week(now).id().equals(week))throw new IllegalArgumentException("The week changed; preview activation again.");
+            String previous;
+            try(var p=db.prepareStatement("SELECT definitions FROM quest_rotations WHERE week=?")){
+                p.setString(1,week);try(var rows=p.executeQuery()){if(!rows.next())throw new IllegalArgumentException("No saved week to replace.");previous=rows.getString(1);}
+            }
+            try(var p=db.prepareStatement("SELECT 1 FROM metadata WHERE key=?")){
+                p.setString(1,"quest-activation:"+week);try(var rows=p.executeQuery()){if(rows.next())throw new IllegalArgumentException("The configured quests have already been activated this week.");}
+            }
+            if(previous.equals(QuestPlan.encode(proposed)))throw new IllegalArgumentException("The configured quests are already active.");
+            try(var p=db.prepareStatement("SELECT 1 FROM quest_deposits WHERE state='REVIEW' UNION ALL SELECT 1 FROM quest_material_claims WHERE state='REVIEW' LIMIT 1");var rows=p.executeQuery()){
+                if(rows.next())throw new IllegalArgumentException("Resolve pending contribution records before changing quests.");
+            }
+            if(proposed.size()!=7 || proposed.stream().filter(g->g.reward()==1500).count()!=6 || proposed.stream().filter(g->g.reward()==3000).count()!=1)throw new IllegalArgumentException("Expected six quests and one challenge.");
+            var activated=new ArrayList<QuestPlan.Goal>();
+            String prefix="launch_"+UUID.randomUUID().toString().replace("-","").substring(0,20)+"_";
+            for(int i=0;i<proposed.size();i++){var g=proposed.get(i);activated.add(new QuestPlan.Goal(prefix+i,g.title(),g.kind(),g.target(),g.amount(),g.reward()));}
+            update("INSERT INTO metadata VALUES(?,?)","quest-activation:"+week,previous);
+            update("UPDATE quest_rotations SET definitions=? WHERE week=?",QuestPlan.encode(activated),week);
+            return List.copyOf(activated);
+        });
+    }
+
     public List<QuestPlan.Goal> questRotation(String week,List<QuestPlan.Goal> proposed)throws SQLException {
         if(proposed.isEmpty() || proposed.stream().map(QuestPlan.Goal::id).distinct().count()!=proposed.size())throw new IllegalArgumentException("Quest IDs must be unique and rotation nonempty.");
         return tx(()->{
