@@ -44,6 +44,7 @@ public final class NookStore implements AutoCloseable {
             s.execute("CREATE TABLE IF NOT EXISTS native_offers (id TEXT PRIMARY KEY, plot TEXT NOT NULL REFERENCES plots(id), lease TEXT NOT NULL, owner TEXT NOT NULL REFERENCES accounts(uuid), item BLOB NOT NULL, bundle INTEGER NOT NULL CHECK(bundle BETWEEN 1 AND 64), cents INTEGER NOT NULL CHECK(cents BETWEEN 1 AND 100000000000), stock INTEGER NOT NULL DEFAULT 0 CHECK(stock BETWEEN 0 AND 1000000), revision INTEGER NOT NULL DEFAULT 1, closed INTEGER NOT NULL DEFAULT 0)");
             s.execute("CREATE TABLE IF NOT EXISTS native_stock_receipts (id TEXT PRIMARY KEY, offer TEXT NOT NULL REFERENCES native_offers(id), actor TEXT NOT NULL REFERENCES accounts(uuid), quantity INTEGER NOT NULL, time INTEGER NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS native_trade_receipts (id TEXT PRIMARY KEY, offer TEXT NOT NULL REFERENCES native_offers(id), buyer TEXT NOT NULL REFERENCES accounts(uuid), seller TEXT NOT NULL REFERENCES accounts(uuid), quantity INTEGER NOT NULL, cents INTEGER NOT NULL, revision INTEGER NOT NULL, item BLOB NOT NULL, time INTEGER NOT NULL, delivery TEXT NOT NULL DEFAULT 'PENDING' CHECK(delivery IN ('PENDING','REVIEW','DELIVERED')))");
+            s.execute("CREATE TABLE IF NOT EXISTS native_stock_returns (receipt TEXT PRIMARY KEY REFERENCES native_trade_receipts(id))");
             s.execute("CREATE TABLE IF NOT EXISTS native_delivery_plans (receipt TEXT PRIMARY KEY REFERENCES native_trade_receipts(id), buyer TEXT NOT NULL REFERENCES accounts(uuid), before_hash BLOB NOT NULL, after_hash BLOB NOT NULL)");
             s.execute("CREATE UNIQUE INDEX IF NOT EXISTS native_one_delivery_per_buyer ON native_trade_receipts(buyer) WHERE delivery='REVIEW'");
             s.execute("CREATE TABLE IF NOT EXISTS quest_rotations (week TEXT PRIMARY KEY, definitions TEXT NOT NULL)");
@@ -262,7 +263,7 @@ public final class NookStore implements AutoCloseable {
         return tx(()->{
             var previous=nativeReceipt(receipt);
             if(previous.isPresent()){
-                var r=previous.get();if(!r.offer().equals(offerId) || !r.buyer().equals(buyer) || r.revision()!=expectedRevision)throw new IllegalArgumentException("Trade receipt was reused with different details.");return r;
+                var r=previous.get();if(nativeStockReturn(receipt) || !r.offer().equals(offerId) || !r.buyer().equals(buyer) || r.revision()!=expectedRevision)throw new IllegalArgumentException("Trade receipt was reused with different details.");return r;
             }
             var offer=nativeOffer(offerId);nativeActive(offer,now);
             if(offer.revision()!=expectedRevision)throw new IllegalArgumentException("Shop terms changed. Review the offer again.");
@@ -273,6 +274,35 @@ public final class NookStore implements AutoCloseable {
             mutate(offer.owner(),offer.cents(),"native-shop-sale",reference,now);
             update("UPDATE native_offers SET stock=stock-? WHERE id=?",offer.bundle(),offerId);
             update("INSERT INTO native_trade_receipts(id,offer,buyer,seller,quantity,cents,revision,item,time) VALUES(?,?,?,?,?,?,?,?,?)",receipt,offerId,buyer,offer.owner(),offer.bundle(),offer.cents(),offer.revision(),offer.item(),now);
+            return nativeReceipt(receipt).orElseThrow();
+        });
+    }
+
+    void closeNativeOffer(UUID offerId,UUID actor)throws SQLException {
+        tx(()->{
+            var offer=nativeOffer(offerId);if(!offer.owner().equals(actor))throw new IllegalArgumentException("Only the original shop owner can close this offer.");
+            if(!offer.closed())update("UPDATE native_offers SET closed=1,revision=revision+1 WHERE id=?",offerId);return null;
+        });
+    }
+    synchronized boolean nativeStockReturn(UUID receipt)throws SQLException {
+        try(var p=db.prepareStatement("SELECT 1 FROM native_stock_returns WHERE receipt=?")){
+            bind(p,receipt);try(var rows=p.executeQuery()){return rows.next();}
+        }
+    }
+    // Preserve former owners' stock as delivery entitlements after closure/eviction, without refunding sales.
+    NativeShop.Receipt reserveNativeStockReturn(UUID receipt,UUID offerId,UUID actor,int quantity,long now)throws SQLException {
+        if(quantity<1 || quantity>64)throw new IllegalArgumentException("Collect between 1 and 64 items per request.");
+        return tx(()->{
+            var previous=nativeReceipt(receipt);
+            if(previous.isPresent()){
+                var r=previous.get();if(!nativeStockReturn(receipt) || !r.offer().equals(offerId) || !r.buyer().equals(actor) || r.quantity()!=quantity)throw new IllegalArgumentException("Return receipt was reused with different details.");return r;
+            }
+            var offer=nativeOffer(offerId);
+            if(!offer.owner().equals(actor) || !offer.closed())throw new IllegalArgumentException("The original owner must close the offer before collecting stock.");
+            if(offer.stock()<quantity)throw new IllegalArgumentException("Not enough remaining stock.");
+            update("UPDATE native_offers SET stock=stock-? WHERE id=?",quantity,offerId);
+            update("INSERT INTO native_trade_receipts(id,offer,buyer,seller,quantity,cents,revision,item,time) VALUES(?,?,?,?,?,0,?,?,?)",receipt,offerId,actor,actor,quantity,offer.revision(),offer.item(),now);
+            update("INSERT INTO native_stock_returns(receipt) VALUES(?)",receipt);
             return nativeReceipt(receipt).orElseThrow();
         });
     }

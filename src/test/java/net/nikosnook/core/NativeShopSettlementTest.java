@@ -78,4 +78,14 @@ class NativeShopSettlementTest {
         stock(8);UUID a=UUID.randomUUID(),b=UUID.randomUUID();store.settleNativePurchase(a,offer.id(),buyer,1,3);store.settleNativePurchase(b,offer.id(),buyer,1,4);byte[] before=new byte[32],after=new byte[32];after[0]=1;
         store.planNativeDelivery(a,buyer,before,after);assertThrows(IllegalArgumentException.class,()->store.planNativeDelivery(b,buyer,before,after));assertEquals("PENDING",store.nativeDeliveryState(b));store.confirmNativeDelivery(a,buyer,after);store.planNativeDelivery(b,buyer,before,after);assertEquals("REVIEW",store.nativeDeliveryState(b));
     }
+    @Test void formerOwnerCanRecoverClosedStockAfterEvictionWithoutMoneyChanges()throws Exception {
+        stock(8);store.abandon(store.abandonmentQuote("one",seller,2),seller,2);store.confirmCleared("one","staff","A1",3);store.rent("one",other,4);
+        assertThrows(IllegalArgumentException.class,()->store.closeNativeOffer(offer.id(),other));store.closeNativeOffer(offer.id(),seller);store.closeNativeOffer(offer.id(),seller);long before=balance(seller);UUID receipt=UUID.randomUUID();
+        var returned=store.reserveNativeStockReturn(receipt,offer.id(),seller,4,5);assertEquals(0,returned.cents());assertEquals(4,returned.quantity());assertEquals(4,store.nativeOffer(offer.id()).stock());assertEquals(before,balance(seller));assertEquals("PENDING",store.nativeDeliveryState(receipt));assertTrue(store.nativeStockReturn(receipt));
+        store.reserveNativeStockReturn(receipt,offer.id(),seller,4,6);assertEquals(4,store.nativeOffer(offer.id()).stock());assertThrows(IllegalArgumentException.class,()->store.reserveNativeStockReturn(UUID.randomUUID(),offer.id(),other,4,6));
+    }
+    @Test void closedOffersStopSalesAndReceiptsCannotSwitchOperationType()throws Exception {
+        stock(12);UUID sale=UUID.randomUUID();store.settleNativePurchase(sale,offer.id(),buyer,1,3);assertThrows(IllegalArgumentException.class,()->store.reserveNativeStockReturn(sale,offer.id(),buyer,4,4));
+        store.closeNativeOffer(offer.id(),seller);assertThrows(IllegalArgumentException.class,()->store.settleNativePurchase(UUID.randomUUID(),offer.id(),buyer,2,4));UUID returned=UUID.randomUUID();store.reserveNativeStockReturn(returned,offer.id(),seller,4,4);assertThrows(IllegalArgumentException.class,()->store.settleNativePurchase(returned,offer.id(),seller,2,5));assertEquals(4,store.nativeOffer(offer.id()).stock());
+    }
 }
