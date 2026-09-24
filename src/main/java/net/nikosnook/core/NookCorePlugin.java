@@ -21,7 +21,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     private AdminTeleports adminTeleports;
     @Override public void onEnable(){
         saveDefaultConfig();
-        if(Files.exists(getDataFolder().toPath().resolve("plot-setup-pending.yml")))healthy=false;
+        if(Files.exists(getDataFolder().toPath().resolve("plot-setup-pending.yml"))){blockStartup("Unfinished plot setup: recover plot-setup-pending.yml before enabling trades.");return;}
         new SmitePrank(this);
         adminTeleports=new AdminTeleports(Bukkit::getPlayerExact,message->getLogger().info(message));
         getServer().getPluginManager().registerEvents(adminTeleports,this);
@@ -88,7 +88,21 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             },1200,1200);
             if(getConfig().getBoolean("shop-gate.enabled",false) || Files.exists(getDataFolder().toPath().resolve("plot-setup-pending.yml")))Bukkit.getScheduler().runTask(this,this::enableShopGate);
             getLogger().info("Economy foundation ready. Rental features are opt-in and require the separate shop gate startup check.");
-        }catch(Exception e){getLogger().log(Level.SEVERE,"NookCore could not initialise; economy unavailable.",e);getServer().getPluginManager().disablePlugin(this);}
+        }catch(Exception e){getLogger().log(Level.SEVERE,"NookCore could not initialise; economy unavailable.",e);blockStartup("NookCore startup failed; check the console before restarting.");}
+    }
+    private void blockStartup(String reason){
+        healthy=false;getLogger().severe(reason);
+        for(String name:getDescription().getCommands().keySet()){
+            var command=getCommand(name);if(command!=null){
+                command.setExecutor((sender,cmd,label,args)->{sender.sendMessage(NookUi.problem("NookCore","Setup is paused. Ask an admin to check the startup error."));return true;});
+                command.setTabCompleter((sender,cmd,label,args)->List.of());
+            }
+        }
+        // Stay loaded long enough to disable a load-after shop provider, even if config is damaged.
+        Bukkit.getScheduler().runTask(this,()->{
+            var shop=getServer().getPluginManager().getPlugin("ChestShop");
+            if(shop!=null)getServer().getPluginManager().disablePlugin(shop);
+        });
     }
     private void enableShopGate(){
         try {
