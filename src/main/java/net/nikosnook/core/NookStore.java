@@ -233,6 +233,7 @@ public final class NookStore implements AutoCloseable {
     // Only a future custody adapter may call this AFTER durably securing the exact matching items.
     // A receipt retry cannot mint the same stock twice. This does not itself remove player/chest items.
     void creditNativeStock(UUID receipt,UUID offerId,UUID actor,int quantity,long now)throws SQLException {
+        if(receipt==null)throw new IllegalArgumentException("A stock receipt ID is required.");
         if(quantity<1 || quantity>NativeShop.MAX_STOCK)throw new IllegalArgumentException("Invalid stock quantity.");
         tx(()->{
             try(var p=db.prepareStatement("SELECT offer,actor,quantity FROM native_stock_receipts WHERE id=?")){
