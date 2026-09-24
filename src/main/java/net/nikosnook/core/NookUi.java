@@ -61,7 +61,7 @@ final class NookUi {
             .append(text(" before "+date(plot.paidUntil()+NookStore.WEEK)+". Only the remaining part of the week is charged."));
     }
     static Component plot(NookStore store,NookStore.Plot plot)throws SQLException {
-        Component result=text(plot.id()).append(Component.text(" · ",MUTED)).append(status(plot,System.currentTimeMillis()));
+        Component result=Component.text(store.plotLabel(plot.id()),ACCENT).hoverEvent(Component.text("Plot ID: "+plot.id())).clickEvent(ClickEvent.runCommand("/nookplots info "+plot.id())).append(Component.text(" · ",MUTED)).append(status(plot,System.currentTimeMillis()));
         if(plot.owner()!=null)result=result.append(Component.text(store.abandoned(plot.id())?" · Former renter: ":" · Owner: ",MUTED)).append(name(store,plot.owner()));
         return plot.owner()==null?result.append(Component.text(" · ",MUTED)).append(Component.text(Money.format(plot.weekly())+"/week",PRICE)):result;
     }

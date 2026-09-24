@@ -35,6 +35,7 @@ public final class NookStore implements AutoCloseable {
             s.execute("CREATE TABLE IF NOT EXISTS members (uuid TEXT PRIMARY KEY REFERENCES accounts(uuid), plot TEXT NOT NULL REFERENCES plots(id), role TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS plot_events (id INTEGER PRIMARY KEY AUTOINCREMENT, time INTEGER NOT NULL, plot TEXT NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS plot_invitations (token TEXT PRIMARY KEY, plot TEXT NOT NULL REFERENCES plots(id), inviter TEXT NOT NULL REFERENCES accounts(uuid), member TEXT NOT NULL REFERENCES accounts(uuid), role TEXT NOT NULL CHECK(role IN ('BUILD','STOCK','BUILD_STOCK')), expires INTEGER NOT NULL, UNIQUE(plot,member))");
+            s.execute("CREATE TABLE IF NOT EXISTS plot_names (plot TEXT PRIMARY KEY REFERENCES plots(id), display TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS plot_absences (plot TEXT PRIMARY KEY REFERENCES plots(id), expires INTEGER NOT NULL)");
 
             s.execute("CREATE TABLE IF NOT EXISTS plot_leases (plot TEXT PRIMARY KEY REFERENCES plots(id), lease TEXT NOT NULL UNIQUE)");
@@ -168,6 +169,22 @@ public final class NookStore implements AutoCloseable {
             bind(p,id);try(ResultSet r=p.executeQuery()){while(r.next())result.add(new Entry(r.getLong("id"),r.getLong("time"),r.getLong("delta"),r.getString("kind"),r.getString("reference")));}
         } return result;
     }
+    public synchronized String plotLabel(String id)throws SQLException {
+        plot(id);
+        try(var p=db.prepareStatement("SELECT display FROM plot_names WHERE plot=?")){
+            bind(p,id);try(var rows=p.executeQuery()){return rows.next()?rows.getString(1):id;}
+        }
+    }
+    public void namePlot(String id,UUID actor,String name,long now)throws SQLException {
+        String cleaned=name==null?null:PlotNames.clean(name);
+        tx(()->{
+            Plot p=plot(id);owner(p,actor);
+            if(!p.state().equals("ACTIVE") || now>=p.paidUntil())throw new IllegalArgumentException("Reopen the shop before changing its name.");
+            if(cleaned==null)update("DELETE FROM plot_names WHERE plot=?",id);
+            else update("INSERT INTO plot_names(plot,display) VALUES(?,?) ON CONFLICT(plot) DO UPDATE SET display=excluded.display",id,cleaned);
+            event(id,"NAME",actor+" name="+(cleaned==null?"reset":cleaned),now);return null;
+        });
+    }
     public synchronized void definePlot(String id,long weekly) throws SQLException {
         if(!id.matches("[a-z0-9_-]{1,32}") || weekly<=0 || weekly>Money.MAX/4) throw new IllegalArgumentException("Invalid plot definition.");
         // Existing lease prices are intentionally not silently rewritten by config reloads.
@@ -385,7 +402,8 @@ public final class NookStore implements AutoCloseable {
     public void confirmCleared(String id,String staff,String collectionReference,long now)throws SQLException {
         if(collectionReference.isBlank())throw new IllegalArgumentException("Describe where the former renter's belongings are stored, for example: staff storage, chest A3.");
         tx(()->{Plot p=plot(id);if(!p.state().equals("RECLAIM"))throw new IllegalArgumentException("This plot is not awaiting staff clearance.");
-            event(id,"CLEARED",staff+" owner="+p.owner()+" collection="+collectionReference,now);
+            event(id,"CLEARED",staff+" owner="+p.owner()+" collection="+collectionReference,now);
+            update("DELETE FROM plot_names WHERE plot=?",id);
             update("DELETE FROM plot_invitations WHERE plot=?",id);
             update("DELETE FROM plot_absences WHERE plot=?",id);
             update("DELETE FROM members WHERE plot=?",id);update("UPDATE plots SET owner=NULL,paid_until=0,state='AVAILABLE' WHERE id=?",id);return null;});

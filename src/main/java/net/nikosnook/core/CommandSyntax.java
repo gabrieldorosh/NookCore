@@ -21,6 +21,7 @@ final class CommandSyntax {
             Map.entry("list",exact(1,"/nookplots list","List does not take any extra words.")),
             Map.entry("leave",exact(1,"/nookplots leave","Leave applies to the plot you currently co-own.")),
             Map.entry("find",new Shape(1,2,"/nookplots find [plot]","Find your own plot, or enter a plot name.")),
+            Map.entry("name",new Shape(3,34,"/nookplots name <plot> <name|reset>","Enter a plot ID and shop name, or reset.")),
             Map.entry("info",exact(2,"/nookplots info <plot>","Choose a plot to see its rent and prepaid weeks.")),
             Map.entry("rent",exact(2,"/nookplots rent <plot>","Enter the plot you want to rent.")),
             Map.entry("invite",exact(4,"/nookplots invite <plot> <player> <build|stock|both>","Enter a plot, player and the permissions to give them.")),
