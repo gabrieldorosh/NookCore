@@ -18,7 +18,7 @@ import java.util.function.*;
 
 /** Add-only region setup. A durable journal blocks trading if a multi-file save is interrupted. */
 final class PlotSetup implements CommandExecutor,TabCompleter,Listener {
-    private record Draft(UUID world,String id,boolean district,PlotLayout box,long rent,long expires){}
+    private record Draft(UUID world,String id,boolean district,PlotLayout box,long rent,String address,long expires){}
     private final JavaPlugin plugin;
     private final NookStore store;
     private final BooleanSupplier healthy;
@@ -36,6 +36,7 @@ final class PlotSetup implements CommandExecutor,TabCompleter,Listener {
         if(d.box().area()>1_000_000)throw new IllegalArgumentException("Choose an area no larger than 1,000,000 blocks.");
         var manager=manager(p);
         if(manager.hasRegion(d.id()) || store.plots().stream().anyMatch(plot->plot.id().equals(d.id())))throw new IllegalArgumentException("That ID already exists. Setup never replaces regions or plots.");
+        if(!d.district())for(var plot:store.plots())if(store.plotAddress(plot.id()).equalsIgnoreCase(d.address()))throw new IllegalArgumentException("That address was just taken. Preview again for a new address.");
         String parent=plugin.getConfig().getString("shop-gate.district-region","");
         if(d.district()){
             var mappings=plugin.getConfig().getConfigurationSection("shop-gate.plot-regions");
@@ -66,23 +67,28 @@ final class PlotSetup implements CommandExecutor,TabCompleter,Listener {
                 validate(p,d);apply(p,d);return true;
             }
             boolean district=action.equals("district");
-            if(district && args.length==2 || action.equals("plot") && args.length==3){
+            if(district && args.length==2 || action.equals("plot") && args.length<=3){
                 drafts.remove(p.getUniqueId());
-                String id=PlotLayout.id(args[1]);
-                long rent=district?0:Money.parse(args[2]);
-                if(!district && (rent<=0 || rent>Money.MAX/4))throw new IllegalArgumentException("Choose a positive weekly rent within the supported range.");
+                String id=args.length>=2?PlotLayout.id(args[1]):null;
                 var session=WorldEdit.getInstance().getSessionManager().get(BukkitAdapter.adapt(p));
                 var selected=session.getSelection(BukkitAdapter.adapt(p.getWorld()));
                 if(!(selected instanceof CuboidRegion))throw new IllegalArgumentException("Use a cuboid selection: //sel cuboid, then select two corners with //wand.");
                 var a=selected.getMinimumPoint();var b=selected.getMaximumPoint();
-                Draft d=new Draft(p.getWorld().getUID(),id,district,new PlotLayout(a.x(),a.z(),b.x(),b.z()),rent,System.currentTimeMillis()+60_000);
+                PlotLayout footprint=new PlotLayout(a.x(),a.z(),b.x(),b.z());
+                long rent=district?0:args.length==3?Money.parse(args[2]):PlotPricing.weekly(footprint.area());
+                if(!district && (rent<=0 || rent>Money.MAX/4))throw new IllegalArgumentException("Choose a positive weekly rent within the supported range.");
+                Set<String> used=new HashSet<>(manager(p).getRegions().keySet());
+                for(var plot:store.plots()){used.add(plot.id());used.add(store.plotAddress(plot.id()).toLowerCase(Locale.ROOT).replace(' ','-'));}
+                var address=district?null:PlotAddresses.choose(used::contains,new Random());
+                if(id==null)id=address.id();
+                Draft d=new Draft(p.getWorld().getUID(),id,district,footprint,rent,address==null?null:address.label(),System.currentTimeMillis()+60_000);
                 validate(p,d);drafts.put(p.getUniqueId(),d);
                 p.sendMessage(NookUi.heading("NookPlots · "+(district?"District":"Plot")+" preview"));
                 p.sendMessage(NookUi.text(id+" · X "+a.x()+" to "+b.x()+", Z "+a.z()+" to "+b.z()+" · "+d.box().area()+" blocks · full world height"));
-                if(!district)p.sendMessage(NookUi.text("Weekly rent: "+Money.format(rent)));
+                if(!district)p.sendMessage(NookUi.text(d.address()+" · Weekly rent: "+Money.format(rent)+(args.length==3?" (explicit price)":" (area suggestion)")));
                 p.sendMessage(NookUi.message("NookPlots","Run /nooksetup confirm within 60 seconds. Nothing changes until confirmed; new plots need a restart before renting."));return true;
             }
-            NookUi.help(p,"NookPlots · Setup","//wand — select two opposite corners; Y is expanded automatically","/nooksetup district <id> — preview a new district","/nooksetup plot <id> <weekly-rent> — preview a plot inside it","/nooksetup confirm — save the preview","/nooksetup cancel — discard the preview");
+            NookUi.help(p,"NookPlots · Setup","//wand — select two opposite corners; Y is expanded automatically","/nooksetup district <id> — preview a new district","/nooksetup plot [id] [weekly-rent] — preview a plot; omitted values are generated","/nooksetup confirm — save the preview","/nooksetup cancel — discard the preview");
         }catch(com.sk89q.worldedit.IncompleteRegionException e){p.sendMessage(NookUi.problem("NookPlots","Select both corners with //wand in this world first."));}
         catch(IllegalArgumentException e){p.sendMessage(NookUi.problem("NookPlots",e.getMessage()));}
         catch(Exception e){failure.accept(e);plugin.getLogger().log(java.util.logging.Level.SEVERE,"Plot setup failed",e);p.sendMessage(NookUi.problem("NookPlots","Setup could not be confirmed. Check console and the setup journal before retrying."));}
@@ -106,7 +112,7 @@ final class PlotSetup implements CommandExecutor,TabCompleter,Listener {
             if(d.district()){
                 plugin.getConfig().set("shop-gate.world-uuid",d.world().toString());plugin.getConfig().set("shop-gate.district-region",d.id());
             }else{
-                store.definePlot(d.id(),d.rent());
+                store.definePlot(d.id(),d.rent());store.addressPlot(d.id(),d.address());
                 plugin.getConfig().set("shop-gate.plot-regions."+d.id(),d.id());
                 plugin.getConfig().set("shop-gate.enabled",true);plugin.getConfig().set("rental-commands-enabled",true);
             }

@@ -35,6 +35,7 @@ public final class NookStore implements AutoCloseable {
             s.execute("CREATE TABLE IF NOT EXISTS members (uuid TEXT PRIMARY KEY REFERENCES accounts(uuid), plot TEXT NOT NULL REFERENCES plots(id), role TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS plot_events (id INTEGER PRIMARY KEY AUTOINCREMENT, time INTEGER NOT NULL, plot TEXT NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS plot_invitations (token TEXT PRIMARY KEY, plot TEXT NOT NULL REFERENCES plots(id), inviter TEXT NOT NULL REFERENCES accounts(uuid), member TEXT NOT NULL REFERENCES accounts(uuid), role TEXT NOT NULL CHECK(role IN ('BUILD','STOCK','BUILD_STOCK')), expires INTEGER NOT NULL, UNIQUE(plot,member))");
+            s.execute("CREATE TABLE IF NOT EXISTS plot_addresses (plot TEXT PRIMARY KEY REFERENCES plots(id), address TEXT NOT NULL UNIQUE COLLATE NOCASE)");
             s.execute("CREATE TABLE IF NOT EXISTS plot_names (plot TEXT PRIMARY KEY REFERENCES plots(id), display TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS plot_absences (plot TEXT PRIMARY KEY REFERENCES plots(id), expires INTEGER NOT NULL)");
 
@@ -172,8 +173,17 @@ public final class NookStore implements AutoCloseable {
     public synchronized String plotLabel(String id)throws SQLException {
         plot(id);
         try(var p=db.prepareStatement("SELECT display FROM plot_names WHERE plot=?")){
+            bind(p,id);try(var rows=p.executeQuery()){return rows.next()?rows.getString(1):plotAddress(id);}
+        }
+    }
+    public synchronized String plotAddress(String id)throws SQLException {
+        plot(id);
+        try(var p=db.prepareStatement("SELECT address FROM plot_addresses WHERE plot=?")){
             bind(p,id);try(var rows=p.executeQuery()){return rows.next()?rows.getString(1):id;}
         }
+    }
+    public synchronized void addressPlot(String id,String address)throws SQLException {
+        plot(id);update("INSERT INTO plot_addresses(plot,address) VALUES(?,?)",id,PlotNames.clean(address));
     }
     public void namePlot(String id,UUID actor,String name,long now)throws SQLException {
         String cleaned=name==null?null:PlotNames.clean(name);

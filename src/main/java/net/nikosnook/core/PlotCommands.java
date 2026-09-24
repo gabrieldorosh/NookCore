@@ -108,7 +108,7 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
                 if(!managed.test(args[1]))throw new IllegalArgumentException("That plot is not part of the shopping district.");
                 var plot=store.plot(args[1]);sender.sendMessage(NookUi.heading("NookPlots · "+store.plotLabel(plot.id())));
                 sender.sendMessage(NookUi.plot(store,plot));
-                sender.sendMessage(NookUi.text("Plot ID: "+plot.id()));
+                sender.sendMessage(NookUi.text("Address: "+store.plotAddress(plot.id())+" · Plot ID: "+plot.id()));
                 if(plot.owner()!=null){
                     sender.sendMessage(NookUi.text("Paid until: "+NookUi.date(plot.paidUntil())));
                     sender.sendMessage(NookUi.text("Future prepaid weeks: "+NookStore.prepaidWeeks(plot,clock.getAsLong())+"/4 · excludes the current rental week"));
