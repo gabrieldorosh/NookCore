@@ -22,6 +22,8 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     @Override public void onEnable(){
         saveDefaultConfig();
         if(Files.exists(getDataFolder().toPath().resolve("plot-setup-pending.yml"))){blockStartup("Unfinished plot setup: recover plot-setup-pending.yml before enabling trades.");return;}
+        try{new org.bukkit.configuration.file.YamlConfiguration().load(getDataFolder().toPath().resolve("config.yml").toFile());}
+        catch(Exception e){getLogger().log(Level.SEVERE,"NookCore could not initialise: invalid config.yml",e);blockStartup("Invalid config.yml; restore a valid configuration before restarting.");return;}
         new SmitePrank(this);
         adminTeleports=new AdminTeleports(Bukkit::getPlayerExact,message->getLogger().info(message));
         getServer().getPluginManager().registerEvents(adminTeleports,this);
