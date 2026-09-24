@@ -1,9 +1,20 @@
-# Enable after reviewing the targets. Restart to load changes.
-# Definitions freeze for the current Wednesday 02:00 UK rotation once enabled.
-# Changes then apply to the next week; never edit stored progress to reset rewards.
+# Launch rotation; definitions freeze at first enable for the current week.
+# Six quests pay 15 Nooks each; the challenge pays 30. Total: 120 Nooks.
 enabled: false
 celebrations-enabled: true
 goals:
+  coal:
+    title: Mine 64 natural coal ore
+    kind: MINE
+    target: COAL
+    amount: 64
+    reward-cents: 1500
+  iron:
+    title: Mine 32 natural iron ore
+    kind: MINE
+    target: IRON
+    amount: 32
+    reward-cents: 1500
   skeletons:
     title: Defeat 32 skeletons
     kind: KILL
@@ -16,23 +27,11 @@ goals:
     target: ZOMBIE
     amount: 48
     reward-cents: 1500
-  spiders:
-    title: Defeat 24 spiders
-    kind: KILL
-    target: SPIDER
-    amount: 24
-    reward-cents: 1500
   cod:
     title: Catch or hunt 32 cod
     kind: FISH
     target: COD
     amount: 32
-    reward-cents: 1500
-  salmon:
-    title: Catch or hunt 24 salmon
-    kind: FISH
-    target: SALMON
-    amount: 24
     reward-cents: 1500
   explorer:
     title: Visit 8 different biomes
@@ -40,9 +39,9 @@ goals:
     target: ANY
     amount: 8
     reward-cents: 1500
-  challenge:
-    title: Defeat 192 common hostile mobs
-    kind: KILL
-    target: HOSTILE
-    amount: 192
+  community:
+    title: Contribute 2048 cobblestone for community building
+    kind: DEPOSIT
+    target: COBBLESTONE
+    amount: 2048
     reward-cents: 3000

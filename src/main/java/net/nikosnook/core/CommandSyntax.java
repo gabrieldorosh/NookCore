@@ -13,6 +13,7 @@ final class CommandSyntax {
             "colour",exact(2,"/nookchat colour aqua","Choose a colour name, #RRGGBB, or reset."),
             "pronouns",new Shape(2,Integer.MAX_VALUE,"/nookchat pronouns they/them","Choose pronouns, or use reset to hide them.")),
         "nooks",Map.of(
+            "top",new Shape(1,2,"/nooks top [page]","View the balance leaderboard."),
             "help",exact(1,"/nooks help","Help does not take any extra words."),
             "history",exact(1,"/nooks history","History does not take any extra words."),
             "pay",exact(3,"/nooks pay <player> <amount>","Enter a player and the amount to send.")),

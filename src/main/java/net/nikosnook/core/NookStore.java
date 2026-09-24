@@ -35,6 +35,9 @@ public final class NookStore implements AutoCloseable {
             s.execute("CREATE TABLE IF NOT EXISTS members (uuid TEXT PRIMARY KEY REFERENCES accounts(uuid), plot TEXT NOT NULL REFERENCES plots(id), role TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS plot_events (id INTEGER PRIMARY KEY AUTOINCREMENT, time INTEGER NOT NULL, plot TEXT NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS plot_invitations (token TEXT PRIMARY KEY, plot TEXT NOT NULL REFERENCES plots(id), inviter TEXT NOT NULL REFERENCES accounts(uuid), member TEXT NOT NULL REFERENCES accounts(uuid), role TEXT NOT NULL CHECK(role IN ('BUILD','STOCK','BUILD_STOCK')), expires INTEGER NOT NULL, UNIQUE(plot,member))");
+            s.execute("CREATE TABLE IF NOT EXISTS quest_changed_blocks (position TEXT PRIMARY KEY)");
+            s.execute("CREATE TABLE IF NOT EXISTS quest_material_claims (id TEXT PRIMARY KEY, target TEXT NOT NULL, amount INTEGER NOT NULL, staff TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'REVIEW')");
+            s.execute("CREATE TABLE IF NOT EXISTS quest_deposits (id TEXT PRIMARY KEY, uuid TEXT NOT NULL, week TEXT NOT NULL, target TEXT NOT NULL, amount INTEGER NOT NULL, before_hash TEXT NOT NULL, after_hash TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'REVIEW', time INTEGER NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS plot_addresses (plot TEXT PRIMARY KEY REFERENCES plots(id), address TEXT NOT NULL UNIQUE COLLATE NOCASE)");
             s.execute("CREATE TABLE IF NOT EXISTS plot_names (plot TEXT PRIMARY KEY REFERENCES plots(id), display TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS plot_absences (plot TEXT PRIMARY KEY REFERENCES plots(id), expires INTEGER NOT NULL)");
@@ -79,8 +82,11 @@ public final class NookStore implements AutoCloseable {
         return advanceQuests(player,week,kind,target,unique,now).stream().filter(QuestUpdate::paid).map(QuestUpdate::goal).toList();
     }
     public List<QuestUpdate> advanceQuests(UUID player,String week,String kind,String target,String unique,long now)throws SQLException {
-        // Load the authoritative snapshot, never accept caller-supplied payout amounts.
-        return tx(()->{
+        return tx(()->advanceQuestBatch(player,week,kind,target,unique,1,now));
+    }
+    private List<QuestUpdate> advanceQuestBatch(UUID player,String week,String kind,String target,String unique,int amount,long now)throws SQLException {
+        // Caller supplies observed progress only; rewards come from the frozen snapshot.
+
             List<QuestPlan.Goal> goals;
             try(var p=db.prepareStatement("SELECT definitions FROM quest_rotations WHERE week=?")){
                 bind(p,week);try(var rows=p.executeQuery()){if(!rows.next())throw new IllegalArgumentException("Unknown quest rotation");goals=QuestPlan.decode(rows.getString(1));}
@@ -90,19 +96,67 @@ public final class NookStore implements AutoCloseable {
             for(var g:goals){
                 if(!g.kind().equals(kind) || !(g.target().equals(target) || g.target().equals("ANY")))continue;
                 int before=questProgress(player,week,g.id());if(before>=g.amount())continue;
-                if(kind.equals("BIOME")){
+                if(kind.equals("BIOME") || kind.equals("MINE")){
                     if(unique==null || unique.isBlank())throw new IllegalArgumentException("Missing biome identity");
                     if(update("INSERT OR IGNORE INTO quest_visits VALUES(?,?,?,?)",player,week,g.id(),unique)==0)continue;
                 }
-                int after=before+1;
+                int after=Math.min(g.amount(),before+amount);
                 update("INSERT INTO quest_progress VALUES(?,?,?,?) ON CONFLICT(uuid,week,goal) DO UPDATE SET progress=excluded.progress",player,week,g.id(),after);
                 boolean paid=after==g.amount() && awardInternal(player,"quest:"+week+":"+g.id(),g.reward(),now);
                 updates.add(new QuestUpdate(g,after,paid));
             }
             return updates;
-        });
     }
 
+    public synchronized void markQuestBlock(String position)throws SQLException {update("INSERT OR IGNORE INTO quest_changed_blocks VALUES(?)",position);}
+    public synchronized boolean changedQuestBlock(String position)throws SQLException {
+        try(var p=db.prepareStatement("SELECT 1 FROM quest_changed_blocks WHERE position=?")){bind(p,position);try(var r=p.executeQuery()){return r.next();}}
+    }
+    public synchronized void beginQuestDeposit(UUID receipt,UUID player,String week,String target,int amount,String before,String after,long now)throws SQLException {
+        if(amount<1 || amount>100000)throw new IllegalArgumentException("Invalid contribution amount.");
+        if(!QuestPlan.week(now).id().equals(week))throw new IllegalArgumentException("Quest week has changed.");
+        try(var query=db.prepareStatement("SELECT definitions FROM quest_rotations WHERE week=?")){
+            bind(query,week);try(var rows=query.executeQuery()){
+                if(!rows.next())throw new IllegalArgumentException("Unknown quest rotation.");
+                var goal=QuestPlan.decode(rows.getString(1)).stream().filter(g->g.kind().equals("DEPOSIT") && g.target().equals(target)).findFirst().orElseThrow(()->new IllegalArgumentException("This material is not requested this week."));
+                if(amount>goal.amount()-questProgress(player,week,goal.id()))throw new IllegalArgumentException("That exceeds your remaining contribution target.");
+            }
+        }
+        try(var p=db.prepareStatement("SELECT 1 FROM quest_deposits WHERE uuid=? AND state='REVIEW'")){bind(p,player);try(var r=p.executeQuery()){if(r.next())throw new IllegalArgumentException("An interrupted contribution needs staff review before another deposit.");}}
+        update("INSERT INTO quest_deposits(id,uuid,week,target,amount,before_hash,after_hash,time) VALUES(?,?,?,?,?,?,?,?)",receipt,player,week,target,amount,before,after,now);
+    }
+    public List<QuestUpdate> finishQuestDeposit(UUID receipt,long now)throws SQLException {
+        return tx(()->{
+            try(var p=db.prepareStatement("SELECT * FROM quest_deposits WHERE id=?")){
+                bind(p,receipt);try(var r=p.executeQuery()){
+                    if(!r.next() || !r.getString("state").equals("REVIEW"))throw new IllegalArgumentException("Contribution is no longer pending.");
+                    var updates=advanceQuestBatch(UUID.fromString(r.getString("uuid")),r.getString("week"),"DEPOSIT",r.getString("target"),null,r.getInt("amount"),now);
+                    if(updates.isEmpty())throw new IllegalArgumentException("This contribution no longer advances a quest.");
+                    update("UPDATE quest_deposits SET state='COMPLETE' WHERE id=?",receipt);return updates;
+                }
+            }
+        });
+    }
+    public synchronized void cancelQuestDeposit(UUID receipt)throws SQLException {update("UPDATE quest_deposits SET state='CANCELLED' WHERE id=? AND state='REVIEW'",receipt);}
+    public void beginQuestClaim(UUID id,String target,int amount,String staff)throws SQLException {
+        if(amount<1 || amount>64)throw new IllegalArgumentException("Collect between 1 and 64 items.");
+        tx(()->{
+            long available=0;
+            try(var p=db.prepareStatement("SELECT COALESCE(SUM(amount),0) FROM quest_deposits WHERE target=? AND state='COMPLETE'")){bind(p,target);try(var r=p.executeQuery()){r.next();available=r.getLong(1);}}
+            try(var p=db.prepareStatement("SELECT COALESCE(SUM(amount),0) FROM quest_material_claims WHERE target=? AND state IN ('REVIEW','COMPLETE')")){bind(p,target);try(var r=p.executeQuery()){r.next();available-=r.getLong(1);}}
+            if(available<amount)throw new IllegalArgumentException("Only "+available+" contributed items are available to collect.");
+            update("INSERT INTO quest_material_claims(id,target,amount,staff) VALUES(?,?,?,?)",id,target,amount,staff);return null;
+        });
+    }
+    public synchronized void finishQuestClaim(UUID id,boolean complete)throws SQLException {update("UPDATE quest_material_claims SET state=? WHERE id=? AND state='REVIEW'",complete?"COMPLETE":"CANCELLED",id);}
+    public synchronized List<String> questDepositReport()throws SQLException {
+        var lines=new ArrayList<String>();
+        try(var p=db.prepareStatement("SELECT id,uuid,target,amount,state FROM quest_deposits WHERE state='REVIEW' ORDER BY time");var r=p.executeQuery()){while(r.next())lines.add("REVIEW "+r.getString(1)+" player="+r.getString(2)+" "+r.getInt(4)+" "+r.getString(3));}
+        try(var p=db.prepareStatement("SELECT week,target,SUM(amount) FROM quest_deposits WHERE state='COMPLETE' GROUP BY week,target ORDER BY week DESC");var r=p.executeQuery()){while(r.next())lines.add(r.getString(1)+" · "+r.getLong(3)+" "+r.getString(2)+" contributed");}
+        try(var p=db.prepareStatement("SELECT id,target,amount,staff,state FROM quest_material_claims WHERE state='REVIEW'");var r=p.executeQuery()){while(r.next())lines.add("REVIEW collection "+r.getString(1)+" "+r.getInt(3)+" "+r.getString(2)+" staff="+r.getString(4));}
+        try(var p=db.prepareStatement("SELECT target,SUM(amount) FROM quest_material_claims WHERE state IN ('REVIEW','COMPLETE') GROUP BY target");var r=p.executeQuery()){while(r.next())lines.add("Collected/reserved: "+r.getLong(2)+" "+r.getString(1));}
+        return lines;
+    }
     private synchronized <T> T tx(Work<T> work) throws SQLException {
         db.setAutoCommit(false);
         try { T result = work.run(); db.commit(); return result; }

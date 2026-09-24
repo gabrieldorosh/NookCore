@@ -8,7 +8,7 @@ final class QuestPlan {
     record Week(String id,long nextReset) {}
     record Goal(String id,String title,String kind,String target,int amount,long reward) {
         Goal {
-            if(!id.matches("[a-z0-9_-]{1,40}") || title.isBlank() || title.length()>100 || !Set.of("KILL","FISH","BIOME").contains(kind)
+            if(!id.matches("[a-z0-9_-]{1,40}") || title.isBlank() || title.length()>100 || !Set.of("KILL","FISH","BIOME","MINE","DEPOSIT").contains(kind)
                 || !target.matches("[A-Z_]+") || amount<1 || amount>100000 || reward<1 || reward>Money.MAX)throw new IllegalArgumentException("Invalid quest definition: "+id);
         }
     }

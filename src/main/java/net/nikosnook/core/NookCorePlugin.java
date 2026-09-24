@@ -56,6 +56,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             }
             Objects.requireNonNull(getCommand("nooks")).setExecutor(this);
             Objects.requireNonNull(getCommand("nookadmin")).setExecutor(this);
+            getCommand("baltop").setExecutor(this);getCommand("baltop").setTabCompleter(this);
             getCommand("nooks").setTabCompleter(this);getCommand("nookadmin").setTabCompleter(this);
             if(getServer().getPluginManager().isPluginEnabled("WorldGuard") && getServer().getPluginManager().isPluginEnabled("WorldEdit"))new PlotSetup(this,store,()->healthy,this::fail);
             var plots=new PlotCommands(store,this::rentalsReady,this::reconcilePlots,this::fail,id->plotGate!=null && plotGate.manages(id),()->plotGate.validateConfiguration());
@@ -170,7 +171,17 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         try{return store.account(UUID.fromString(input)).orElseThrow(()->new IllegalArgumentException("Unknown account."));}
         catch(IllegalArgumentException e){return store.byName(input).orElseThrow(()->new IllegalArgumentException("Player must have joined this season. Use their current name or UUID."));}
     }
+    static String[] adminArgs(String[] args){
+        if(args.length>=2 && args[0].equalsIgnoreCase("plot")){
+            String[] flat=new String[args.length-1];flat[0]="plot"+args[1].toLowerCase(Locale.ROOT);System.arraycopy(args,2,flat,1,args.length-2);return flat;
+        }return args;
+    }
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
+        if(command.getName().equals("baltop")){return showBaltop(sender,args);}
+        if(command.getName().equals("nookadmin")){
+            if(args.length==1 && args[0].equalsIgnoreCase("plot")){NookUi.help(sender,"NookAdmin · Plots","/nookadmin plot clear <address> <note> — record clearance","/nookadmin plot evict <address> <reason|confirm> — preview/confirm eviction","/nookadmin plot membership <player> — inspect membership","/nookadmin plot storage <address> — read storage notes","/nookadmin plot absence <address> <days|off> <reason> — allow a break","/nookadmin plot define <id> <rent> — create a record");return true;}
+            args=adminArgs(args);
+        }
         String section=command.getName().equals("nookadmin")?"NookAdmin":"Nooks";
         if(command.getName().equals("nookadmin") && args.length>0 && Set.of("teleport","return").contains(args[0].toLowerCase(Locale.ROOT))){adminTeleports.execute(sender,args);return true;}
         if(!healthy){sender.sendMessage(NookUi.message(section,"The economy is paused. Please contact an admin."));return true;}
@@ -236,11 +247,12 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
                     awardsEnabled=args[1].equalsIgnoreCase("on");getConfig().set("advancement-rewards-enabled",awardsEnabled);saveConfig();sender.sendMessage(NookUi.message(section,"Advancement rewards "+(awardsEnabled?"enabled":"disabled")+". Disabled-period advancements are not backfilled."));return true;
                 }
                 if(args.length==2 && args[0].equalsIgnoreCase("balance")){var a=resolve(args[1]);sender.sendMessage(NookUi.prefix(section).append(NookUi.name(a.id(),a.name())).append(NookUi.text(": "+Money.format(a.cents()))));return true;}
-                if(args.length>=4 && Set.of("give","take").contains(args[0].toLowerCase(Locale.ROOT))){var a=resolve(args[1]);long value=Money.parse(args[2]);if(args[0].equalsIgnoreCase("take"))value=-value;String reason=String.join(" ",Arrays.copyOfRange(args,3,args.length));store.adjust(a.id(),value,sender.getName(),reason,now);sender.sendMessage(NookUi.message(section,"Recorded adjustment for ").append(NookUi.name(a.id(),a.name())).append(NookUi.text(": "+Money.format(value))));return true;}
+                if(args.length>=4 && Set.of("give","take").contains(args[0].toLowerCase(Locale.ROOT))){var a=resolve(args[1]);long value=Money.parse(args[2]);if(args[0].equalsIgnoreCase("take"))value=-value;String reason=String.join(" ",Arrays.copyOfRange(args,3,args.length));store.adjust(a.id(),value,sender.getName(),reason,now);Player affected=Bukkit.getPlayer(a.id());if(affected!=null)affected.sendMessage(NookUi.message("Nooks","Staff "+(value>0?"added ":"removed ")+Money.format(Math.abs(value))+(value>0?" to":" from")+" your balance. Reason: "+reason+". Balance: "+Money.format(store.account(a.id()).orElseThrow().cents())+"."));sender.sendMessage(NookUi.message(section,"Recorded adjustment for ").append(NookUi.name(a.id(),a.name())).append(NookUi.text(": "+Money.format(value))));return true;}
                 NookUi.help(sender,"NookAdmin","/nookadmin teleport <player> [destination-player] — visit a player, or move one player to another","/nookadmin return [player] — return after a staff teleport (30-minute window)","/nookadmin balance <player> — inspect a balance","/nookadmin give <player> <amount> <reason> — credit Nooks","/nookadmin take <player> <amount> <reason> — debit Nooks","/nookadmin backup — save an economy snapshot","/nookadmin awards <on|off> — toggle advancement payments","/nookadmin plotdefine <id> <weekly-price> — create a plot record","/nookadmin plotevict <address> <reason|confirm> — preview and confirm an eviction with refund","/nookadmin plotclear <address> <storage-note> — release a cleared plot; record where belongings are stored","/nookadmin plotstorage <id> — read the latest 10 clearance storage notes","/nookadmin plotmembership <player> — inspect the player's plot allowance","/nookadmin plotabsence <id> <days|off> <reason> — record an absence");return true;
             }
             if(!(sender instanceof Player p)){sender.sendMessage(NookUi.message(section,"Use /nookadmin balance <player> from console."));return true;}
             CommandSyntax.check("nooks",args);
+            if(args.length>=1 && args[0].equalsIgnoreCase("top"))return showBaltop(sender,Arrays.copyOfRange(args,1,args.length));
             if(args.length==0){sender.sendMessage(NookUi.message(section,"Your balance: "+Money.format(store.account(p.getUniqueId()).orElseThrow().cents())));return true;}
             if(args.length==1 && args[0].equalsIgnoreCase("history")){
                 var entries=store.history(p.getUniqueId());sender.sendMessage(NookUi.heading("Nooks · Recent transactions"));
@@ -256,12 +268,30 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         catch(IllegalArgumentException e){sender.sendMessage(NookUi.problem(section,e.getMessage()));return true;}
         catch(Exception e){fail(e);sender.sendMessage(NookUi.message(section,"The operation could not be confirmed. Contact staff before retrying."));return true;}
     }
+    private boolean showBaltop(CommandSender sender,String[] args){
+        if(!healthy){sender.sendMessage(NookUi.problem("Nooks","The economy is paused."));return true;}
+        try{
+            if(args.length>1)throw new IllegalArgumentException("Use /baltop [page].");
+            int page=args.length==0?1:Integer.parseInt(args[0]);if(page<1 || page>100000)throw new IllegalArgumentException("Choose a positive page number.");
+            var accounts=store.accounts().stream().sorted(Comparator.comparingLong(NookStore.Account::cents).reversed().thenComparing(NookStore.Account::name).thenComparing(a->a.id().toString())).toList();
+            int pages=Math.max(1,(accounts.size()+9)/10);if(page>pages)throw new IllegalArgumentException("There are "+pages+" pages.");
+            sender.sendMessage(NookUi.heading("Nooks · Top balances · "+page+"/"+pages));
+            for(int i=(page-1)*10;i<Math.min(page*10,accounts.size());i++){var a=accounts.get(i);sender.sendMessage(NookUi.text((i+1)+". ").append(NookUi.name(a.id(),a.name())).append(NookUi.text(" · "+Money.format(a.cents()))));}
+        }catch(IllegalArgumentException e){sender.sendMessage(NookUi.problem("Nooks",e instanceof NumberFormatException?"Choose a positive page number.":e.getMessage()));}
+        catch(Exception e){fail(e);sender.sendMessage(NookUi.problem("Nooks","Could not read balances."));}return true;
+    }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args){
+        if(command.getName().equals("baltop"))return List.of();
+        if(command.getName().equals("nookadmin") && args.length>=1 && args[0].equalsIgnoreCase("plot")){
+            if(!sender.hasPermission("nookcore.admin"))return List.of();
+            if(args.length==2)return NookUi.complete(args[1],List.of("define","clear","evict","storage","absence","membership"));
+            args=adminArgs(args);
+        }
         boolean admin=command.getName().equals("nookadmin");if(!healthy || admin && !sender.hasPermission("nookcore.admin"))return List.of();
         if(admin && args.length>=2 && args.length<=3 && Set.of("teleport","return").contains(args[0].toLowerCase(Locale.ROOT)))return AdminTeleports.authorised(sender)?NookUi.complete(args[args.length-1],Bukkit.getOnlinePlayers().stream().map(Player::getName).toList()):List.of();
         List<String> values=new ArrayList<>();
         try{
-            if(args.length==1)values.addAll(admin?List.of("balance","give","take","backup","awards","plotdefine","plotclear","plotstorage","plotabsence","plotmembership","plotevict","help","teleport","return"):List.of("pay","history","help"));
+            if(args.length==1)values.addAll(admin?List.of("balance","give","take","backup","awards","plot","help","teleport","return"):List.of("pay","history","top","help"));
             else if(args.length==2){
                 if(Set.of("pay","balance","give","take","plotmembership").contains(args[0].toLowerCase(Locale.ROOT))){for(var a:store.accounts())values.add(a.name());}
                 else if(admin && args[0].equalsIgnoreCase("awards"))values.addAll(List.of("on","off"));
