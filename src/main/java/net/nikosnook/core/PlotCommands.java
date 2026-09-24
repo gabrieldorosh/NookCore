@@ -35,6 +35,8 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
     private final LongSupplier clock;
     private final BiConsumer<UUID,net.kyori.adventure.text.Component> notifyPlayer;
     private BiConsumer<Player,String> locator=(player,plot)->player.sendMessage(NookUi.message("NookPlots","Plot directions are unavailable right now."));
+    private Function<Player,String> currentPlot=player->null;
+    void currentPlot(Function<Player,String> lookup){currentPlot=lookup;}
     void locator(BiConsumer<Player,String> locator){this.locator=locator;}
     static net.kyori.adventure.text.Component findLink(String plot){
         return net.kyori.adventure.text.Component.text(" [Find]",NookUi.COMMAND).clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/nookplots find "+plot));
@@ -109,11 +111,16 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
             }
 
-            if(args.length==2 && args[0].equalsIgnoreCase("info")){
+            if(args.length>=1 && args[0].equalsIgnoreCase("info")){
+                if(args.length==1){
+                    String here=sender instanceof Player player?currentPlot.apply(player):null;
+                    if(here==null || !managed.test(here))throw new IllegalArgumentException("Stand inside a plot, or provide its address.");
+                    args=new String[]{"info",here};
+                }
                 if(!managed.test(args[1]))throw new IllegalArgumentException("That plot is not part of the shopping district.");
                 var plot=store.plot(args[1]);sender.sendMessage(NookUi.heading("NookPlots · "+store.plotLabel(plot.id())));
                 sender.sendMessage(NookUi.plot(store,plot));
-                sender.sendMessage(NookUi.text("Address: "+store.plotAddress(plot.id())+" · Plot ID: "+plot.id()));
+                sender.sendMessage(NookUi.text("Address: "+store.plotAddress(plot.id())));
                 if(plot.owner()!=null){
                     sender.sendMessage(NookUi.text("Paid until: "+NookUi.date(plot.paidUntil())));
 
@@ -145,7 +152,7 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
                     String plot=args.length==2?args[1]:null;
                     if(plot==null){
                         for(var candidate:store.plots())if(managed.test(candidate.id()) && store.members(candidate.id()).containsKey(actor)){plot=candidate.id();break;}
-                        if(plot==null){sender.sendMessage(NookUi.message("NookPlots","You do not belong to a plot. Use ").append(NookUi.command("/nookplots find ")).append(NookUi.text("<plot> to locate one from the list.")));return true;}
+                        if(plot==null){sender.sendMessage(NookUi.message("NookPlots","You do not belong to a plot. Use ").append(NookUi.command("/nookplots find <plot>","/nookplots find ")).append(NookUi.text(" to locate one from the list.")));return true;}
                     }
                     if(!managed.test(plot))throw new IllegalArgumentException("That plot is not part of the shopping district.");
                     p.sendMessage(NookUi.heading(store.plotLabel(plot)));locator.accept(p,plot);return true;
@@ -223,7 +230,7 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
             }
 
-            NookUi.help(sender,"NookPlots","/nookplots abandon <plot> — review closure and a prepaid-week refund","/nookplots leave — leave as a co-owner","/nookplots list — see prices, owners and availability","/nookplots find [plot] — locate your plot or a named plot","/nookplots name <plot> <name|reset> — set your shop display name","/nookplots info <plot> — check paid-through date and prepaid weeks","/nookplots rent <plot> — rent an available plot","/nookplots invite <plot> <player> <build|stock|both> — invite or update a member","/nookplots invitations — see your invitations","/nookplots accept [player] — accept; omit player if only one invitation","/nookplots decline [player] — decline an invitation","/nookplots role <plot> <player> <build|stock|both> — replace their permissions","/nookplots remove <plot> <player> — remove a member","/nookplots prepay <plot> <weeks> — pay ahead, up to four weeks","/nookplots reopen <plot> — pay remaining rent and resume sales");
+            NookUi.help(sender,"NookPlots","/nookplots abandon <plot> — review closure and a prepaid-week refund","/nookplots leave — leave as a co-owner","/nookplots list — see prices, owners and availability","/nookplots find [plot] — locate your plot or a named plot","/nookplots name <plot> <name|reset> — set your shop display name","/nookplots info [address] — inspect this plot or another address","/nookplots rent <plot> — rent an available plot","/nookplots invite <plot> <player> <build|stock|both> — invite or update a member","/nookplots invitations — see your invitations","/nookplots accept [player] — accept; omit player if only one invitation","/nookplots decline [player] — decline an invitation","/nookplots role <plot> <player> <build|stock|both> — replace their permissions","/nookplots remove <plot> <player> — remove a member","/nookplots prepay <plot> <weeks> — pay ahead, up to four weeks","/nookplots reopen <plot> — pay remaining rent and resume sales");
 
         }catch(NumberFormatException ex){sender.sendMessage(NookUi.problem("NookPlots","Choose a whole number of weeks from 1 to 4."));}
         catch(IllegalArgumentException ex){sender.sendMessage(NookUi.problem("NookPlots",ex.getMessage()));}
@@ -273,6 +280,11 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
         try{
 
             List<String> values=new ArrayList<>();String sub=args[0].toLowerCase(Locale.ROOT);
+            if(args.length>=3 && Set.of("abandon","invite","role","remove","prepay","name").contains(sub)){
+                Map<String,String> addresses=new HashMap<>();for(var plot:store.plots())addresses.put(plot.id(),store.plotAddress(plot.id()));
+                try{args=args.clone();args[1]=PlotSelector.resolve(args[1],addresses);}catch(IllegalArgumentException e){return List.of();}
+            }
+
 
             if(args.length==1)values.addAll(List.of("abandon","leave","list","name","info","find","help","rent","invite","invitations","accept","decline","role","remove","prepay","reopen"));
 
@@ -280,8 +292,8 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
                 if(Set.of("accept","decline").contains(sub)){for(var i:store.invitations(player.getUniqueId(),System.currentTimeMillis()))values.add(store.account(i.inviter()).orElseThrow().name());}
 
-                else if((sub.equals("info") || sub.equals("find"))){for(var plot:store.plots())if(managed.test(plot.id())){values.add(plot.id());String addressAlias=PlotSelector.alias(store.plotAddress(plot.id()));if(!addressAlias.isBlank())values.add(addressAlias);}}
-                else if(Set.of("rent","invite","role","remove","prepay","reopen","abandon","name").contains(sub)){for(var plot:store.plots())if((managed.test(plot.id()) || sub.equals("abandon")) && (sub.equals("rent")?plot.state().equals("AVAILABLE"):player.getUniqueId().equals(plot.owner()) && store.role(plot.id(),player.getUniqueId()).equals("OWNER"))){values.add(plot.id());String addressAlias=PlotSelector.alias(store.plotAddress(plot.id()));if(!addressAlias.isBlank())values.add(addressAlias);}}
+                else if((sub.equals("info") || sub.equals("find"))){for(var plot:store.plots())if(managed.test(plot.id())){String addressAlias=PlotSelector.alias(store.plotAddress(plot.id()));values.add(addressAlias.isBlank()?plot.id():addressAlias);}}
+                else if(Set.of("rent","invite","role","remove","prepay","reopen","abandon","name").contains(sub)){for(var plot:store.plots())if((managed.test(plot.id()) || sub.equals("abandon")) && (sub.equals("rent")?plot.state().equals("AVAILABLE"):player.getUniqueId().equals(plot.owner()) && store.role(plot.id(),player.getUniqueId()).equals("OWNER"))){String addressAlias=PlotSelector.alias(store.plotAddress(plot.id()));values.add(addressAlias.isBlank()?plot.id():addressAlias);}}
 
             }else if(args.length==3){
 

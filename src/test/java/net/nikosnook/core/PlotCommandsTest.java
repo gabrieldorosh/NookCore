@@ -12,6 +12,27 @@ import static org.junit.jupiter.api.Assertions.*;
 class PlotCommandsTest {
     @TempDir Path dir;NookStore store;Player player;UUID id=UUID.randomUUID();AtomicInteger failures=new AtomicInteger(),reconciles=new AtomicInteger();
     Map<UUID,List<String>> notices=new HashMap<>();
+    @Test void addressSuggestionsHideIdsAndCapacityMessageIsPersonal()throws Exception {
+        store.addressPlot("one","Willow Way");
+        var c=commands(true,true,()->{},()->{});
+        assertEquals(List.of("willow-way"),c.onTabComplete(player,null,"nookplots",new String[]{"rent",""}));
+        assertEquals(List.of("willow-way"),c.onTabComplete(player,null,"nookplots",new String[]{"info",""}));
+        store.rent("one",id,System.currentTimeMillis());store.definePlot("two",3000);
+        var error=assertThrows(IllegalArgumentException.class,()->store.rent("two",id,System.currentTimeMillis()));
+        assertTrue(error.getMessage().startsWith("You are at the maximum plot capacity: 1"));
+    }
+    @Test void infoWithoutAddressUsesCurrentPlotAndRejectsOutside(){
+        var lines=new ArrayList<String>();
+        Player viewer=(Player)Proxy.newProxyInstance(getClass().getClassLoader(),new Class[]{Player.class},(o,m,a)->{
+            if(m.getName().equals("sendMessage") && a[0] instanceof net.kyori.adventure.text.Component component)lines.add(net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(component));
+            return null;
+        });
+        var c=commands(true,true,()->{},()->{});c.currentPlot(p->"one");
+        c.onCommand(viewer,null,"nookplots",new String[]{"info"});
+        assertTrue(lines.stream().anyMatch(s->s.startsWith("Address:")));assertEquals(0,failures.get());
+        lines.clear();c.currentPlot(p->null);c.onCommand(viewer,null,"nookplots",new String[]{"info"});
+        assertTrue(lines.stream().anyMatch(s->s.contains("Stand inside a plot")));assertEquals(0,failures.get());
+    }
     @BeforeEach void setup()throws Exception {
         store=new NookStore(dir.resolve("nooks.db"));store.join(id,"Player",System.currentTimeMillis(),6000);store.definePlot("one",3000);
         player=(Player)Proxy.newProxyInstance(getClass().getClassLoader(),new Class[]{Player.class},(o,m,a)->switch(m.getName()){case "getUniqueId"->id;case "getName"->"Player";default->null;});

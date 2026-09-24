@@ -22,7 +22,7 @@ final class CommandSyntax {
             Map.entry("leave",exact(1,"/nookplots leave","Leave applies to the plot you currently co-own.")),
             Map.entry("find",new Shape(1,2,"/nookplots find [plot]","Find your own plot, or enter a plot name.")),
             Map.entry("name",new Shape(3,34,"/nookplots name <plot> <name|reset>","Enter a plot ID and shop name, or reset.")),
-            Map.entry("info",exact(2,"/nookplots info <plot>","Choose a plot to see its rent and prepaid weeks.")),
+            Map.entry("info",new Shape(1,2,"/nookplots info [address]","View the plot you are standing in, or choose an address.")),
             Map.entry("rent",exact(2,"/nookplots rent <plot>","Enter the plot you want to rent.")),
             Map.entry("invite",exact(4,"/nookplots invite <plot> <player> <build|stock|both>","Enter a plot, player and the permissions to give them.")),
             Map.entry("role",exact(4,"/nookplots role <plot> <player> <build|stock|both>","Enter a plot, member and their new permissions.")),
@@ -44,6 +44,7 @@ final class CommandSyntax {
             Map.entry("awards",exact(2,"/nookadmin awards <on|off>","Choose on or off.")),
             Map.entry("plotdefine",exact(3,"/nookadmin plotdefine <id> <weekly-price>","Enter a plot ID and weekly rent.")),
             Map.entry("plotstorage",exact(2,"/nookadmin plotstorage <plot>","Choose a plot to read its recorded storage notes.")),
+            Map.entry("plotmembership",exact(2,"/nookadmin plotmembership <player>","Inspect the membership using that player's plot allowance.")),
             Map.entry("plotclear",new Shape(3,Integer.MAX_VALUE,"/nookadmin plotclear <plot> <storage-note>","This makes a cleared plot available to rent again; it does not clear blocks. First store the former renter's belongings, then describe where they are kept (for example: staff storage, chest A3).")),
             Map.entry("plotabsence",new Shape(4,Integer.MAX_VALUE,"/nookadmin plotabsence <plot> <days|off> <reason>","Enter a plot, absence duration and an audit reason.")))
     );

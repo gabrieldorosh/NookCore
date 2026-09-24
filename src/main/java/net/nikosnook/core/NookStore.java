@@ -419,7 +419,8 @@ public final class NookStore implements AutoCloseable {
     public void rent(String id,UUID actor,long now)throws SQLException {
         tx(()-> {
             Plot p=plot(id);if(!p.state().equals("AVAILABLE"))throw new IllegalArgumentException("Plot is unavailable.");
-            requireNoMembership(actor);
+            requireNoMembership(actor,"You are at the maximum plot capacity: 1. Leave or abandon your current plot first.");
+
             update("INSERT INTO members(uuid,plot,role) VALUES(?,?,'OWNER')",actor,id);
             mutate(actor,-p.weekly(),"rent",id,now);
             update("UPDATE plots SET owner=?,paid_until=?,state='ACTIVE' WHERE id=?",actor,Math.addExact(now,WEEK),id);
@@ -428,9 +429,12 @@ public final class NookStore implements AutoCloseable {
             event(id,"RENT",actor.toString(),now);return null;
         });
     }
-    private void requireNoMembership(UUID member)throws SQLException {
+    private void requireNoMembership(UUID member)throws SQLException {requireNoMembership(member,"That player already belongs to a plot.");}
+    private void requireNoMembership(UUID member,String message)throws SQLException {
+
         try(PreparedStatement p=db.prepareStatement("SELECT 1 FROM members WHERE uuid=?")) {
-            bind(p,member);try(ResultSet r=p.executeQuery()){if(r.next())throw new IllegalArgumentException("That player already belongs to a plot.");}
+            bind(p,member);try(ResultSet r=p.executeQuery()){if(r.next())throw new IllegalArgumentException(message);}
+
         }
     }
     private static void memberRole(String role) {
