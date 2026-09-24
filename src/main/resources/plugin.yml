@@ -7,6 +7,10 @@ author: NikosNook
 softdepend: [Vault, WorldGuard, WorldEdit, PlaceholderAPI]
 loadbefore: [ChestShop]
 commands:
+  nooksetup:
+    description: Create district and plot regions from a selection
+    permission: nookcore.admin
+    usage: /nooksetup help
   return:
     description: Return after a staff teleport
     permission: nookcore.admin

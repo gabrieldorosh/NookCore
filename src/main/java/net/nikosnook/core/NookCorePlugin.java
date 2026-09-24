@@ -21,6 +21,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     private AdminTeleports adminTeleports;
     @Override public void onEnable(){
         saveDefaultConfig();
+        if(Files.exists(getDataFolder().toPath().resolve("plot-setup-pending.yml")))healthy=false;
         new SmitePrank(this);
         adminTeleports=new AdminTeleports(Bukkit::getPlayerExact,message->getLogger().info(message));
         getServer().getPluginManager().registerEvents(adminTeleports,this);
@@ -51,6 +52,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             Objects.requireNonNull(getCommand("nooks")).setExecutor(this);
             Objects.requireNonNull(getCommand("nookadmin")).setExecutor(this);
             getCommand("nooks").setTabCompleter(this);getCommand("nookadmin").setTabCompleter(this);
+            if(getServer().getPluginManager().isPluginEnabled("WorldGuard") && getServer().getPluginManager().isPluginEnabled("WorldEdit"))new PlotSetup(this,store,()->healthy,this::fail);
             var plots=new PlotCommands(store,this::rentalsReady,this::reconcilePlots,this::fail,id->plotGate!=null && plotGate.manages(id),()->plotGate.validateConfiguration());
             new ShopSetup(this,(player,block)->{
                 if(!rentalsReady())throw new IllegalArgumentException("Rentals must be available before previewing a district shop.");
@@ -84,12 +86,13 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
                 }
                 catch(Exception e){fail(e);}
             },1200,1200);
-            if(getConfig().getBoolean("shop-gate.enabled",false))Bukkit.getScheduler().runTask(this,this::enableShopGate);
+            if(getConfig().getBoolean("shop-gate.enabled",false) || Files.exists(getDataFolder().toPath().resolve("plot-setup-pending.yml")))Bukkit.getScheduler().runTask(this,this::enableShopGate);
             getLogger().info("Economy foundation ready. Rental features are opt-in and require the separate shop gate startup check.");
         }catch(Exception e){getLogger().log(Level.SEVERE,"NookCore could not initialise; economy unavailable.",e);getServer().getPluginManager().disablePlugin(this);}
     }
     private void enableShopGate(){
         try {
+            if(Files.exists(getDataFolder().toPath().resolve("plot-setup-pending.yml")))throw new IllegalStateException("Unfinished plot setup: recover plot-setup-pending.yml before enabling trades.");
             for(String dependency:List.of("ChestShop","WorldGuard","WorldEdit"))
                 if(!getServer().getPluginManager().isPluginEnabled(dependency))throw new IllegalStateException("Missing shop gate dependency: "+dependency);
             var gate=new ChestShopRentalGate(this,store,()->healthy && isEnabled(),this::fail);
