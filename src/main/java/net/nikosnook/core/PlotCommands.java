@@ -66,6 +66,7 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
         }
     }
 
+    static int listOrder(NookStore.Plot plot,long now){return plot.state().equals("ACTIVE") && plot.paidUntil()>now?0:plot.state().equals("AVAILABLE")?1:2;}
     static String role(String input){return input.equalsIgnoreCase("both")?"BUILD_STOCK":input.toUpperCase(Locale.ROOT);}
 
     private UUID player(String text)throws SQLException {
@@ -99,7 +100,7 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
                 sender.sendMessage(NookUi.heading("NookPlots · Shopping district"));
 
-                for(var plot:store.plots())if(managed.test(plot.id())){
+                for(var plot:store.plots().stream().sorted(Comparator.comparingInt((NookStore.Plot plot)->listOrder(plot,clock.getAsLong())).thenComparing(NookStore.Plot::id)).toList())if(managed.test(plot.id())){
 
                     sender.sendMessage(NookUi.text("• ").append(NookUi.plot(store,plot)).append(findLink(plot.id())));
 

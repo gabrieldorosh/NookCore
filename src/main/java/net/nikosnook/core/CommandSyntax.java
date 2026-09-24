@@ -45,6 +45,7 @@ final class CommandSyntax {
             Map.entry("plotdefine",exact(3,"/nookadmin plotdefine <id> <weekly-price>","Enter a plot ID and weekly rent.")),
             Map.entry("plotstorage",exact(2,"/nookadmin plotstorage <plot>","Choose a plot to read its recorded storage notes.")),
             Map.entry("plotmembership",exact(2,"/nookadmin plotmembership <player>","Inspect the membership using that player's plot allowance.")),
+            Map.entry("plotevict",new Shape(3,Integer.MAX_VALUE,"/nookadmin plotevict <address> <reason|confirm>","Preview an eviction and refund, then confirm within 60 seconds.")),
             Map.entry("plotclear",new Shape(3,Integer.MAX_VALUE,"/nookadmin plotclear <plot> <storage-note>","This makes a cleared plot available to rent again; it does not clear blocks. First store the former renter's belongings, then describe where they are kept (for example: staff storage, chest A3).")),
             Map.entry("plotabsence",new Shape(4,Integer.MAX_VALUE,"/nookadmin plotabsence <plot> <days|off> <reason>","Enter a plot, absence duration and an audit reason.")))
     );

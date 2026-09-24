@@ -530,6 +530,35 @@ public final class NookStore implements AutoCloseable {
             return current.refund();
         });
     }
+    public synchronized AbandonmentQuote evictionQuote(String id,long now)throws SQLException {
+        Plot p=plot(id);if(p.owner()==null)throw new IllegalArgumentException("This plot has no renter to evict.");
+        var base=abandonmentQuote(id,p.owner(),now);
+        long refund=evictionRefund(p,now);
+        return new AbandonmentQuote(id,base.owner(),base.lease(),base.paidUntil(),base.weekly(),base.state(),refund);
+    }
+    static long evictionRefund(Plot p,long now){
+        if(!p.state().equals("ACTIVE") || p.paidUntil()<=now)return 0;
+        var zone=java.time.ZoneId.of("Europe/London");
+        var tomorrow=java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate().plusDays(1);
+        var end=java.time.Instant.ofEpochMilli(p.paidUntil()).atZone(zone).toLocalDate();
+        long days=Math.max(0,java.time.temporal.ChronoUnit.DAYS.between(tomorrow,end));
+        return java.math.BigDecimal.valueOf(p.weekly()).multiply(java.math.BigDecimal.valueOf(days)).divide(java.math.BigDecimal.valueOf(7),0,java.math.RoundingMode.HALF_UP).longValueExact();
+    }
+    public long evict(AbandonmentQuote expected,String staff,String reason,long now)throws SQLException {
+        if(reason.isBlank())throw new IllegalArgumentException("Give a reason for the eviction.");
+        return tx(()->{
+            var current=evictionQuote(expected.plot(),now);
+            if(!current.equals(expected))throw new IllegalArgumentException("The lease or refund changed. Preview the eviction again.");
+            if(current.refund()>0)mutate(current.owner(),current.refund(),"rent-refund",current.plot()+" eviction lease="+current.lease(),now);
+            update("INSERT INTO plot_abandonments(lease,plot,owner,time,refund) VALUES(?,?,?,?,?)",current.lease(),current.plot(),current.owner(),now,current.refund());
+            event(current.plot(),"EVICT",staff+" reason="+reason+" refund="+current.refund()+" members="+members(current.plot()),now);
+            update("DELETE FROM plot_invitations WHERE plot=?",current.plot());
+            update("DELETE FROM plot_absences WHERE plot=?",current.plot());
+            update("DELETE FROM members WHERE plot=?",current.plot());
+            update("UPDATE plots SET state='RECLAIM',paid_until=? WHERE id=?",now,current.plot());
+            return current.refund();
+        });
+    }
     public synchronized boolean abandoned(String id)throws SQLException {
         try(PreparedStatement query=db.prepareStatement("SELECT 1 FROM plot_abandonments a JOIN plot_leases l ON a.lease=l.lease WHERE l.plot=?")){
             bind(query,id);try(ResultSet result=query.executeQuery()){return result.next();}
