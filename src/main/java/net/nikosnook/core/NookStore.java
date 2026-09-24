@@ -44,6 +44,8 @@ public final class NookStore implements AutoCloseable {
             s.execute("CREATE TABLE IF NOT EXISTS native_offers (id TEXT PRIMARY KEY, plot TEXT NOT NULL REFERENCES plots(id), lease TEXT NOT NULL, owner TEXT NOT NULL REFERENCES accounts(uuid), item BLOB NOT NULL, bundle INTEGER NOT NULL CHECK(bundle BETWEEN 1 AND 64), cents INTEGER NOT NULL CHECK(cents BETWEEN 1 AND 100000000000), stock INTEGER NOT NULL DEFAULT 0 CHECK(stock BETWEEN 0 AND 1000000), revision INTEGER NOT NULL DEFAULT 1, closed INTEGER NOT NULL DEFAULT 0)");
             s.execute("CREATE TABLE IF NOT EXISTS native_stock_receipts (id TEXT PRIMARY KEY, offer TEXT NOT NULL REFERENCES native_offers(id), actor TEXT NOT NULL REFERENCES accounts(uuid), quantity INTEGER NOT NULL, time INTEGER NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS native_trade_receipts (id TEXT PRIMARY KEY, offer TEXT NOT NULL REFERENCES native_offers(id), buyer TEXT NOT NULL REFERENCES accounts(uuid), seller TEXT NOT NULL REFERENCES accounts(uuid), quantity INTEGER NOT NULL, cents INTEGER NOT NULL, revision INTEGER NOT NULL, item BLOB NOT NULL, time INTEGER NOT NULL, delivery TEXT NOT NULL DEFAULT 'PENDING' CHECK(delivery IN ('PENDING','REVIEW','DELIVERED')))");
+            s.execute("CREATE TABLE IF NOT EXISTS native_stock_intents (receipt TEXT PRIMARY KEY, offer TEXT NOT NULL REFERENCES native_offers(id), actor TEXT NOT NULL REFERENCES accounts(uuid), quantity INTEGER NOT NULL CHECK(quantity BETWEEN 1 AND 64), before_hash BLOB NOT NULL, after_hash BLOB NOT NULL, state TEXT NOT NULL DEFAULT 'REVIEW' CHECK(state IN ('REVIEW','COMPLETE')), time INTEGER NOT NULL)");
+            s.execute("CREATE UNIQUE INDEX IF NOT EXISTS native_one_deposit_per_actor ON native_stock_intents(actor) WHERE state='REVIEW'");
             s.execute("CREATE TABLE IF NOT EXISTS native_stock_returns (receipt TEXT PRIMARY KEY REFERENCES native_trade_receipts(id))");
             s.execute("CREATE TABLE IF NOT EXISTS native_delivery_plans (receipt TEXT PRIMARY KEY REFERENCES native_trade_receipts(id), buyer TEXT NOT NULL REFERENCES accounts(uuid), before_hash BLOB NOT NULL, after_hash BLOB NOT NULL)");
             s.execute("CREATE UNIQUE INDEX IF NOT EXISTS native_one_delivery_per_buyer ON native_trade_receipts(buyer) WHERE delivery='REVIEW'");
@@ -279,6 +281,54 @@ public final class NookStore implements AutoCloseable {
         });
     }
 
+    boolean planNativeStockDeposit(UUID receipt,UUID offerId,UUID actor,int quantity,byte[] before,byte[] after,long now)throws SQLException {
+        if(receipt==null || quantity<1 || quantity>64 || before==null || after==null || before.length!=32 || after.length!=32 || Arrays.equals(before,after))throw new IllegalArgumentException("A receipt, item count and distinct inventory snapshots are required.");
+        byte[] original=before.clone(),result=after.clone();
+        return tx(()->{
+            try(var p=db.prepareStatement("SELECT * FROM native_stock_intents WHERE receipt=?")){
+                bind(p,receipt);try(var r=p.executeQuery()){if(r.next()){
+                    if(!r.getString("offer").equals(offerId.toString()) || !r.getString("actor").equals(actor.toString()) || r.getInt("quantity")!=quantity || !Arrays.equals(original,r.getBytes("before_hash")) || !Arrays.equals(result,r.getBytes("after_hash")))throw new IllegalArgumentException("Stock intent already exists with different details.");return false;
+                }}
+            }
+            var offer=nativeOffer(offerId);nativeActive(offer,now);owner(plot(offer.plot()),actor);
+            if((long)offer.stock()+quantity>NativeShop.MAX_STOCK)throw new IllegalArgumentException("Stock capacity reached.");
+            if(nativeInventoryPending(actor))throw new IllegalArgumentException("An earlier inventory operation needs review first.");
+            try(var p=db.prepareStatement("SELECT 1 FROM native_stock_receipts WHERE id=?")){
+                bind(p,receipt);try(var r=p.executeQuery()){if(r.next())throw new IllegalArgumentException("That stock receipt already exists.");}
+            }
+            update("INSERT INTO native_stock_intents(receipt,offer,actor,quantity,before_hash,after_hash,time) VALUES(?,?,?,?,?,?,?)",receipt,offerId,actor,quantity,original,result,now);return true;
+        });
+    }
+    private boolean nativeInventoryPending(UUID actor)throws SQLException {
+        try(var p=db.prepareStatement("SELECT 1 FROM native_stock_intents WHERE actor=? AND state='REVIEW' UNION ALL SELECT 1 FROM native_trade_receipts WHERE buyer=? AND delivery='REVIEW'")){
+            bind(p,actor,actor);try(var r=p.executeQuery()){return r.next();}
+        }
+    }
+    // Confirm only against a durably persisted inventory, not an in-memory API snapshot.
+    void confirmNativeStockDeposit(UUID receipt,UUID actor,byte[] persistedAfter,long now)throws SQLException {
+        tx(()->{
+            UUID offerId;int quantity;
+            try(var p=db.prepareStatement("SELECT * FROM native_stock_intents WHERE receipt=?")){
+                bind(p,receipt);try(var r=p.executeQuery()){
+                    if(!r.next() || !r.getString("actor").equals(actor.toString()) || !Arrays.equals(r.getBytes("after_hash"),persistedAfter))throw new IllegalArgumentException("Stock deposit snapshot does not match; review is required.");
+                    if(r.getString("state").equals("COMPLETE"))return null;
+                    offerId=UUID.fromString(r.getString("offer"));quantity=r.getInt("quantity");
+                }
+            }
+            var offer=nativeOffer(offerId);
+            if(!offer.owner().equals(actor) || (long)offer.stock()+quantity>NativeShop.MAX_STOCK)throw new IllegalArgumentException("Stock deposit needs staff review.");
+            // Items may have been removed just before closure/expiry. Preserve them for the original owner.
+            update("UPDATE native_offers SET stock=stock+? WHERE id=?",quantity,offerId);
+            update("INSERT INTO native_stock_receipts(id,offer,actor,quantity,time) VALUES(?,?,?,?,?)",receipt,offerId,actor,quantity,now);
+            update("UPDATE native_stock_intents SET state='COMPLETE' WHERE receipt=?",receipt);return null;
+        });
+    }
+    synchronized String nativeStockIntentState(UUID receipt)throws SQLException {
+        try(var p=db.prepareStatement("SELECT state FROM native_stock_intents WHERE receipt=?")){
+            bind(p,receipt);try(var r=p.executeQuery()){if(!r.next())throw new IllegalArgumentException("Unknown stock intent.");return r.getString(1);}
+        }
+    }
+
     void closeNativeOffer(UUID offerId,UUID actor)throws SQLException {
         tx(()->{
             var offer=nativeOffer(offerId);if(!offer.owner().equals(actor))throw new IllegalArgumentException("Only the original shop owner can close this offer.");
@@ -322,6 +372,7 @@ public final class NookStore implements AutoCloseable {
                     if(!Arrays.equals(original,r.getBytes(1)) || !Arrays.equals(result,r.getBytes(2)))throw new IllegalArgumentException("Delivery intent already exists with different snapshots.");return false;
                 }}
             }
+            if(nativeInventoryPending(buyer))throw new IllegalArgumentException("An earlier inventory operation needs review first.");
             if(!nativeDeliveryState(receipt).equals("PENDING"))throw new IllegalArgumentException("Delivery requires review.");
             try(var p=db.prepareStatement("SELECT 1 FROM native_trade_receipts WHERE buyer=? AND delivery='REVIEW'")){
                 bind(p,buyer);try(var r=p.executeQuery()){if(r.next())throw new IllegalArgumentException("An earlier delivery needs review first.");}

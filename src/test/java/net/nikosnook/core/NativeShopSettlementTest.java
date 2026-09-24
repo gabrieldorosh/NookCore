@@ -88,4 +88,33 @@ class NativeShopSettlementTest {
         stock(12);UUID sale=UUID.randomUUID();store.settleNativePurchase(sale,offer.id(),buyer,1,3);assertThrows(IllegalArgumentException.class,()->store.reserveNativeStockReturn(sale,offer.id(),buyer,4,4));
         store.closeNativeOffer(offer.id(),seller);assertThrows(IllegalArgumentException.class,()->store.settleNativePurchase(UUID.randomUUID(),offer.id(),buyer,2,4));UUID returned=UUID.randomUUID();store.reserveNativeStockReturn(returned,offer.id(),seller,4,4);assertThrows(IllegalArgumentException.class,()->store.settleNativePurchase(returned,offer.id(),seller,2,5));assertEquals(4,store.nativeOffer(offer.id()).stock());
     }
+    byte[] fingerprint(int value){byte[] hash=new byte[32];hash[0]=(byte)value;return hash;}
+    @Test void stockIntentSurvivesRestartAndCreditsOnlyOnceAfterConfirmation()throws Exception {
+        UUID id=UUID.randomUUID();assertTrue(store.planNativeStockDeposit(id,offer.id(),seller,4,fingerprint(0),fingerprint(1),2));assertEquals(0,store.nativeOffer(offer.id()).stock());
+        store.close();store=new NookStore(dir.resolve("db"));assertEquals("REVIEW",store.nativeStockIntentState(id));assertFalse(store.planNativeStockDeposit(id,offer.id(),seller,4,fingerprint(0),fingerprint(1),3));
+        store.confirmNativeStockDeposit(id,seller,fingerprint(1),4);store.confirmNativeStockDeposit(id,seller,fingerprint(1),5);assertEquals(4,store.nativeOffer(offer.id()).stock());assertEquals("COMPLETE",store.nativeStockIntentState(id));assertFalse(store.planNativeStockDeposit(id,offer.id(),seller,4,fingerprint(0),fingerprint(1),6));
+    }
+    @Test void badStockConfirmationOrConflictingRetryCannotCreditItems()throws Exception {
+        UUID id=UUID.randomUUID();store.planNativeStockDeposit(id,offer.id(),seller,4,fingerprint(0),fingerprint(1),2);
+        assertThrows(IllegalArgumentException.class,()->store.confirmNativeStockDeposit(id,seller,fingerprint(0),3));assertThrows(IllegalArgumentException.class,()->store.confirmNativeStockDeposit(id,other,fingerprint(1),3));
+        assertThrows(IllegalArgumentException.class,()->store.planNativeStockDeposit(id,offer.id(),seller,5,fingerprint(0),fingerprint(1),3));assertEquals(0,store.nativeOffer(offer.id()).stock());assertEquals("REVIEW",store.nativeStockIntentState(id));
+    }
+    @Test void confirmedRemovedItemsRemainRecoverableIfLeaseEndsBeforeConfirmation()throws Exception {
+        UUID id=UUID.randomUUID();store.planNativeStockDeposit(id,offer.id(),seller,4,fingerprint(0),fingerprint(1),2);store.abandon(store.abandonmentQuote("one",seller,3),seller,3);store.confirmCleared("one","staff","A1",4);store.rent("one",other,5);store.closeNativeOffer(offer.id(),seller);
+        store.confirmNativeStockDeposit(id,seller,fingerprint(1),6);assertEquals(4,store.nativeOffer(offer.id()).stock());store.reserveNativeStockReturn(UUID.randomUUID(),offer.id(),seller,4,7);assertEquals(0,store.nativeOffer(offer.id()).stock());
+    }
+    @Test void oneInventoryCannotHaveTwoStockIntents()throws Exception {
+        store.planNativeStockDeposit(UUID.randomUUID(),offer.id(),seller,4,fingerprint(0),fingerprint(1),2);assertThrows(IllegalArgumentException.class,()->store.planNativeStockDeposit(UUID.randomUUID(),offer.id(),seller,4,fingerprint(0),fingerprint(1),3));
+    }
+    @Test void failedStockReceiptWriteKeepsIntentUncreditedForRecovery()throws Exception {
+        UUID id=UUID.randomUUID();store.planNativeStockDeposit(id,offer.id(),seller,4,fingerprint(0),fingerprint(1),2);
+        try(var connection=java.sql.DriverManager.getConnection("jdbc:sqlite:"+dir.resolve("db"));var statement=connection.createStatement()){statement.execute("CREATE TRIGGER fail_stock BEFORE INSERT ON native_stock_receipts BEGIN SELECT RAISE(ABORT,'injected'); END");}
+        assertThrows(java.sql.SQLException.class,()->store.confirmNativeStockDeposit(id,seller,fingerprint(1),3));assertEquals(0,store.nativeOffer(offer.id()).stock());assertEquals("REVIEW",store.nativeStockIntentState(id));
+    }
+    @Test void stockRemovalAndDeliveryCannotOverlapForSamePlayer()throws Exception {
+        store.definePlot("two",3000);store.rent("two",other,1);var otherOffer=store.createNativeOffer("two",other,new byte[]{4},1,100,1);store.creditNativeStock(UUID.randomUUID(),otherOffer.id(),other,2,1);
+        UUID deposit=UUID.randomUUID(),purchase=UUID.randomUUID();store.planNativeStockDeposit(deposit,offer.id(),seller,4,fingerprint(0),fingerprint(1),2);store.settleNativePurchase(purchase,otherOffer.id(),seller,1,2);
+        assertThrows(IllegalArgumentException.class,()->store.planNativeDelivery(purchase,seller,fingerprint(1),fingerprint(2)));store.confirmNativeStockDeposit(deposit,seller,fingerprint(1),3);assertTrue(store.planNativeDelivery(purchase,seller,fingerprint(1),fingerprint(2)));
+        assertThrows(IllegalArgumentException.class,()->store.planNativeStockDeposit(UUID.randomUUID(),offer.id(),seller,4,fingerprint(2),fingerprint(3),4));
+    }
 }
