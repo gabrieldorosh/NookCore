@@ -8,7 +8,10 @@ import java.util.*;
 /** Serialized SQLite transactions; every balance mutation and its audit entry commit together. */
 public final class NookStore implements AutoCloseable {
     public static final long WEEK = Duration.ofDays(7).toMillis();
-    private final Connection db;
+    private final Connection db;
+    private final Set<UUID> onlineAccounts=new HashSet<>();
+    public record IncomeSender(UUID player,String name,long cents) {}
+    public record IncomeReport(long through,long payments,long sales,List<IncomeSender> senders) {}
     public record Account(UUID id, String name, long cents, long seen) {}
     public record Plot(String id, long weekly, UUID owner, long paidUntil, String state) {}
     public record Entry(long id, long time, long delta, String kind, String reference) {}
@@ -30,7 +33,8 @@ public final class NookStore implements AutoCloseable {
             s.execute("CREATE TABLE IF NOT EXISTS accounts (uuid TEXT PRIMARY KEY, name TEXT NOT NULL, cents INTEGER NOT NULL DEFAULT 0 CHECK(cents>=0 AND cents<=100000000000), seen INTEGER NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS awards (uuid TEXT NOT NULL REFERENCES accounts(uuid), key TEXT NOT NULL, PRIMARY KEY(uuid,key))");
             s.execute("CREATE TABLE IF NOT EXISTS ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, time INTEGER NOT NULL, uuid TEXT NOT NULL REFERENCES accounts(uuid), delta INTEGER NOT NULL, kind TEXT NOT NULL, reference TEXT NOT NULL)");
-            s.execute("CREATE INDEX IF NOT EXISTS ledger_account ON ledger(uuid,id)");
+            s.execute("CREATE INDEX IF NOT EXISTS ledger_account ON ledger(uuid,id)");
+            s.execute("CREATE TABLE IF NOT EXISTS offline_income (ledger_id INTEGER PRIMARY KEY REFERENCES ledger(id))");
             s.execute("CREATE TABLE IF NOT EXISTS plots (id TEXT PRIMARY KEY, weekly INTEGER NOT NULL CHECK(weekly>0), owner TEXT REFERENCES accounts(uuid), paid_until INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL DEFAULT 'AVAILABLE' CHECK(state IN ('AVAILABLE','ACTIVE','GRACE','RECLAIM')))");
             s.execute("CREATE TABLE IF NOT EXISTS members (uuid TEXT PRIMARY KEY REFERENCES accounts(uuid), plot TEXT NOT NULL REFERENCES plots(id), role TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS plot_events (id INTEGER PRIMARY KEY AUTOINCREMENT, time INTEGER NOT NULL, plot TEXT NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL)");
@@ -198,6 +202,25 @@ public final class NookStore implements AutoCloseable {
     private static void bind(PreparedStatement p, Object... args) throws SQLException {
         for (int i=0;i<args.length;i++) p.setObject(i+1,args[i] instanceof UUID ? args[i].toString() : args[i]);
     }
+    synchronized void online(UUID id,boolean value){if(value)onlineAccounts.add(id);else onlineAccounts.remove(id);}
+    synchronized IncomeReport offlineIncome(UUID id)throws SQLException {
+        long through=0,payments=0,sales=0;
+        var amounts=new LinkedHashMap<UUID,Long>();
+        try(var p=db.prepareStatement("SELECT l.id,l.delta,l.kind,(SELECT uuid FROM ledger t WHERE t.kind='transfer' AND t.reference=l.reference AND t.delta<0 LIMIT 1) sender FROM offline_income o JOIN ledger l ON l.id=o.ledger_id WHERE l.uuid=? ORDER BY l.id")){
+            bind(p,id);try(var r=p.executeQuery()){while(r.next()){
+                through=r.getLong("id");long cents=r.getLong("delta");
+                if(r.getString("kind").equals("native-shop-sale"))sales=Math.addExact(sales,cents);
+                else {payments=Math.addExact(payments,cents);String sender=r.getString("sender");if(sender!=null)amounts.merge(UUID.fromString(sender),cents,Math::addExact);}
+            }}
+        }
+        var senders=new ArrayList<IncomeSender>();
+        for(var entry:amounts.entrySet())senders.add(new IncomeSender(entry.getKey(),account(entry.getKey()).map(Account::name).orElse(entry.getKey().toString()),entry.getValue()));
+        return new IncomeReport(through,payments,sales,List.copyOf(senders));
+    }
+    void acknowledgeIncome(UUID id,long through)throws SQLException {
+        tx(()->{update("DELETE FROM offline_income WHERE ledger_id IN (SELECT id FROM ledger WHERE uuid=? AND id<=?)",id,through);return null;});
+    }
+
     public synchronized Optional<Account> account(UUID id) throws SQLException {
         try (PreparedStatement p=db.prepareStatement("SELECT * FROM accounts WHERE uuid=?")) {
             bind(p,id); try(ResultSet r=p.executeQuery()) { return r.next()?Optional.of(new Account(id,r.getString("name"),r.getLong("cents"),r.getLong("seen"))):Optional.empty(); }
@@ -241,7 +264,9 @@ public final class NookStore implements AutoCloseable {
         if(next<0) throw new IllegalArgumentException("Not enough Nooks. Cost: "+Money.format(-delta)+" · Your balance: "+Money.format(a.cents())+".");
         if(next>Money.MAX) throw new BalanceCapacityException();
         update("UPDATE accounts SET cents=? WHERE uuid=?",next,id);
-        update("INSERT INTO ledger(time,uuid,delta,kind,reference) VALUES(?,?,?,?,?)",now,id,delta,kind,ref);
+        update("INSERT INTO ledger(time,uuid,delta,kind,reference) VALUES(?,?,?,?,?)",now,id,delta,kind,ref);
+        if(delta>0 && !onlineAccounts.contains(id) && Set.of("transfer","native-shop-sale").contains(kind))
+            update("INSERT INTO offline_income(ledger_id) VALUES(last_insert_rowid())");
     }
     public void transfer(UUID from,UUID to,long cents,long now) throws SQLException {
         if(cents<=0 || cents>Money.MAX || from.equals(to)) throw new IllegalArgumentException("Choose another player and a positive amount.");

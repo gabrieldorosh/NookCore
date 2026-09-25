@@ -137,9 +137,18 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     private void fail(Exception e){if(!healthy)return;healthy=false;getLogger().log(Level.SEVERE,"Economy/plots paused after a storage or protection failure; restart after investigating. No success should be assumed.",e);}
     private void joinPlayer(Player p)throws SQLException {
         if(!healthy)return;
+        store.online(p.getUniqueId(),true);
         long bonus=getConfig().getLong("joining-bonus-cents",6000);
         if(store.join(p.getUniqueId(),p.getName(),System.currentTimeMillis(),bonus))p.sendMessage(NookUi.message("Nooks","Welcome to Niko's Nook! Your starting balance is "+Money.format(bonus)+"."));
         else p.sendMessage(NookUi.message("Nooks","Your balance: "+Money.format(store.account(p.getUniqueId()).orElseThrow().cents())));
+        var income=store.offlineIncome(p.getUniqueId());
+        if(income.through()>0){
+            p.sendMessage(NookUi.heading("Nooks · While you were away"));
+            for(var payment:income.senders())p.sendMessage(NookUi.name(payment.player(),payment.name()).append(NookUi.text(" sent you "+Money.format(payment.cents())+".")));
+            if(income.sales()>0)p.sendMessage(NookUi.message("NookShops","Shop income: "+Money.format(income.sales())+"."));
+            p.sendMessage(NookUi.text("Already credited to your balance. Item payments are collected separately."));
+            store.acknowledgeIncome(p.getUniqueId(),income.through());
+        }
         if(rentalsReady())for(var plot:store.plots())plotNotice(p,plot);
     }
     private void plotNotice(Player player,NookStore.Plot plot)throws SQLException {
@@ -148,7 +157,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         else if(plot.state().equals("RECLAIM"))player.sendMessage(NookUi.message("NookPlots","Plot "+plot.id()+" is awaiting staff reclamation. Sales are closed; contact staff about collecting your belongings. Nothing is automatically deleted."));
     }
     @EventHandler public void join(PlayerJoinEvent e){try{joinPlayer(e.getPlayer());}catch(SQLException ex){fail(ex);}}
-    @EventHandler public void quit(PlayerQuitEvent e){if(healthy)try{store.touch(e.getPlayer().getUniqueId(),System.currentTimeMillis());}catch(SQLException ex){fail(ex);}}
+    @EventHandler public void quit(PlayerQuitEvent e){if(store!=null)store.online(e.getPlayer().getUniqueId(),false);if(healthy)try{store.touch(e.getPlayer().getUniqueId(),System.currentTimeMillis());}catch(SQLException ex){fail(ex);}}
     @EventHandler public void advancement(PlayerAdvancementDoneEvent e){
         if(!healthy || !awardsEnabled)return;
         String key=e.getAdvancement().getKey().toString();Long amount=rewards.get(key);if(amount==null)return;
