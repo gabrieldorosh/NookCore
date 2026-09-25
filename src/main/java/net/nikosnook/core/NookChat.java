@@ -76,6 +76,10 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
         if(killer!=null)message=PlayerPresentation.colourName(message,killer.getName(),preferences.get(killer.getUniqueId()).textColour());
         event.deathMessage(message);
     }
+    @EventHandler(priority=EventPriority.HIGH) public void advancement(PlayerAdvancementDoneEvent event){
+        var player=event.getPlayer();
+        event.message(PlayerPresentation.colourName(event.message(),player.getName(),preferences.get(player.getUniqueId()).textColour()));
+    }
     @EventHandler(priority=EventPriority.HIGH) public void join(PlayerJoinEvent event){
         refresh(event.getPlayer());
         event.joinMessage(PlayerPresentation.colourName(event.joinMessage(),event.getPlayer().getName(),preferences.get(event.getPlayer().getUniqueId()).textColour()));
