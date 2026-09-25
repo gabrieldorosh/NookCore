@@ -126,7 +126,7 @@ final class NativeShops implements Listener {
         if(owner){
             if(!offer.closed()){menu.inventory.setItem(11,icon(Material.CHEST,"Manage stock","Deposit or withdraw a chosen quantity.","Look at your shop container to manage it."));menu.inventory.setItem(22,icon(Material.RED_DYE,"Close shop","Stop sales. Stock remains yours to collect.","Create a new draft to change item, price or bundle."));}
             else menu.inventory.setItem(22,icon(Material.CHEST,"Collect remaining stock","Collect up to 64 items. Make room first.","Works even after your rental has ended."));
-        }else menu.inventory.setItem(22,icon(Material.LIME_DYE,"Buy "+offer.bundle()+" for "+price(offer),"Click once to confirm this purchase.","Payment goes to the shop owner, even when offline."));
+        }else menu.inventory.setItem(22,icon(Material.LIME_DYE,"Buy "+offer.bundle()+" for "+price(offer),"Click once to confirm this purchase.","Payment is credited even when the shop members are offline."));
         if(!owner && stockMember(offer,player.getUniqueId()) && !offer.closed()){
             menu.inventory.setItem(11,icon(Material.CHEST,"Manage stock","Deposit or withdraw a chosen quantity."));
             menu.inventory.setItem(22,icon(Material.PAPER,"You help stock this shop","Plot members cannot purchase from their own plot."));

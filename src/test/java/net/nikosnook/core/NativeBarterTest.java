@@ -14,6 +14,11 @@ class NativeBarterTest {
   long seller=store.account(owner).orElseThrow().cents();pay(buyer,8);UUID id=UUID.randomUUID();var receipt=store.settleNativePurchase(id,offer.id(),buyer,1,4);assertEquals(0,receipt.cents());assertEquals(4,receipt.quantity());assertEquals(4,store.nativeOffer(offer.id()).stock());assertEquals(0,store.nativePaymentBalance(buyer,offer.id()));assertEquals(8,store.nativePaymentBalance(owner,offer.id()));assertEquals(seller,store.account(owner).orElseThrow().cents());assertEquals(10000,store.account(buyer).orElseThrow().cents());
   store.close();store=new NookStore(dir.resolve("db"));store.settleNativePurchase(id,offer.id(),buyer,1,5);assertEquals(8,store.nativePaymentBalance(owner,offer.id()));assertEquals(4,store.nativeOffer(offer.id()).stock());
  }
+ @Test void itemPaymentsAreNotSharedWithCoOwners()throws Exception {
+  var invite=store.invite("one",owner,co,"STOCK",2);store.acceptInvitation(invite.token(),co,2);
+  pay(buyer,8);store.settleNativePurchase(UUID.randomUUID(),offer.id(),buyer,1,4);
+  assertEquals(8,store.nativePaymentBalance(owner,offer.id()));assertEquals(0,store.nativePaymentBalance(co,offer.id()));assertEquals(10000,store.account(co).orElseThrow().cents());
+ }
  @Test void noPaymentMeansNoSaleEvenWithNooksBalance()throws Exception {
   assertThrows(IllegalArgumentException.class,()->store.settleNativePurchase(UUID.randomUUID(),offer.id(),buyer,1,4));assertEquals(8,store.nativeOffer(offer.id()).stock());assertEquals(10000,store.account(buyer).orElseThrow().cents());
  }

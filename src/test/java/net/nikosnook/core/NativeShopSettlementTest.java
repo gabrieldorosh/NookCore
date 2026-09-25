@@ -60,7 +60,7 @@ class NativeShopSettlementTest {
         try(var connection=java.sql.DriverManager.getConnection("jdbc:sqlite:"+dir.resolve("db"));var statement=connection.prepareStatement("SELECT delivery FROM native_trade_receipts WHERE id=?")){
             statement.setString(1,receipt.toString());try(var rows=statement.executeQuery()){assertTrue(rows.next());assertEquals("PENDING",rows.getString(1));}
         }
-        assertEquals(10000,balance(other));
+        assertEquals(10125,balance(other));
     }
     @Test void receiptWriteFailureRollsBackAllSettlementChanges()throws Exception {
         stock(4);long sellerBefore=balance(seller);

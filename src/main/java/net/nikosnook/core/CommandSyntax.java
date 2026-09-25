@@ -25,6 +25,7 @@ final class CommandSyntax {
             Map.entry("find",new Shape(1,2,"/plots find [plot]","Find your own plot, or enter a plot name.")),
             Map.entry("name",new Shape(3,34,"/plots name <plot> <name|reset>","Enter a plot ID and shop name, or reset.")),
             Map.entry("info",new Shape(1,2,"/plots info [address]","View the plot you are standing in, or choose an address.")),
+            Map.entry("sharing",new Shape(2,3,"/plots sharing <address> [on|off]","View sharing, or let the renter change it.")),
             Map.entry("rent",exact(2,"/plots rent <plot>","Enter the plot you want to rent.")),
             Map.entry("invite",exact(4,"/plots invite <plot> <player> <build|stock|both>","Enter a plot, player and the permissions to give them.")),
             Map.entry("role",exact(4,"/plots role <plot> <player> <build|stock|both>","Enter a plot, member and their new permissions.")),

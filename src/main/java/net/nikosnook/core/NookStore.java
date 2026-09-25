@@ -35,6 +35,7 @@ public final class NookStore implements AutoCloseable {
             s.execute("CREATE TABLE IF NOT EXISTS ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, time INTEGER NOT NULL, uuid TEXT NOT NULL REFERENCES accounts(uuid), delta INTEGER NOT NULL, kind TEXT NOT NULL, reference TEXT NOT NULL)");
             s.execute("CREATE INDEX IF NOT EXISTS ledger_account ON ledger(uuid,id)");
             s.execute("CREATE TABLE IF NOT EXISTS offline_income (ledger_id INTEGER PRIMARY KEY REFERENCES ledger(id))");
+            s.execute("CREATE TABLE IF NOT EXISTS income_sharing (lease TEXT PRIMARY KEY, enabled INTEGER NOT NULL CHECK(enabled IN (0,1)))");
             s.execute("CREATE TABLE IF NOT EXISTS plots (id TEXT PRIMARY KEY, weekly INTEGER NOT NULL CHECK(weekly>0), owner TEXT REFERENCES accounts(uuid), paid_until INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL DEFAULT 'AVAILABLE' CHECK(state IN ('AVAILABLE','ACTIVE','GRACE','RECLAIM')))");
             s.execute("CREATE TABLE IF NOT EXISTS members (uuid TEXT PRIMARY KEY REFERENCES accounts(uuid), plot TEXT NOT NULL REFERENCES plots(id), role TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS plot_events (id INTEGER PRIMARY KEY AUTOINCREMENT, time INTEGER NOT NULL, plot TEXT NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL)");
@@ -478,6 +479,26 @@ public final class NookStore implements AutoCloseable {
             }
         }
     }
+    synchronized boolean incomeSharing(String plot)throws SQLException {
+        try(var p=db.prepareStatement("SELECT enabled FROM income_sharing WHERE lease=?")){
+            bind(p,nativeLease(plot));try(var r=p.executeQuery()){return !r.next() || r.getInt(1)==1;}
+        }
+    }
+    void incomeSharing(String plot,UUID actor,boolean enabled,long now)throws SQLException {
+        tx(()->{var p=plot(plot);owner(p,actor);requireOpen(p,now);
+            update("INSERT INTO income_sharing(lease,enabled) VALUES(?,?) ON CONFLICT(lease) DO UPDATE SET enabled=excluded.enabled",nativeLease(plot),enabled?1:0);
+            event(plot,"INCOME_SHARING",actor+" enabled="+enabled,now);return null;
+        });
+    }
+    private void shareNativeIncome(NativeShop.Offer offer,String reference,long now)throws SQLException {
+        var recipients=new ArrayList<UUID>();recipients.add(offer.owner());
+        if(incomeSharing(offer.plot()))members(offer.plot()).keySet().stream().filter(id->!id.equals(offer.owner())).sorted().forEach(recipients::add);
+        long share=offer.cents()/recipients.size(),remainder=offer.cents()%recipients.size();
+        for(int i=0;i<recipients.size();i++){
+            long amount=share+(i<remainder?1:0);
+            if(amount>0)mutate(recipients.get(i),amount,"native-shop-sale",reference,now);
+        }
+    }
     NativeShop.Receipt settleNativePurchase(UUID receipt,UUID offerId,UUID buyer,long expectedRevision,long now)throws SQLException {
         return tx(()->{
             var previous=nativeReceipt(receipt);
@@ -495,7 +516,7 @@ public final class NookStore implements AutoCloseable {
                 changeNativePayment(buyer,offerId,-amount);changeNativePayment(offer.owner(),offerId,amount);
             }else {
                 mutate(buyer,-offer.cents(),"native-shop-buy",reference,now);
-                mutate(offer.owner(),offer.cents(),"native-shop-sale",reference,now);
+                shareNativeIncome(offer,reference,now);
             }
             update("UPDATE native_offers SET stock=stock-? WHERE id=?",offer.bundle(),offerId);
             update("INSERT INTO native_trade_receipts(id,offer,buyer,seller,quantity,cents,revision,item,time) VALUES(?,?,?,?,?,?,?,?,?)",receipt,offerId,buyer,offer.owner(),offer.bundle(),price,offer.revision(),offer.item(),now);
