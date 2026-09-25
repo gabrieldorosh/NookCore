@@ -32,8 +32,9 @@ final class ChatStyle {
         }
         return result.append(Component.text(text.substring(start),style));
     }
+    static String rankLabel(String rank){return rank.equals("owner")?"Mr. Niko":rank;}
     static Component render(String rank,String name,ChatPreferences.Preference preference,Component body){
-        return render(Component.text("["+rank+"]",rank.equals("nookling")?NookUi.GOOD:NookUi.ACCENT),name,preference,body);
+        return render(Component.text("["+rankLabel(rank)+"]",rank.equals("nookling")?NookUi.GOOD:NookUi.ACCENT),name,preference,body);
     }
     static Component render(Component rank,String name,ChatPreferences.Preference preference,Component body){
         Component prefix=Component.empty().append(rank).append(Component.text(" "))

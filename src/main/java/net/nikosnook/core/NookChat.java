@@ -36,7 +36,7 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
             if(!packId.isBlank()){
                 configuredPack=UUID.fromString(packId);
                 Key font=Key.key(plugin.getConfig().getString("chat.rank-images.font","minecraft:default"));
-                for(String rank:List.of("nookling","supporter","helper","admin")){
+                for(String rank:List.of("nookling","supporter","helper","admin","owner")){
                     String glyph=plugin.getConfig().getString("chat.rank-images.glyphs."+rank,"");
                     if(!glyph.isEmpty()){
                         if(glyph.codePointCount(0,glyph.length())!=1 || Character.getType(glyph.codePointAt(0))!=Character.PRIVATE_USE)throw new IllegalArgumentException("Each rank glyph must be one private-use code point.");
@@ -57,11 +57,14 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
     void close(){unregister.run();NookUi.preferences=null;}
     String placeholder(UUID id,String key){
         Snapshot s=snapshots.get(id);if(s==null)return key.equals("deaths")?"0":"";
-        return switch(key){case "deaths"->Integer.toString(s.deaths());case "name"->"&"+s.preference().textColour().asHexString()+s.name()+"&r";case "pronouns"->s.preference().pronouns().isEmpty()?"":" &7· "+s.preference().pronouns()+"&r";case "rank"->("&"+(s.rank().equals("nookling")?NookUi.GOOD:NookUi.ACCENT).asHexString())+"["+s.rank()+"] &r";default->null;};
+        return switch(key){case "deaths"->Integer.toString(s.deaths());case "name"->"&"+s.preference().textColour().asHexString()+s.name()+"&r";case "pronouns"->s.preference().pronouns().isEmpty()?"":" &7· "+s.preference().pronouns()+"&r";case "rank"->("&"+(s.rank().equals("nookling")?NookUi.GOOD:NookUi.ACCENT).asHexString())+"["+ChatStyle.rankLabel(s.rank())+"] &r";default->null;};
+    }
+    static String displayRank(java.util.function.Predicate<String> permission){
+        for(String rank:List.of("owner","admin","helper","supporter"))if(permission.test("nookcore.chat.rank."+rank))return rank;
+        return "nookling";
     }
     private void refresh(Player player){
-        String rank="nookling";
-        for(String candidate:List.of("admin","helper","supporter"))if(player.hasPermission("nookcore.chat.rank."+candidate)){rank=candidate;break;}
+        String rank=displayRank(player::hasPermission);
         snapshots.put(player.getUniqueId(),new Snapshot(player.getName(),rank,preferences.get(player.getUniqueId()),player.getStatistic(org.bukkit.Statistic.DEATHS)));
     }
     @EventHandler(priority=EventPriority.HIGH)

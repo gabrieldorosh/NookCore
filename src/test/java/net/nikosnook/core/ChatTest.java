@@ -70,4 +70,10 @@ class ChatTest {
     @Test void absentPronounsLeaveNoExtraSpace(){
         assertEquals("[supporter] Alex: Hello",plain(ChatStyle.render("supporter","Alex",ChatPreferences.DEFAULT,ChatStyle.message("Hello"))));
     }
+    @Test void cosmeticRanksDoNotConsultOperationalPermissions(){
+        assertEquals("[Mr. Niko] DrunkeUnicorn: Hello",plain(ChatStyle.render("owner","DrunkeUnicorn",ChatPreferences.DEFAULT,ChatStyle.message("Hello"))));
+        assertEquals("owner",NookChat.displayRank(node->{assertTrue(node.startsWith("nookcore.chat.rank."));return node.endsWith("owner") || node.endsWith("supporter");}));
+        assertEquals("supporter",NookChat.displayRank(node->node.equals("nookcore.chat.rank.supporter")));
+        assertEquals("nookling",NookChat.displayRank(node->node.equals("nookcore.admin")));
+    }
 }

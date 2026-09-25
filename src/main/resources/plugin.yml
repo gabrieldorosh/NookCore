@@ -43,6 +43,9 @@ commands:
     permission: nookcore.admin
     usage: /nookadmin <balance|give|take|backup|awards> ...
 permissions:
+  nookcore.chat.rank.owner:
+    description: Cosmetic owner rank only; does not grant staff access
+    default: false
   nookcore.chat.rank.admin:
     default: false
   nookcore.chat.rank.helper:
