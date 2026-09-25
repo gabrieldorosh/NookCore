@@ -19,7 +19,7 @@ commands:
     permission: nookcore.admin
     usage: /return [player]
   nookshops:
-    description: Preview guided shop setup
+    description: Create and manage shops, stock and item collections
     usage: /nookshops help
   smite:
     description: Call down the heavens

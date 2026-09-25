@@ -49,6 +49,11 @@ public final class NookStore implements AutoCloseable {
             s.execute("CREATE TABLE IF NOT EXISTS native_trade_receipts (id TEXT PRIMARY KEY, offer TEXT NOT NULL REFERENCES native_offers(id), buyer TEXT NOT NULL REFERENCES accounts(uuid), seller TEXT NOT NULL REFERENCES accounts(uuid), quantity INTEGER NOT NULL, cents INTEGER NOT NULL, revision INTEGER NOT NULL, item BLOB NOT NULL, time INTEGER NOT NULL, delivery TEXT NOT NULL DEFAULT 'PENDING' CHECK(delivery IN ('PENDING','REVIEW','DELIVERED')))");
             s.execute("CREATE TABLE IF NOT EXISTS native_stock_intents (receipt TEXT PRIMARY KEY, offer TEXT NOT NULL REFERENCES native_offers(id), actor TEXT NOT NULL REFERENCES accounts(uuid), quantity INTEGER NOT NULL CHECK(quantity BETWEEN 1 AND 64), before_hash BLOB NOT NULL, after_hash BLOB NOT NULL, state TEXT NOT NULL DEFAULT 'REVIEW' CHECK(state IN ('REVIEW','COMPLETE')), time INTEGER NOT NULL)");
             s.execute("CREATE UNIQUE INDEX IF NOT EXISTS native_one_deposit_per_actor ON native_stock_intents(actor) WHERE state='REVIEW'");
+            s.execute("CREATE TABLE IF NOT EXISTS native_payment_terms (offer TEXT PRIMARY KEY REFERENCES native_offers(id), item BLOB NOT NULL, quantity INTEGER NOT NULL CHECK(quantity BETWEEN 1 AND 64))");
+            s.execute("CREATE TABLE IF NOT EXISTS native_payment_balances (actor TEXT NOT NULL REFERENCES accounts(uuid), offer TEXT NOT NULL REFERENCES native_offers(id), quantity INTEGER NOT NULL CHECK(quantity BETWEEN 0 AND 1000000), PRIMARY KEY(actor,offer))");
+            s.execute("CREATE TABLE IF NOT EXISTS native_payment_intents (receipt TEXT PRIMARY KEY, offer TEXT NOT NULL REFERENCES native_offers(id), actor TEXT NOT NULL REFERENCES accounts(uuid), quantity INTEGER NOT NULL, before_hash BLOB NOT NULL, after_hash BLOB NOT NULL, state TEXT NOT NULL DEFAULT 'REVIEW', time INTEGER NOT NULL)");
+            s.execute("CREATE UNIQUE INDEX IF NOT EXISTS native_one_payment_per_actor ON native_payment_intents(actor) WHERE state='REVIEW'");
+            s.execute("CREATE TABLE IF NOT EXISTS native_locations (location TEXT PRIMARY KEY, offer TEXT NOT NULL UNIQUE REFERENCES native_offers(id))");
             s.execute("CREATE TABLE IF NOT EXISTS native_stock_returns (receipt TEXT PRIMARY KEY REFERENCES native_trade_receipts(id))");
             s.execute("CREATE TABLE IF NOT EXISTS native_delivery_plans (receipt TEXT PRIMARY KEY REFERENCES native_trade_receipts(id), buyer TEXT NOT NULL REFERENCES accounts(uuid), before_hash BLOB NOT NULL, after_hash BLOB NOT NULL)");
             s.execute("CREATE UNIQUE INDEX IF NOT EXISTS native_one_delivery_per_buyer ON native_trade_receipts(buyer) WHERE delivery='REVIEW'");
@@ -282,14 +287,123 @@ public final class NookStore implements AutoCloseable {
         });
     }
     // Internal native-shop settlement only. Physical stock custody and delivery are not wired yet.
+    synchronized List<NativeShop.Offer> nativeOffers(UUID owner)throws SQLException {
+        List<NativeShop.Offer> offers=new ArrayList<>();
+        try(var p=db.prepareStatement("SELECT id FROM native_offers WHERE owner=? ORDER BY rowid DESC")){
+            bind(p,owner);try(var r=p.executeQuery()){while(r.next())offers.add(nativeOffer(UUID.fromString(r.getString(1))));}
+        }return offers;
+    }
+    synchronized Optional<NativeShop.Offer> nativeAt(String location)throws SQLException {
+        try(var p=db.prepareStatement("SELECT offer FROM native_locations WHERE location=?")){
+            bind(p,location);try(var r=p.executeQuery()){return r.next()?Optional.of(nativeOffer(UUID.fromString(r.getString(1)))):Optional.empty();}
+        }
+    }
+    NativeShop.Offer publishNativeOffer(String location,String plot,UUID owner,byte[] item,int bundle,long cents,long now)throws SQLException {
+        return publishNativeOffer(location,plot,owner,item,bundle,cents,null,0,now);
+    }
+    NativeShop.Offer publishNativeOffer(String location,String plot,UUID owner,byte[] item,int bundle,long cents,byte[] paymentItem,int paymentQuantity,long now)throws SQLException {
+        if(paymentItem!=null)NativeShop.terms(paymentItem,paymentQuantity,1);
+        if(location==null || location.isBlank())throw new IllegalArgumentException("A shop location is required.");
+        return tx(()->{
+            var old=nativeAt(location);
+            if(old.isPresent() && !old.get().closed()){
+                var previous=old.get();
+                if(previous.lease().equals(nativeLease(plot)))throw new IllegalArgumentException("There is already a shop here. Close it before creating another.");
+                update("UPDATE native_offers SET closed=1,revision=revision+1 WHERE id=?",previous.id());
+            }
+            var offer=createNativeOfferInternal(plot,owner,item,bundle,cents,now);
+            if(paymentItem!=null)update("INSERT INTO native_payment_terms(offer,item,quantity) VALUES(?,?,?)",offer.id(),paymentItem.clone(),paymentQuantity);
+            update("INSERT INTO native_locations(location,offer) VALUES(?,?) ON CONFLICT(location) DO UPDATE SET offer=excluded.offer",location,offer.id());
+            return offer;
+        });
+    }
+    synchronized List<NativeShop.Receipt> nativeDeliveries(UUID buyer)throws SQLException {
+        List<NativeShop.Receipt> result=new ArrayList<>();
+        try(var p=db.prepareStatement("SELECT id FROM native_trade_receipts WHERE buyer=? AND delivery<>'DELIVERED' ORDER BY time,id LIMIT 100")){
+            bind(p,buyer);try(var r=p.executeQuery()){while(r.next())result.add(nativeReceipt(UUID.fromString(r.getString(1))).orElseThrow());}
+        }return result;
+    }
+    synchronized boolean nativeNeedsReview(UUID player)throws SQLException {return nativeInventoryPending(player);}
+
+    record NativePayment(byte[] item,int quantity){
+        NativePayment {item=item.clone();}
+        @Override public byte[] item(){return item.clone();}
+    }
+    synchronized Optional<NativePayment> nativePayment(UUID offer)throws SQLException {
+        try(var p=db.prepareStatement("SELECT item,quantity FROM native_payment_terms WHERE offer=?")){
+            bind(p,offer);try(var r=p.executeQuery()){return r.next()?Optional.of(new NativePayment(r.getBytes(1),r.getInt(2))):Optional.empty();}
+        }
+    }
+    synchronized int nativePaymentBalance(UUID actor,UUID offer)throws SQLException {
+        try(var p=db.prepareStatement("SELECT quantity FROM native_payment_balances WHERE actor=? AND offer=?")){
+            bind(p,actor,offer);try(var r=p.executeQuery()){return r.next()?r.getInt(1):0;}
+        }
+    }
+    private void changeNativePayment(UUID actor,UUID offer,int delta)throws SQLException {
+        long next=(long)nativePaymentBalance(actor,offer)+delta;
+        if(next<0)throw new IllegalArgumentException("Not enough deposited payment items.");
+        if(next>NativeShop.MAX_STOCK)throw new IllegalArgumentException("This shop's payment storage is full. Ask the owner to collect it.");
+        update("INSERT INTO native_payment_balances(actor,offer,quantity) VALUES(?,?,?) ON CONFLICT(actor,offer) DO UPDATE SET quantity=excluded.quantity",actor,offer,next);
+    }
+    synchronized List<UUID> nativePaymentCollections(UUID actor)throws SQLException {
+        List<UUID> ids=new ArrayList<>();try(var p=db.prepareStatement("SELECT offer FROM native_payment_balances WHERE actor=? AND quantity>0 ORDER BY offer")){
+            bind(p,actor);try(var r=p.executeQuery()){while(r.next())ids.add(UUID.fromString(r.getString(1)));}
+        }return ids;
+    }
+    boolean planNativePayment(UUID receipt,UUID offerId,UUID actor,int quantity,byte[] before,byte[] after,long now)throws SQLException {
+        if(receipt==null || quantity<1 || quantity>64 || before==null || after==null || before.length!=32 || after.length!=32 || Arrays.equals(before,after))throw new IllegalArgumentException("Invalid payment inventory plan.");
+        return tx(()->{
+            try(var p=db.prepareStatement("SELECT offer,actor,quantity,before_hash,after_hash FROM native_payment_intents WHERE receipt=?")){
+                bind(p,receipt);try(var r=p.executeQuery()){if(r.next()){
+                    if(!r.getString(1).equals(offerId.toString()) || !r.getString(2).equals(actor.toString()) || r.getInt(3)!=quantity || !Arrays.equals(r.getBytes(4),before) || !Arrays.equals(r.getBytes(5),after))throw new IllegalArgumentException("Payment intent was reused with different details.");return false;
+                }}
+            }
+            var offer=nativeOffer(offerId);nativeActive(offer,now);
+            if(nativePayment(offerId).isEmpty())throw new IllegalArgumentException("This shop accepts Nooks.");
+            if(offer.owner().equals(actor) || members(offer.plot()).containsKey(actor))throw new IllegalArgumentException("Members cannot buy from their own plot.");
+            if(nativeInventoryPending(actor))throw new IllegalArgumentException("An earlier inventory operation needs review first.");
+            if((long)nativePaymentBalance(actor,offerId)+quantity>NativeShop.MAX_STOCK)throw new IllegalArgumentException("Payment storage capacity reached.");
+            update("INSERT INTO native_payment_intents(receipt,offer,actor,quantity,before_hash,after_hash,time) VALUES(?,?,?,?,?,?,?)",receipt,offerId,actor,quantity,before.clone(),after.clone(),now);return true;
+        });
+    }
+    void confirmNativePayment(UUID receipt,UUID actor,byte[] saved)throws SQLException {
+        tx(()->{
+            try(var p=db.prepareStatement("SELECT * FROM native_payment_intents WHERE receipt=?")){
+                bind(p,receipt);try(var r=p.executeQuery()){
+                    if(!r.next() || !r.getString("actor").equals(actor.toString()) || !Arrays.equals(saved,r.getBytes("after_hash")))throw new IllegalArgumentException("Payment save does not match; staff review required.");
+                    if(r.getString("state").equals("COMPLETE"))return null;
+                    changeNativePayment(actor,UUID.fromString(r.getString("offer")),r.getInt("quantity"));
+                }
+            }
+            update("UPDATE native_payment_intents SET state='COMPLETE' WHERE receipt=?",receipt);return null;
+        });
+    }
+    NativeShop.Receipt reserveNativePaymentReturn(UUID receipt,UUID offerId,UUID actor,int quantity,long now)throws SQLException {
+        if(quantity<1 || quantity>64)throw new IllegalArgumentException("Collect between 1 and 64 payment items.");
+        return tx(()->{
+            if(nativeReceipt(receipt).isPresent())throw new IllegalArgumentException("That collection receipt has already been used.");
+            var offer=nativeOffer(offerId);var payment=nativePayment(offerId).orElseThrow(()->new IllegalArgumentException("This shop has no item payment."));
+            changeNativePayment(actor,offerId,-quantity);
+            update("INSERT INTO native_trade_receipts(id,offer,buyer,seller,quantity,cents,revision,item,time) VALUES(?,?,?,?,?,0,?,?,?)",receipt,offerId,actor,actor,quantity,offer.revision(),payment.item(),now);
+            update("INSERT INTO native_stock_returns(receipt) VALUES(?)",receipt);return nativeReceipt(receipt).orElseThrow();
+        });
+    }
+    synchronized List<String> nativeReviews()throws SQLException {
+        List<String> result=new ArrayList<>();
+        try(var s=db.createStatement();var r=s.executeQuery("SELECT 'stock' AS kind,receipt,actor FROM native_stock_intents WHERE state='REVIEW' UNION ALL SELECT 'payment',receipt,actor FROM native_payment_intents WHERE state='REVIEW' UNION ALL SELECT 'delivery',id,buyer FROM native_trade_receipts WHERE delivery='REVIEW' LIMIT 50")){
+            while(r.next())result.add(r.getString(1)+" · "+r.getString(2)+" · player "+r.getString(3));
+        }return result;
+    }
     private UUID nativeLease(String plot)throws SQLException {
         try(var p=db.prepareStatement("SELECT lease FROM plot_leases WHERE plot=?")){
             bind(p,plot);try(var rows=p.executeQuery()){if(!rows.next())throw new IllegalArgumentException("No current rental lease.");return UUID.fromString(rows.getString(1));}
         }
     }
     NativeShop.Offer createNativeOffer(String plot,UUID actor,byte[] item,int bundle,long cents,long now)throws SQLException {
+        return tx(()->createNativeOfferInternal(plot,actor,item,bundle,cents,now));
+    }
+    private NativeShop.Offer createNativeOfferInternal(String plot,UUID actor,byte[] item,int bundle,long cents,long now)throws SQLException {
         NativeShop.terms(item,bundle,cents);byte[] snapshot=item.clone();
-        return tx(()->{
             Plot p=plot(plot);owner(p,actor);if(!canTrade(plot,now))throw new IllegalArgumentException("Shop rent must be active.");
             UUID lease=nativeLease(plot),id=UUID.randomUUID();
             try(var query=db.prepareStatement("SELECT COUNT(*) FROM native_offers WHERE lease=? AND closed=0")){
@@ -297,7 +411,6 @@ public final class NookStore implements AutoCloseable {
             }
             update("INSERT INTO native_offers(id,plot,lease,owner,item,bundle,cents) VALUES(?,?,?,?,?,?,?)",id,plot,lease,actor,snapshot,bundle,cents);
             return nativeOffer(id);
-        });
     }
     synchronized NativeShop.Offer nativeOffer(UUID id)throws SQLException {
         try(var p=db.prepareStatement("SELECT * FROM native_offers WHERE id=?")){
@@ -351,10 +464,16 @@ public final class NookStore implements AutoCloseable {
             if(offer.owner().equals(buyer) || members(offer.plot()).containsKey(buyer))throw new IllegalArgumentException("Members cannot buy from their own plot.");
             if(offer.stock()<offer.bundle())throw new IllegalArgumentException("Not enough stock.");
             String reference="receipt="+receipt+" offer="+offerId+" quantity="+offer.bundle();
-            mutate(buyer,-offer.cents(),"native-shop-buy",reference,now);
-            mutate(offer.owner(),offer.cents(),"native-shop-sale",reference,now);
+            var payment=nativePayment(offerId);long price=payment.isPresent()?0:offer.cents();
+            if(payment.isPresent()){
+                int amount=payment.get().quantity();
+                changeNativePayment(buyer,offerId,-amount);changeNativePayment(offer.owner(),offerId,amount);
+            }else {
+                mutate(buyer,-offer.cents(),"native-shop-buy",reference,now);
+                mutate(offer.owner(),offer.cents(),"native-shop-sale",reference,now);
+            }
             update("UPDATE native_offers SET stock=stock-? WHERE id=?",offer.bundle(),offerId);
-            update("INSERT INTO native_trade_receipts(id,offer,buyer,seller,quantity,cents,revision,item,time) VALUES(?,?,?,?,?,?,?,?,?)",receipt,offerId,buyer,offer.owner(),offer.bundle(),offer.cents(),offer.revision(),offer.item(),now);
+            update("INSERT INTO native_trade_receipts(id,offer,buyer,seller,quantity,cents,revision,item,time) VALUES(?,?,?,?,?,?,?,?,?)",receipt,offerId,buyer,offer.owner(),offer.bundle(),price,offer.revision(),offer.item(),now);
             return nativeReceipt(receipt).orElseThrow();
         });
     }
@@ -368,7 +487,7 @@ public final class NookStore implements AutoCloseable {
                     if(!r.getString("offer").equals(offerId.toString()) || !r.getString("actor").equals(actor.toString()) || r.getInt("quantity")!=quantity || !Arrays.equals(original,r.getBytes("before_hash")) || !Arrays.equals(result,r.getBytes("after_hash")))throw new IllegalArgumentException("Stock intent already exists with different details.");return false;
                 }}
             }
-            var offer=nativeOffer(offerId);nativeActive(offer,now);owner(plot(offer.plot()),actor);
+            var offer=nativeOffer(offerId);nativeActive(offer,now);if(!new PlotPermissions(this).allowed(offer.plot(),actor,PlotPermissions.Action.STOCK))throw new IllegalArgumentException("Stock permission is required.");
             if((long)offer.stock()+quantity>NativeShop.MAX_STOCK)throw new IllegalArgumentException("Stock capacity reached.");
             if(nativeInventoryPending(actor))throw new IllegalArgumentException("An earlier inventory operation needs review first.");
             try(var p=db.prepareStatement("SELECT 1 FROM native_stock_receipts WHERE id=?")){
@@ -378,8 +497,8 @@ public final class NookStore implements AutoCloseable {
         });
     }
     private boolean nativeInventoryPending(UUID actor)throws SQLException {
-        try(var p=db.prepareStatement("SELECT 1 FROM native_stock_intents WHERE actor=? AND state='REVIEW' UNION ALL SELECT 1 FROM native_trade_receipts WHERE buyer=? AND delivery='REVIEW'")){
-            bind(p,actor,actor);try(var r=p.executeQuery()){return r.next();}
+        try(var p=db.prepareStatement("SELECT 1 FROM native_stock_intents WHERE actor=? AND state='REVIEW' UNION ALL SELECT 1 FROM native_trade_receipts WHERE buyer=? AND delivery='REVIEW' UNION ALL SELECT 1 FROM native_payment_intents WHERE actor=? AND state='REVIEW'")){
+            bind(p,actor,actor,actor);try(var r=p.executeQuery()){return r.next();}
         }
     }
     // Confirm only against a durably persisted inventory, not an in-memory API snapshot.
@@ -394,7 +513,7 @@ public final class NookStore implements AutoCloseable {
                 }
             }
             var offer=nativeOffer(offerId);
-            if(!offer.owner().equals(actor) || (long)offer.stock()+quantity>NativeShop.MAX_STOCK)throw new IllegalArgumentException("Stock deposit needs staff review.");
+            if((long)offer.stock()+quantity>NativeShop.MAX_STOCK)throw new IllegalArgumentException("Stock deposit needs staff review.");
             // Items may have been removed just before closure/expiry. Preserve them for the original owner.
             update("UPDATE native_offers SET stock=stock+? WHERE id=?",quantity,offerId);
             update("INSERT INTO native_stock_receipts(id,offer,actor,quantity,time) VALUES(?,?,?,?,?)",receipt,offerId,actor,quantity,now);

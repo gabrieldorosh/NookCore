@@ -156,3 +156,6 @@ advancement-rewards:
 
 # Optional read-only shop creation rehearsal. Does not publish shops or move items/money.
 shop-setup-preview-enabled: false
+
+# Opt-in native Nooks trading. Requires the tested rental gate; ChestShop may coexist on separate containers.
+native-shops-enabled: false

@@ -60,7 +60,8 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             getCommand("nooks").setTabCompleter(this);getCommand("nookadmin").setTabCompleter(this);
             if(getServer().getPluginManager().isPluginEnabled("WorldGuard") && getServer().getPluginManager().isPluginEnabled("WorldEdit"))new PlotSetup(this,store,()->healthy,this::fail);
             var plots=new PlotCommands(store,this::rentalsReady,this::reconcilePlots,this::fail,id->plotGate!=null && plotGate.manages(id),()->plotGate.validateConfiguration());
-            new ShopSetup(this,(player,block)->{
+            var nativeShops=new NativeShops(this,store,this::rentalsReady,block->{plotGate.validateConfiguration();return plotGate.regionAt(block.getLocation());},this::fail);
+            new ShopSetup(this,nativeShops,(player,block)->{
                 if(!rentalsReady())throw new IllegalArgumentException("Rentals must be available before previewing a district shop.");
                 try{
                     plotGate.validateConfiguration();

@@ -13,7 +13,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.util.*;
 import java.util.function.BiConsumer;
 
-/** Opt-in, read-only rehearsal of shop creation. Does not register live shops. */
+/** Guided shop drafts; publication is opt-in through NativeShops. */
 final class ShopSetup implements Listener,CommandExecutor,TabCompleter {
     private record Draft(Block chest,ItemStack item,ShopDraft terms,long expires){}
     private static final class Menu implements InventoryHolder {
@@ -22,22 +22,26 @@ final class ShopSetup implements Listener,CommandExecutor,TabCompleter {
         public Inventory getInventory(){return inventory;}
     }
     private final JavaPlugin plugin;
+    private final NativeShops live;
     private final BiConsumer<Player,Block> validate;
     private final Map<UUID,Draft> drafts=new HashMap<>();
-    ShopSetup(JavaPlugin plugin,BiConsumer<Player,Block> validate){
-        this.plugin=plugin;this.validate=validate;
+    ShopSetup(JavaPlugin plugin,NativeShops live,BiConsumer<Player,Block> validate){
+        this.plugin=plugin;this.live=live;this.validate=validate;
         plugin.getCommand("nookshops").setExecutor(this);plugin.getCommand("nookshops").setTabCompleter(this);
         Bukkit.getPluginManager().registerEvents(this,plugin);
         Bukkit.getScheduler().runTaskTimer(plugin,()->drafts.entrySet().removeIf(e->System.currentTimeMillis()>=e.getValue().expires()),1200,1200);
     }
     static boolean stockContainer(Material type){return type==Material.CHEST || type==Material.TRAPPED_CHEST || type==Material.BARREL || type.name().endsWith("SHULKER_BOX");}
-    private boolean enabled(){return plugin.getConfig().getBoolean("shop-setup-preview-enabled",false);}
+    private boolean enabled(){return live.enabled() || plugin.getConfig().getBoolean("shop-setup-preview-enabled",false);}
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
+        if(live.review(sender,args))return true;
         if(!enabled()){sender.sendMessage(NookUi.message("NookShops","Shop setup preview is not enabled on this server."));return true;}
         if(!(sender instanceof Player player)){sender.sendMessage(NookUi.message("NookShops","Use shop setup in game."));return true;}
+        if(live.enabled() && live.command(player,args))return true;
         try{
             if(args.length==0 || args[0].equalsIgnoreCase("help")){
-                NookUi.help(sender,"NookShops · Setup preview","/nookshops create — hold your sale item and look at your stock container","/nookshops preview — reopen your draft","/nookshops price <nooks> — set the price per bundle","/nookshops payment <item> [quantity] — use plain items as payment","/nookshops cancel — discard your draft");
+                NookUi.help(sender,live.enabled()?"NookShops · Create a shop":"NookShops · Setup preview","/nookshops create — hold your sale item and look at your stock container","/nookshops preview — reopen your draft","/nookshops price <nooks> — set the price per bundle","/nookshops payment <item> [quantity] — use plain items as payment","/nookshops cancel — discard your draft");
+                if(live.enabled()){NookUi.help(sender,"Your shops","/nookshops mine — manage your shops and recover closed stock","/nookshops manage — manage the shop you are looking at","/nookshops collect — collect purchases, item proceeds or refunds");return true;}
                 sender.sendMessage(NookUi.message("NookShops","Drafts only: no live shop is created, and no items or Nooks move. Drafts expire after ten minutes or when you leave."));return true;
             }
             String sub=args[0].toLowerCase(Locale.ROOT);
@@ -76,17 +80,17 @@ final class ShopSetup implements Listener,CommandExecutor,TabCompleter {
     private void open(Player player){
         Draft d=current(player);Menu menu=new Menu(player.getUniqueId());menu.inventory=Bukkit.createInventory(menu,27,Component.text("NookShops · Draft",net.kyori.adventure.text.format.NamedTextColor.DARK_GRAY));
         var item=d.item().clone();item.setAmount(Math.min(d.terms().quantity(),item.getMaxStackSize()));
-        menu.inventory.setItem(4,icon(Material.PAPER,"Customer receives "+d.terms().quantity()+" item(s)","Customer pays "+d.terms().price(),"This is a draft; purchases are not enabled.","Stock chest: "+d.chest().getX()+", "+d.chest().getY()+", "+d.chest().getZ()));
+        menu.inventory.setItem(4,icon(Material.PAPER,"Customer receives "+d.terms().quantity()+" item(s)","Customer pays "+d.terms().price(),live.enabled()?"Review, then publish your shop below.":"This is a draft; purchases are not enabled.","Stock chest: "+d.chest().getX()+", "+d.chest().getY()+", "+d.chest().getZ()));
         menu.inventory.setItem(0,icon(Material.RED_DYE,"Lower price","Nooks: -0.25 · Shift: -1.00","Items: -1 · Shift: -8"));
         menu.inventory.setItem(8,icon(Material.LIME_DYE,"Higher price","Nooks: +0.25 · Shift: +1.00","Items: +1 · Shift: +8"));
         menu.inventory.setItem(11,icon(Material.RED_DYE,"Smaller bundle","Click: -1 · Shift-click: -8"));menu.inventory.setItem(13,item);
         menu.inventory.setItem(15,icon(Material.LIME_DYE,"Larger bundle","Click: +1 · Shift-click: +8"));
         menu.inventory.setItem(18,icon(Material.GOLD_NUGGET,"Payment: Nooks","Use /nookshops price <amount> for a custom price."));
         menu.inventory.setItem(20,icon(Material.DIAMOND,"Payment: diamonds","Click to use one plain diamond per bundle.","Custom items: /nookshops payment <item> [quantity]"));
-        var payment=icon(d.terms().paymentItem()==null?Material.GOLD_NUGGET:Material.valueOf(d.terms().paymentItem()),"Selected: "+d.terms().price(),"Payment per bundle", "Preview only; no items or currency move.");
-        if(d.terms().paymentItem()!=null)payment.setAmount(d.terms().paymentQuantity());
+        var payment=icon(d.terms().paymentItem()==null?Material.GOLD_NUGGET:Material.valueOf(d.terms().paymentItem()),"Selected: "+d.terms().price(),"Payment per bundle", live.enabled()?"Applied when a customer confirms a purchase.":"Preview only; no items or currency move.");
+        if(d.terms().paymentItem()!=null)payment.setAmount(Math.min(d.terms().paymentQuantity(),payment.getMaxStackSize()));
         menu.inventory.setItem(24,payment);
-        menu.inventory.setItem(22,icon(Material.BOOK,"Review draft","Customer receives "+d.terms().quantity()+" item(s)","Customer pays "+d.terms().price(),"Plain payment items only; no named/enchanted currency."));
+        menu.inventory.setItem(22,icon(Material.BOOK,live.enabled()?"Publish shop":"Review draft","Customer receives "+d.terms().quantity()+" item(s)","Customer pays "+d.terms().price(),"Plain payment items only; no named/enchanted currency."));
         menu.inventory.setItem(26,icon(Material.BARRIER,"Close preview","Draft remains available for ten minutes from creation.","/nookshops cancel discards it."));player.openInventory(menu.inventory);
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=false)
@@ -107,6 +111,12 @@ final class ShopSetup implements Listener,CommandExecutor,TabCompleter {
                 }
                 else if(slot==18)terms=terms.nooks(terms.nooks());
                 else if(slot==20)terms=terms.item("DIAMOND",1);
+                else if(slot==22 && live.enabled()){
+                    try{live.publish(player,d.chest(),d.item(),terms);drafts.remove(player.getUniqueId());}
+                    catch(IllegalArgumentException e){throw e;}
+                    catch(Exception e){plugin.getLogger().log(java.util.logging.Level.SEVERE,"Native shop publication failed",e);player.closeInventory();player.sendMessage(NookUi.problem("NookShops","Could not publish. Check /nookshops mine before retrying; no stock or payment was taken."));}
+                    return;
+                }
                 else if(slot==22){player.sendMessage(NookUi.message("NookShops","Draft: customer receives "+terms.quantity()+" × "+d.item().getType().name().toLowerCase(Locale.ROOT).replace('_',' ')+" for "+terms.price()+". No live shop has been created."));return;}
                 else return;
                 drafts.put(player.getUniqueId(),new Draft(d.chest(),d.item(),terms,d.expires()));open(player);
@@ -119,7 +129,7 @@ final class ShopSetup implements Listener,CommandExecutor,TabCompleter {
     @EventHandler public void quit(PlayerQuitEvent event){drafts.remove(event.getPlayer().getUniqueId());}
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String label,String[] args){
         if(!enabled())return List.of();
-        if(args.length==1)return NookUi.complete(args[0],List.of("create","preview","price","payment","cancel","help"));
+        if(args.length==1)return NookUi.complete(args[0],live.enabled()?List.of("create","preview","price","payment","cancel","mine","manage","collect","help"):List.of("create","preview","price","payment","cancel","help"));
         if(args.length==2 && args[0].equalsIgnoreCase("payment"))return NookUi.complete(args[1],Arrays.stream(Material.values()).filter(m->m.isItem() && !m.isAir()).map(m->m.name().toLowerCase(Locale.ROOT)).toList());
         return List.of();
     }

@@ -1,7 +1,7 @@
 package net.nikosnook.core;
 import java.util.UUID;
 
-/** Internal settlement records. No command or listener can trade through this unfinished backend. */
+/** Durable offer and receipt records used by the opt-in native shop adapter. */
 final class NativeShop {
     static final int MAX_STOCK=1_000_000;
     record Offer(UUID id,String plot,UUID lease,UUID owner,byte[] item,int bundle,long cents,int stock,long revision,boolean closed){
