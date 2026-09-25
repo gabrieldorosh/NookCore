@@ -59,10 +59,6 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
                 if(!healthy.getAsBoolean())return;
                 try{
                     rotation(clock.getAsLong());
-                    for(var notice:notices.drain(clock.getAsLong())){
-                        Player recipient=Bukkit.getPlayer(notice.player());
-                        if(recipient!=null)recipient.sendMessage(QuestUi.progress(notice.update()));
-                    }
                     for(Player p:Bukkit.getOnlinePlayers())if(eligible(p)){
                         String biome=p.getWorld().getBiome(p.getLocation()).getKey().toString();
                         sampleBiome(p,biome);

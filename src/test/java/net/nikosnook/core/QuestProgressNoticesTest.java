@@ -10,33 +10,37 @@ class QuestProgressNoticesTest {
     private NookStore.QuestUpdate update(String id,String kind,int progress,boolean paid){
         return new NookStore.QuestUpdate(new QuestPlan.Goal(id,"Mining",kind,kind.equals("MINE")?"COAL":"COD",100,1500),progress,paid);
     }
-    @Test void burstProducesLatestProgressOnceAfterTenSeconds(){
-        for(int n=1;n<=50;n++)assertFalse(notices.immediate(player,update("coal","MINE",n,false),n));
-        assertTrue(notices.drain(10000).isEmpty());
-        var output=notices.drain(10001);
-        assertEquals(1,output.size());assertEquals(50,output.getFirst().update().progress());
-        assertTrue(notices.drain(20000).isEmpty());
+    @Test void firstBlockIsImmediateAndSuppressedBlocksDoNotExtendCooldown(){
+        assertTrue(notices.immediate(player,update("coal","MINE",1,false),0));
+        for(int n=2;n<=50;n++)assertFalse(notices.immediate(player,update("coal","MINE",n,false),n*100));
+        assertFalse(notices.immediate(player,update("coal","MINE",51,false),9999));
+        assertTrue(notices.immediate(player,update("coal","MINE",52,false),10000));
+        assertFalse(notices.immediate(player,update("coal","MINE",53,false),10001));
+        assertTrue(notices.immediate(player,update("coal","MINE",54,false),20000));
     }
-    @Test void completionIsImmediateAndCancelsStaleNotice(){
-        notices.immediate(player,update("coal","MINE",99,false),0);
-        assertTrue(notices.immediate(player,update("coal","MINE",100,true),1));
-        assertTrue(notices.drain(10000).isEmpty());
+    @Test void completionBypassesCooldown(){
+        assertTrue(notices.immediate(player,update("coal","MINE",98,false),0));
+        assertFalse(notices.immediate(player,update("coal","MINE",99,false),1));
+        assertTrue(notices.immediate(player,update("coal","MINE",100,true),2));
     }
     @Test void otherKindsStayImmediate(){
         assertTrue(notices.immediate(player,update("fish","FISH",1,false),0));
-        assertTrue(notices.drain(10000).isEmpty());
+        assertTrue(notices.immediate(player,update("fish","FISH",2,false),1));
     }
-    @Test void PlayersAndGoalsHaveIndependentBatches(){
-        notices.immediate(player,update("coal","MINE",1,false),0);
-        notices.immediate(player,update("iron","MINE",2,false),1000);
-        notices.immediate(UUID.randomUUID(),update("coal","MINE",3,false),0);
-        assertEquals(2,notices.drain(10000).size());assertEquals(1,notices.drain(11000).size());
+    @Test void playersAndGoalsHaveIndependentCooldowns(){
+        assertTrue(notices.immediate(player,update("coal","MINE",1,false),0));
+        assertTrue(notices.immediate(player,update("iron","MINE",2,false),1));
+        assertTrue(notices.immediate(UUID.randomUUID(),update("coal","MINE",3,false),1));
+        assertFalse(notices.immediate(player,update("iron","MINE",3,false),2));
     }
-    @Test void QuitAndRotationDiscardOnlyCosmeticPendingMessages(){
+    @Test void logoutAndRotationClearCooldownsAndLongPausesAllowImmediateUpdate(){
+        UUID other=UUID.randomUUID();
         notices.immediate(player,update("coal","MINE",1,false),0);
-        notices.immediate(UUID.randomUUID(),update("coal","MINE",3,false),0);
-        notices.forget(player);assertEquals(1,notices.drain(10000).size());
-        notices.immediate(player,update("coal","MINE",1,false),20000);
-        notices.clear();assertTrue(notices.drain(30000).isEmpty());
+        notices.immediate(other,update("coal","MINE",1,false),0);
+        notices.forget(player);
+        assertTrue(notices.immediate(player,update("coal","MINE",2,false),1));
+        assertFalse(notices.immediate(other,update("coal","MINE",2,false),1));
+        notices.clear();assertTrue(notices.immediate(other,update("coal","MINE",3,false),2));
+        assertTrue(notices.immediate(other,update("coal","MINE",4,false),60000));
     }
 }
