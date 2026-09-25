@@ -99,12 +99,12 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
             if(args.length==0 || args.length<=2 && args[0].equalsIgnoreCase("list")){
 
                 var listed=store.plots().stream().filter(plot->managed.test(plot.id())).sorted(Comparator.comparingInt((NookStore.Plot plot)->listOrder(plot,clock.getAsLong())).thenComparing(NookStore.Plot::id)).toList();
-                int pages=Math.max(1,(listed.size()+4)/5),page=1;
+                int pages=Math.max(1,(listed.size()+7)/8),page=1;
                 if(args.length==2){try{page=Integer.parseInt(args[1]);}catch(NumberFormatException e){throw new IllegalArgumentException("Use /nookplots list <page> with a whole page number.");}}
                 if(page<1 || page>pages)throw new IllegalArgumentException("Choose a plot page between 1 and "+pages+".");
                 sender.sendMessage(NookUi.heading("NookPlots · Shopping district · "+page+"/"+pages));
 
-                for(var plot:listed.subList((page-1)*5,Math.min(page*5,listed.size()))){
+                for(var plot:listed.subList((page-1)*8,Math.min(page*8,listed.size()))){
 
                     sender.sendMessage(NookUi.text("• ").append(NookUi.plot(store,plot)).append(findLink(plot.id())));
 
@@ -113,8 +113,11 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
                 }
 
-                if(page>1)sender.sendMessage(NookUi.command("← Previous", "/nookplots list "+(page-1)).clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/nookplots list "+(page-1))));
-                if(page<pages)sender.sendMessage(NookUi.command("Next →", "/nookplots list "+(page+1)).clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/nookplots list "+(page+1))));
+                var navigation=net.kyori.adventure.text.Component.empty();
+                if(page>1)navigation=navigation.append(NookUi.command("← Previous", "/nookplots list "+(page-1)).clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/nookplots list "+(page-1))));
+                if(page>1 && page<pages)navigation=navigation.append(NookUi.text(" · "));
+                if(page<pages)navigation=navigation.append(NookUi.command("Next →", "/nookplots list "+(page+1)).clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/nookplots list "+(page+1))));
+                if(pages>1)sender.sendMessage(navigation);
                 sender.sendMessage(net.kyori.adventure.text.Component.text("/nookplots help — commands and permissions",NookUi.MUTED).clickEvent(net.kyori.adventure.text.event.ClickEvent.suggestCommand("/nookplots help")));return true;
 
             }

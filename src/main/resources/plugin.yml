@@ -25,12 +25,14 @@ commands:
     description: Call down the heavens
     usage: /smite <player>
   nookquests:
+    aliases: [quests]
     description: Weekly quest progress and rewards
     usage: /nookquests
   nookchat:
     description: Set your chat name colour and pronouns
     usage: /nookchat
   nookplots:
+    aliases: [plots]
     description: Plot rentals, invitations, permissions and rent payments
     usage: /nookplots
   nooks:

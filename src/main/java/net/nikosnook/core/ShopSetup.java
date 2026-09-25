@@ -74,7 +74,7 @@ final class ShopSetup implements Listener,CommandExecutor,TabCompleter {
         meta.lore(Arrays.stream(lines).map(s->Component.text(s,NookUi.BODY)).toList());item.setItemMeta(meta);return item;
     }
     private void open(Player player){
-        Draft d=current(player);Menu menu=new Menu(player.getUniqueId());menu.inventory=Bukkit.createInventory(menu,27,Component.text("NookShops · Draft",NookUi.ACCENT));
+        Draft d=current(player);Menu menu=new Menu(player.getUniqueId());menu.inventory=Bukkit.createInventory(menu,27,Component.text("NookShops · Draft",net.kyori.adventure.text.format.NamedTextColor.DARK_GRAY));
         var item=d.item().clone();item.setAmount(Math.min(d.terms().quantity(),item.getMaxStackSize()));
         menu.inventory.setItem(4,icon(Material.PAPER,"Customer receives "+d.terms().quantity()+" item(s)","Customer pays "+d.terms().price(),"This is a draft; purchases are not enabled.","Stock chest: "+d.chest().getX()+", "+d.chest().getY()+", "+d.chest().getZ()));
         menu.inventory.setItem(0,icon(Material.RED_DYE,"Lower price","Nooks: -0.25 · Shift: -1.00","Items: -1 · Shift: -8"));
@@ -83,7 +83,9 @@ final class ShopSetup implements Listener,CommandExecutor,TabCompleter {
         menu.inventory.setItem(15,icon(Material.LIME_DYE,"Larger bundle","Click: +1 · Shift-click: +8"));
         menu.inventory.setItem(18,icon(Material.GOLD_NUGGET,"Payment: Nooks","Use /nookshops price <amount> for a custom price."));
         menu.inventory.setItem(20,icon(Material.DIAMOND,"Payment: diamonds","Click to use one plain diamond per bundle.","Custom items: /nookshops payment <item> [quantity]"));
-        menu.inventory.setItem(24,icon(d.terms().paymentItem()==null?Material.GOLD_NUGGET:Material.valueOf(d.terms().paymentItem()),"Selected: "+d.terms().price(),"Payment per bundle", "Preview only; no items or currency move."));
+        var payment=icon(d.terms().paymentItem()==null?Material.GOLD_NUGGET:Material.valueOf(d.terms().paymentItem()),"Selected: "+d.terms().price(),"Payment per bundle", "Preview only; no items or currency move.");
+        if(d.terms().paymentItem()!=null)payment.setAmount(d.terms().paymentQuantity());
+        menu.inventory.setItem(24,payment);
         menu.inventory.setItem(22,icon(Material.BOOK,"Review draft","Customer receives "+d.terms().quantity()+" item(s)","Customer pays "+d.terms().price(),"Plain payment items only; no named/enchanted currency."));
         menu.inventory.setItem(26,icon(Material.BARRIER,"Close preview","Draft remains available for ten minutes from creation.","/nookshops cancel discards it."));player.openInventory(menu.inventory);
     }

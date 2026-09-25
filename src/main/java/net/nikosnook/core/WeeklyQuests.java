@@ -222,7 +222,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
             sender.sendMessage(Component.empty());sender.sendMessage(Component.text("NookQuests",NookUi.ACCENT).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD));
             for(var g:goals)if(g.reward()!=3000)sender.sendMessage(QuestUi.row(g,store.questProgress(player,week.id(),g.id())));
             for(var g:goals)if(g.reward()==3000)sender.sendMessage(QuestUi.row(g,store.questProgress(player,week.id(),g.id())));
-            if(goals.stream().anyMatch(g->g.kind().equals("DEPOSIT")))sender.sendMessage(NookUi.command("/nookquests contribute").append(NookUi.text(" · consumes matching materials, up to your remaining target")));
+            if(goals.stream().anyMatch(g->g.kind().equals("DEPOSIT")))sender.sendMessage(NookUi.command("/nookquests contribute").append(NookUi.text(" · donated materials stay with the community; no weekly refund")));
             sender.sendMessage(Component.text("Resets "+NookUi.date(week.nextReset()),NookUi.MUTED));
         }catch(IllegalArgumentException e){sender.sendMessage(NookUi.problem("NookQuests",e.getMessage()));}
         catch(Exception e){failure.accept(e);sender.sendMessage(NookUi.problem("NookQuests","Could not read quests; please contact staff."));}
