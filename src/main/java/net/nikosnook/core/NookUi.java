@@ -58,14 +58,14 @@ final class NookUi {
         return switch(state){case "AVAILABLE"->Component.text("Available to rent",GOOD);case "ACTIVE"->Component.text("Open",GOOD);case "GRACE"->Component.text("Closed · rent overdue",WARNING);default->Component.text("Closed · awaiting clearance",BAD);};
     }
     static Component overdue(NookStore.Plot plot){
-        String command="/nookplots reopen "+plot.id();
+        String command="/plots reopen "+plot.id();
         return prefix("NookPlots").append(Component.text(plot.id(),COMMAND))
             .append(text(" is overdue; sales are closed. The original renter can run "))
             .append(Component.text(command,COMMAND).clickEvent(ClickEvent.suggestCommand(command)))
             .append(text(" before "+date(plot.paidUntil()+NookStore.WEEK)+". Only the remaining part of the week is charged."));
     }
     static Component plot(NookStore store,NookStore.Plot plot)throws SQLException {
-        Component result=Component.text(store.plotLabel(plot.id()),ACCENT).hoverEvent(Component.text("Plot ID: "+plot.id())).clickEvent(ClickEvent.runCommand("/nookplots info "+plot.id())).append(Component.text(" · ",MUTED)).append(status(plot,System.currentTimeMillis()));
+        Component result=Component.text(store.plotLabel(plot.id()),ACCENT).hoverEvent(Component.text("Plot ID: "+plot.id())).clickEvent(ClickEvent.runCommand("/plots info "+plot.id())).append(Component.text(" · ",MUTED)).append(status(plot,System.currentTimeMillis()));
         if(plot.owner()!=null)result=result.append(Component.text(store.abandoned(plot.id())?" · Former renter: ":" · Owner: ",MUTED)).append(name(store,plot.owner()));
         return plot.owner()==null?result.append(Component.text(" · ",MUTED)).append(Component.text(Money.format(plot.weekly())+"/week",PRICE)):result;
     }

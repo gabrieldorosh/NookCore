@@ -22,7 +22,7 @@ class AbandonmentCommandsTest {
         commands=new PlotCommands(store,()->true,()->{if(!reconcileWorks.get())throw new IllegalStateException("save failed");reconciles.incrementAndGet();},e->failures.incrementAndGet(),id->id.equals("one"),()->{if(!valid.get())throw new IllegalStateException("invalid mapping");},time::get);
     }
     @AfterEach void close()throws Exception {store.close();}
-    void command(String... args){commands.onCommand(player,null,"nookplots",args);}
+    void command(String... args){commands.onCommand(player,null,"plots",args);}
     @Test void previewDoesNotMutateAndConfirmationRefundsExactlyOnce()throws Exception {
         long before=store.account(owner).orElseThrow().cents();command("abandon","one");
         assertEquals("ACTIVE",store.plot("one").state());assertEquals(before,store.account(owner).orElseThrow().cents());
@@ -37,7 +37,7 @@ class AbandonmentCommandsTest {
     @Test void anotherPlayerCannotUseOwnersPendingConfirmation()throws Exception {
         command("abandon","one");UUID other=UUID.randomUUID();
         Player stranger=(Player)Proxy.newProxyInstance(getClass().getClassLoader(),new Class[]{Player.class},(o,m,a)->m.getName().equals("getUniqueId")?other:null);
-        commands.onCommand(stranger,null,"nookplots",new String[]{"abandon","one","confirm"});
+        commands.onCommand(stranger,null,"plots",new String[]{"abandon","one","confirm"});
         assertEquals("ACTIVE",store.plot("one").state());assertEquals(0,reconciles.get());
     }
     @Test void failedProtectionPreflightPreventsRefundAndClosure()throws Exception {
@@ -50,9 +50,9 @@ class AbandonmentCommandsTest {
         command("abandon","one","confirm");assertEquals(17000,store.account(owner).orElseThrow().cents());
     }
     @Test void completionOnlyOffersConfirmForCurrentReviewedPlot() {
-        assertEquals(List.of(),commands.onTabComplete(player,null,"nookplots",new String[]{"abandon","one",""}));
-        command("abandon","one");assertEquals(List.of("confirm"),commands.onTabComplete(player,null,"nookplots",new String[]{"abandon","one",""}));
-        time.addAndGet(60000);assertEquals(List.of(),commands.onTabComplete(player,null,"nookplots",new String[]{"abandon","one",""}));
+        assertEquals(List.of(),commands.onTabComplete(player,null,"plots",new String[]{"abandon","one",""}));
+        command("abandon","one");assertEquals(List.of("confirm"),commands.onTabComplete(player,null,"plots",new String[]{"abandon","one",""}));
+        time.addAndGet(60000);assertEquals(List.of(),commands.onTabComplete(player,null,"plots",new String[]{"abandon","one",""}));
     }
 
     @Test void expiryNotifiesOnceAtDeadlineWithoutChangingLease()throws Exception {
@@ -66,7 +66,7 @@ class AbandonmentCommandsTest {
     @Test void renewedPreviewDoesNotExpireAtOldDeadline(){
         command("abandon","one");time.addAndGet(30000);command("abandon","one");time.addAndGet(30000);
         commands.expireConfirmations((id,plot)->fail("New review expired too early"));
-        assertEquals(List.of("confirm"),commands.onTabComplete(player,null,"nookplots",new String[]{"abandon","one",""}));
+        assertEquals(List.of("confirm"),commands.onTabComplete(player,null,"plots",new String[]{"abandon","one",""}));
     }
     @Test void completedConfirmationHasNoLaterExpiryNotice(){
         command("abandon","one");command("abandon","one","confirm");time.addAndGet(60000);
@@ -83,6 +83,6 @@ class AbandonmentCommandsTest {
     }
     @Test void namedPlotLookupAndCompletionWork(){
         var found=new ArrayList<String>();commands.locator((p,id)->found.add(id));command("find","one");
-        assertEquals(List.of("one"),found);assertEquals(List.of("one"),commands.onTabComplete(player,null,"nookplots",new String[]{"find",""}));
+        assertEquals(List.of("one"),found);assertEquals(List.of("one"),commands.onTabComplete(player,null,"plots",new String[]{"find",""}));
     }
 }

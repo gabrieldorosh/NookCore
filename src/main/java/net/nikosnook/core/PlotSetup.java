@@ -26,7 +26,6 @@ final class PlotSetup implements CommandExecutor,TabCompleter,Listener {
     private final Map<UUID,Draft> drafts=new HashMap<>();
     PlotSetup(JavaPlugin plugin,NookStore store,BooleanSupplier healthy,Consumer<Exception> failure){
         this.plugin=plugin;this.store=store;this.healthy=healthy;this.failure=failure;
-        plugin.getCommand("nooksetup").setExecutor(this);plugin.getCommand("nooksetup").setTabCompleter(this);
         plugin.getServer().getPluginManager().registerEvents(this,plugin);
     }
     @EventHandler public void quit(PlayerQuitEvent event){drafts.remove(event.getPlayer().getUniqueId());}
@@ -110,9 +109,9 @@ final class PlotSetup implements CommandExecutor,TabCompleter,Listener {
                 p.sendMessage(NookUi.heading("NookPlots · "+(district?"District":"Plot")+" preview"));
                 p.sendMessage(NookUi.text(id+" · X "+a.x()+" to "+b.x()+", Z "+a.z()+" to "+b.z()+" · "+d.box().area()+" blocks · full world height"));
                 if(!district)p.sendMessage(NookUi.text(d.address()+" · Weekly rent: "+Money.format(rent)+(args.length==3?" (explicit price)":" (area suggestion)")));
-                p.sendMessage(NookUi.message("NookPlots","Run ").append(NookUi.command("/nooksetup confirm")).append(NookUi.text(" within 60 seconds. Nothing changes until confirmed; new plots need a restart before renting.")));return true;
+                p.sendMessage(NookUi.message("NookPlots","Run ").append(NookUi.command("/plots setup confirm")).append(NookUi.text(" within 60 seconds. Nothing changes until confirmed; new plots need a restart before renting.")));return true;
             }
-            NookUi.help(p,"NookPlots · Setup","/nooksetup status — inspect the configured district and rental gate","//wand — select two opposite corners; Y is expanded automatically","/nooksetup district <id> — preview a new district","/nooksetup plot [id] [weekly-rent] — preview a plot; omitted values are generated","/nooksetup confirm — save the preview","/nooksetup cancel — discard the preview");
+            NookUi.help(p,"NookPlots · Setup","/plots setup status — inspect the configured district and rental gate","//wand — select two opposite corners; Y is expanded automatically","/plots setup district <id> — preview a new district","/plots setup plot [id] [weekly-rent] — preview a plot; omitted values are generated","/plots setup confirm — save the preview","/plots setup cancel — discard the preview");
         }catch(com.sk89q.worldedit.IncompleteRegionException e){p.sendMessage(NookUi.problem("NookPlots","Select both corners with //wand in this world first."));}
         catch(IllegalArgumentException e){p.sendMessage(NookUi.problem("NookPlots",e.getMessage()));}
         catch(Exception e){failure.accept(e);plugin.getLogger().log(java.util.logging.Level.SEVERE,"Plot setup failed",e);p.sendMessage(NookUi.problem("NookPlots","Setup could not be confirmed. Check console and the setup journal before retrying."));}

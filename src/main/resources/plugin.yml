@@ -10,10 +10,6 @@ commands:
   baltop:
     description: View the Nooks balance leaderboard
     usage: /baltop [page]
-  nooksetup:
-    description: Create district and plot regions from a selection
-    permission: nookcore.admin
-    usage: /nooksetup help
   return:
     description: Return after a staff teleport
     permission: nookcore.admin
@@ -24,24 +20,22 @@ commands:
   smite:
     description: Call down the heavens
     usage: /smite <player>
-  nookquests:
-    aliases: [quests]
+  quests:
     description: Weekly quest progress and rewards
-    usage: /nookquests
+    usage: /quests
   nookchat:
     description: Set your chat name colour and pronouns
     usage: /nookchat
-  nookplots:
-    aliases: [plots]
+  plots:
     description: Plot rentals, invitations, permissions and rent payments
-    usage: /nookplots
+    usage: /plots
   nooks:
     description: Balance, transfers and transaction history
     usage: /nooks [pay <player> <amount>|history]
   nookadmin:
     description: Audited economy administration
     permission: nookcore.admin
-    usage: /nookadmin <balance|give|take|backup|awards> ...
+    usage: /nookadmin <teleport|return> ...
 permissions:
   nookcore.chat.rank.owner:
     description: Cosmetic owner rank only; does not grant staff access

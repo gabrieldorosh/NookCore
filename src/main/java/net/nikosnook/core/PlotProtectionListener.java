@@ -51,7 +51,7 @@ public final class PlotProtectionListener implements Listener {
         if(holder instanceof Entity entity)return protectedLocation(entity.getLocation());
         return false;
     }
-    private void deny(Cancellable event,Player player){event.setCancelled(true);player.sendMessage(NookUi.message("NookPlots","This area is protected. Use /nookplots list for rental spaces, or ask staff for help."));}
+    private void deny(Cancellable event,Player player){event.setCancelled(true);player.sendMessage(NookUi.message("NookPlots","This area is protected. Use /plots list for rental spaces, or ask staff for help."));}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void place(BlockPlaceEvent event){if(!allowed(event.getPlayer(),event.getBlockPlaced().getLocation(),BUILD))deny(event,event.getPlayer());}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)

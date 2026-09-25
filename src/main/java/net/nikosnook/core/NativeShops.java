@@ -17,7 +17,7 @@ import java.util.function.*;
 /** Opt-in district shops. The block is an interface; stock lives in the receipt-backed store. */
 final class NativeShops implements Listener {
     private static final class Menu implements InventoryHolder {
-        final UUID viewer,offer;final long revision;final boolean owner;Inventory inventory;
+        final UUID viewer,offer;final long revision;final boolean owner;Inventory inventory;boolean stock;int amount=1;
         Menu(UUID viewer,NativeShop.Offer offer,boolean owner){this.viewer=viewer;this.offer=offer.id();this.revision=offer.revision();this.owner=owner;}
         public Inventory getInventory(){return inventory;}
     }
@@ -124,11 +124,11 @@ final class NativeShops implements Listener {
         var item=ItemStack.deserializeBytes(offer.item());item.setAmount(Math.min(offer.bundle(),item.getMaxStackSize()));menu.inventory.setItem(13,item);
         menu.inventory.setItem(4,icon(Material.PAPER,offer.bundle()+" × "+name(offer.item()),"Price: "+price(offer)+" per bundle","Stock: "+offer.stock()+" items",offer.closed()?"Closed":"Plot: "+store.plotAddress(offer.plot())));
         if(owner){
-            if(!offer.closed()){menu.inventory.setItem(11,icon(Material.CHEST,"Add stock","Move up to 64 matching items from your inventory.","Look at your shop container to stock it."));menu.inventory.setItem(22,icon(Material.RED_DYE,"Close shop","Stop sales. Stock remains yours to collect.","Create a new draft to change item, price or bundle."));}
+            if(!offer.closed()){menu.inventory.setItem(11,icon(Material.CHEST,"Manage stock","Deposit or withdraw a chosen quantity.","Look at your shop container to manage it."));menu.inventory.setItem(22,icon(Material.RED_DYE,"Close shop","Stop sales. Stock remains yours to collect.","Create a new draft to change item, price or bundle."));}
             else menu.inventory.setItem(22,icon(Material.CHEST,"Collect remaining stock","Collect up to 64 items. Make room first.","Works even after your rental has ended."));
         }else menu.inventory.setItem(22,icon(Material.LIME_DYE,"Buy "+offer.bundle()+" for "+price(offer),"Click once to confirm this purchase.","Payment goes to the shop owner, even when offline."));
         if(!owner && stockMember(offer,player.getUniqueId()) && !offer.closed()){
-            menu.inventory.setItem(11,icon(Material.CHEST,"Add stock","Deposit up to 64 matching items from your inventory."));
+            menu.inventory.setItem(11,icon(Material.CHEST,"Manage stock","Deposit or withdraw a chosen quantity."));
             menu.inventory.setItem(22,icon(Material.PAPER,"You help stock this shop","Plot members cannot purchase from their own plot."));
         }
         var payment=store.nativePayment(offer.id());
@@ -137,6 +137,49 @@ final class NativeShops implements Listener {
             currency.setAmount(Math.min(payment.get().quantity(),currency.getMaxStackSize()));menu.inventory.setItem(15,currency);
         }
         menu.inventory.setItem(26,icon(Material.BARRIER,"Close"));player.openInventory(menu.inventory);
+    }
+    private void openStock(Player player,NativeShop.Offer offer,int amount)throws Exception {
+        if(!stockMember(offer,player.getUniqueId()) || offer.closed())throw new IllegalArgumentException("You need stock access to an open shop.");
+        Menu menu=new Menu(player.getUniqueId(),offer,offer.owner().equals(player.getUniqueId()));menu.stock=true;menu.amount=Math.clamp(amount,1,64);
+        menu.inventory=Bukkit.createInventory(menu,27,Component.text("NookShops · Stock",NamedTextColor.DARK_GRAY));
+        menu.inventory.setItem(4,icon(Material.PAPER,"Stock: "+offer.stock()+" items","Selected amount: "+menu.amount,"Click an inventory stack to deposit it.","Right-click an inventory stack to deposit one."));
+        var item=ItemStack.deserializeBytes(offer.item());item.setAmount(Math.min(menu.amount,item.getMaxStackSize()));menu.inventory.setItem(13,item);
+        menu.inventory.setItem(10,icon(Material.RED_DYE,"Fewer items","Click: -1 · Shift-click: -8"));
+        menu.inventory.setItem(16,icon(Material.LIME_DYE,"More items","Click: +1 · Shift-click: +8"));
+        menu.inventory.setItem(11,icon(Material.PAPER,"Select 1"));menu.inventory.setItem(15,icon(Material.PAPER,"Select 64"));
+        menu.inventory.setItem(18,icon(Material.CHEST,"Deposit "+menu.amount,"Moves matching items from your inventory."));
+        menu.inventory.setItem(22,icon(Material.HOPPER,"Withdraw "+menu.amount,"The shop stays open. Make room first."));
+        menu.inventory.setItem(26,icon(Material.ARROW,"Back"));player.openInventory(menu.inventory);
+    }
+    private void stockClick(Player player,Menu menu,int slot,ClickType click,ItemStack clicked){
+        if(!List.of(ClickType.LEFT,ClickType.RIGHT,ClickType.SHIFT_LEFT,ClickType.SHIFT_RIGHT).contains(click))return;
+        Bukkit.getScheduler().runTask(plugin,()->{
+            if(!player.isOnline() || player.getOpenInventory().getTopInventory()!=menu.inventory)return;
+            player.closeInventory();
+            try{
+                ready(player);var offer=nearby(player,menu.offer);UUID actor=player.getUniqueId();
+                if(offer.closed() || !stockMember(offer,actor))throw new IllegalArgumentException("You no longer have stock access to this shop.");
+                if(slot==26){open(player,offer,offer.owner().equals(actor));return;}
+                int selected=menu.amount;
+                if(slot==10 || slot==16)selected=Math.clamp(selected+(slot==10?-1:1)*(click.isShiftClick()?8:1),1,64);
+                else if(slot==11)selected=1;
+                else if(slot==15)selected=64;
+                else if(slot==18 || slot==22 || slot>=27){
+                    var inventory=new NativePlayerInventory(player);var exact=NativePlayerInventory.item(offer.item());int count=selected;
+                    if(slot>=27){
+                        if(clicked==null || clicked.getType().isAir())return;
+                        if(!Base64.getEncoder().encodeToString(NativeInventoryCodec.saleItem(clicked)).equals(exact.key()))throw new IllegalArgumentException("Only exactly matching sale items can be stocked here.");
+                        count=click==ClickType.RIGHT || click==ClickType.SHIFT_RIGHT?1:Math.min(64,clicked.getAmount());
+                    }
+                    if(slot==22){
+                        NativeInventoryPlan.deliver(inventory.capture(),exact,count);
+                        var receipt=store.reserveNativeStockWithdrawal(UUID.randomUUID(),offer.id(),actor,count,System.currentTimeMillis());collect(player,receipt);
+                    }else custody.deposit(offer.id(),actor,count,exact.key(),inventory,System.currentTimeMillis());
+                    player.sendMessage(NookUi.message("NookShops",(slot==22?"Withdrew ":"Deposited ")+count+" items."));
+                }else {openStock(player,offer,selected);return;}
+                openStock(player,store.nativeOffer(offer.id()),selected);
+            }catch(Exception error){problem(player,error);}
+        });
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=false) public void interact(PlayerInteractEvent event){
         if(!enabled() || event.getHand()!=EquipmentSlot.HAND || event.getAction()!=org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK || event.getClickedBlock()==null)return;
@@ -147,7 +190,9 @@ final class NativeShops implements Listener {
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=false) public void click(InventoryClickEvent e){
         if(!(e.getView().getTopInventory().getHolder() instanceof Menu menu))return;e.setCancelled(true);
-        if(!(e.getWhoClicked() instanceof Player p) || !menu.viewer.equals(p.getUniqueId()) || e.getRawSlot()<0 || e.getRawSlot()>=27)return;
+        if(!(e.getWhoClicked() instanceof Player p) || !menu.viewer.equals(p.getUniqueId()) || e.getRawSlot()<0)return;
+        if(menu.stock){stockClick(p,menu,e.getRawSlot(),e.getClick(),e.getCurrentItem()==null?null:e.getCurrentItem().clone());return;}
+        if(e.getRawSlot()>=27)return;
         int slot=e.getRawSlot();if(slot!=11 && slot!=22 && slot!=26)return;Bukkit.getScheduler().runTask(plugin,()->{
             if(!p.isOnline() || p.getOpenInventory().getTopInventory()!=menu.inventory)return;
             p.closeInventory(); // A queued duplicate click can no longer spend again.
@@ -156,9 +201,7 @@ final class NativeShops implements Listener {
                 if(menu.owner || slot==11 && stockMember(offer,p.getUniqueId())){
                     if(slot!=11 && !offer.owner().equals(p.getUniqueId()))throw new IllegalArgumentException("Only the original owner can close this shop or collect its stock.");
                     if(slot==11 && !offer.closed()){
-                        offer=nearby(p,offer.id());var item=NativePlayerInventory.item(offer.item());var inventory=new NativePlayerInventory(p);int count=inventory.capture().stream().filter(Objects::nonNull).filter(s->s.key().equals(item.key())).mapToInt(NativeInventoryPlan.Stack::count).sum();
-                        if(count==0)throw new IllegalArgumentException("Carry matching sale items in your inventory.");
-                        custody.deposit(offer.id(),p.getUniqueId(),Math.min(64,count),item.key(),inventory,now);p.sendMessage(NookUi.message("NookShops","Stock added: "+Math.min(64,count)+" items."));
+                        offer=nearby(p,offer.id());openStock(p,offer,1);return;
                     }else if(slot==22 && !offer.closed()){store.closeNativeOffer(offer.id(),p.getUniqueId());p.sendMessage(NookUi.message("NookShops","Shop closed. Collect its remaining stock from this menu."));}
                     else if(slot==22){
                         int amount=Math.min(64,offer.stock());if(amount==0)throw new IllegalArgumentException("No stock remains.");

@@ -532,6 +532,23 @@ public final class NookStore implements AutoCloseable {
             if(!offer.closed())update("UPDATE native_offers SET closed=1,revision=revision+1 WHERE id=?",offerId);return null;
         });
     }
+    NativeShop.Receipt reserveNativeStockWithdrawal(UUID receipt,UUID offerId,UUID actor,int quantity,long now)throws SQLException {
+        if(quantity<1 || quantity>64)throw new IllegalArgumentException("Withdraw between 1 and 64 items at a time.");
+        return tx(()->{
+            var previous=nativeReceipt(receipt);
+            if(previous.isPresent()){
+                var r=previous.get();if(!nativeStockReturn(receipt) || !r.offer().equals(offerId) || !r.buyer().equals(actor) || r.quantity()!=quantity)throw new IllegalArgumentException("Withdrawal receipt was reused with different details.");return r;
+            }
+            var offer=nativeOffer(offerId);nativeActive(offer,now);
+            if(!new PlotPermissions(this).allowed(offer.plot(),actor,PlotPermissions.Action.STOCK))throw new IllegalArgumentException("Stock permission is required.");
+            if(nativeInventoryPending(actor))throw new IllegalArgumentException("An earlier inventory operation needs review first.");
+            if(offer.stock()<quantity)throw new IllegalArgumentException("Not enough stock to withdraw that amount.");
+            update("UPDATE native_offers SET stock=stock-? WHERE id=?",quantity,offerId);
+            update("INSERT INTO native_trade_receipts(id,offer,buyer,seller,quantity,cents,revision,item,time) VALUES(?,?,?,?,?,0,?,?,?)",receipt,offerId,actor,actor,quantity,offer.revision(),offer.item(),now);
+            update("INSERT INTO native_stock_returns(receipt) VALUES(?)",receipt);return nativeReceipt(receipt).orElseThrow();
+        });
+    }
+
     synchronized boolean nativeStockReturn(UUID receipt)throws SQLException {
         try(var p=db.prepareStatement("SELECT 1 FROM native_stock_returns WHERE receipt=?")){
             bind(p,receipt);try(var rows=p.executeQuery()){return rows.next();}
@@ -690,7 +707,7 @@ public final class NookStore implements AutoCloseable {
     }
     public void leavePlot(String id,UUID actor,long now)throws SQLException {
         tx(()->{Plot p=plot(id);
-            if(actor.equals(p.owner()))throw new IllegalArgumentException("You are the renter. Use /nookplots abandon "+id+" to review closure and any prepaid-week refund.");
+            if(actor.equals(p.owner()))throw new IllegalArgumentException("You are the renter. Use /plots abandon "+id+" to review closure and any prepaid-week refund.");
             if(update("DELETE FROM members WHERE uuid=? AND plot=?",actor,id)!=1)throw new IllegalArgumentException("You do not belong to this plot.");
             update("DELETE FROM plot_invitations WHERE member=? AND plot=?",actor,id);
             event(id,"LEAVE",actor.toString(),now);return null;});
@@ -714,7 +731,7 @@ public final class NookStore implements AutoCloseable {
     public long abandon(AbandonmentQuote expected,UUID actor,long now)throws SQLException {
         return tx(()->{
             AbandonmentQuote current=abandonmentQuote(expected.plot(),actor,now);
-            if(!current.equals(expected))throw new IllegalArgumentException("The lease or refund changed. Review /nookplots abandon "+expected.plot()+" again before confirming.");
+            if(!current.equals(expected))throw new IllegalArgumentException("The lease or refund changed. Review /plots abandon "+expected.plot()+" again before confirming.");
             // Refund, audit, membership removal and closure commit together, or not at all.
             if(current.refund()>0)mutate(actor,current.refund(),"rent-refund",current.plot()+" lease="+current.lease(),now);
             update("INSERT INTO plot_abandonments(lease,plot,owner,time,refund) VALUES(?,?,?,?,?)",current.lease(),current.plot(),actor,now,current.refund());
@@ -762,7 +779,7 @@ public final class NookStore implements AutoCloseable {
         }
     }
     public void removeMember(String id,UUID actor,UUID member,long now)throws SQLException {
-        tx(()->{Plot p=plot(id);owner(p,actor);if(actor.equals(member))throw new IllegalArgumentException("The renter cannot remove themselves. Use /nookplots abandon to review closing the shop.");
+        tx(()->{Plot p=plot(id);owner(p,actor);if(actor.equals(member))throw new IllegalArgumentException("The renter cannot remove themselves. Use /plots abandon to review closing the shop.");
             update("DELETE FROM members WHERE uuid=? AND plot=?",member,id);
             update("DELETE FROM plot_invitations WHERE member=? AND plot=?",member,id);
             event(id,"REMOVE_MEMBER",member.toString(),now);return null;});
@@ -813,7 +830,7 @@ public final class NookStore implements AutoCloseable {
     }
     public long reopen(String id,UUID actor,long now)throws SQLException {
         return tx(()->{Plot p=plot(id);owner(p,actor);
-            if(p.state().equals("ACTIVE") && now<p.paidUntil())throw new IllegalArgumentException("This shop is already open. Use /nookplots info "+id+" to check its rent.");
+            if(p.state().equals("ACTIVE") && now<p.paidUntil())throw new IllegalArgumentException("This shop is already open. Use /plots info "+id+" to check its rent.");
             if(!p.state().equals("GRACE") || now>=p.paidUntil()+WEEK)throw new IllegalArgumentException("This plot cannot be reopened; contact staff.");
             long cost=Money.prorate(p.weekly(),p.paidUntil()+WEEK-now,WEEK);
             mutate(actor,-cost,"rent-reopen",id,now);update("UPDATE plots SET state='ACTIVE',paid_until=? WHERE id=?",p.paidUntil()+WEEK,id);event(id,"REOPEN",Long.toString(cost),now);return cost;
@@ -837,7 +854,7 @@ public final class NookStore implements AutoCloseable {
             long until=Math.addExact(p.paidUntil(),WEEK*weeks);
             if(!p.state().equals("ACTIVE") || now>=p.paidUntil())throw new IllegalArgumentException("Reopen the plot first.");
             // Four additional weeks beyond the current rental week, not unlimited repeated calls.
-            if(until-now>WEEK*5)throw new IllegalArgumentException("You already have "+prepaidWeeks(p,now)+" future prepaid weeks. The limit is four; use /nookplots info "+id+" for your paid-through date.");
+            if(until-now>WEEK*5)throw new IllegalArgumentException("You already have "+prepaidWeeks(p,now)+" future prepaid weeks. The limit is four; use /plots info "+id+" for your paid-through date.");
             mutate(actor,-Math.multiplyExact(p.weekly(),weeks),"rent-prepay",id,now);update("UPDATE plots SET paid_until=? WHERE id=?",until,id);event(id,"PREPAY",Integer.toString(weeks),now);return null;
         });
     }

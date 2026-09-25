@@ -24,6 +24,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
     private BiConsumer<Player,Boolean> celebration=(player,challenge)->{};
     private Consumer<Exception> cosmeticFailure=error->{};
     private final Set<UUID> capacityNotified=new HashSet<>();
+    private final QuestProgressNotices notices=new QuestProgressNotices();
     private QuestPlan.Week week;
     private java.nio.file.Path backupFolder;
     private record Activation(String week,long expires) {}
@@ -51,13 +52,17 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         if(parsed.size()!=7 || parsed.stream().filter(g->g.reward()==1500).count()!=6 || parsed.stream().filter(g->g.reward()==3000).count()!=1)throw new IllegalArgumentException("Configure six quests at 1500 cents and one challenge at 3000 cents");
         if(parsed.stream().filter(g->g.kind().equals("DEPOSIT")).count()>1)throw new IllegalArgumentException("Only one contribution goal per week is supported");
         proposed=List.copyOf(parsed);
-        var command=Objects.requireNonNull(plugin.getCommand("nookquests"));command.setExecutor(this);command.setTabCompleter(this);
+        var command=Objects.requireNonNull(plugin.getCommand("quests"));command.setExecutor(this);command.setTabCompleter(this);
         if(enabled){
             rotation(clock.getAsLong());plugin.getServer().getPluginManager().registerEvents(this,plugin);
             Bukkit.getScheduler().runTaskTimer(plugin,()->{
                 if(!healthy.getAsBoolean())return;
                 try{
                     rotation(clock.getAsLong());
+                    for(var notice:notices.drain(clock.getAsLong())){
+                        Player recipient=Bukkit.getPlayer(notice.player());
+                        if(recipient!=null)recipient.sendMessage(QuestUi.progress(notice.update()));
+                    }
                     for(Player p:Bukkit.getOnlinePlayers())if(eligible(p)){
                         String biome=p.getWorld().getBiome(p.getLocation()).getKey().toString();
                         sampleBiome(p,biome);
@@ -80,7 +85,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
     private void rotation(long now)throws Exception {
         var current=QuestPlan.week(now);
         if(week==null || !week.id().equals(current.id())){
-            goals=store.questRotation(current.id(),proposed);week=current;lastBiome.clear();capacityNotified.clear();
+            goals=store.questRotation(current.id(),proposed);week=current;lastBiome.clear();capacityNotified.clear();notices.clear();
         }
     }
     private boolean eligible(Player p){return enabled && healthy.getAsBoolean() && p.getGameMode()==GameMode.SURVIVAL && p.getWorld().getEnvironment()==World.Environment.NORMAL;}
@@ -91,7 +96,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
             var updates=store.advanceQuests(p.getUniqueId(),week.id(),kind,target,unique,now);
             if(updates.stream().anyMatch(NookStore.QuestUpdate::paid))capacityNotified.remove(p.getUniqueId());
             for(var update:updates){
-                p.sendMessage(QuestUi.progress(update));
+                if(notices.immediate(p.getUniqueId(),update,now))p.sendMessage(QuestUi.progress(update));
                 if(update.paid())celebrate(p,update.goal().reward()==3000);
             }
             return true;
@@ -174,7 +179,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
             String type=item.getItemStack().getType().name();if(Set.of("COD","SALMON","TROPICAL_FISH","PUFFERFISH").contains(type))record(event.getPlayer(),"FISH",type,null);
         }
     }
-    @EventHandler public void quit(PlayerQuitEvent event){lastBiome.remove(event.getPlayer().getUniqueId());capacityNotified.remove(event.getPlayer().getUniqueId());}
+    @EventHandler public void quit(PlayerQuitEvent event){notices.forget(event.getPlayer().getUniqueId());lastBiome.remove(event.getPlayer().getUniqueId());capacityNotified.remove(event.getPlayer().getUniqueId());}
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
         if(!enabled){sender.sendMessage(NookUi.message("NookQuests","Weekly quests are not open yet."));return true;}
         if(!healthy.getAsBoolean()){sender.sendMessage(NookUi.problem("NookQuests","Quests are paused; please contact staff."));return true;}
@@ -187,17 +192,17 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
                     sender.sendMessage(NookUi.heading("NookQuests · Activate configured goals"));
                     for(var goal:proposed)sender.sendMessage(NookUi.text(goal.title()+" · "+Money.format(goal.reward())));
                     sender.sendMessage(NookUi.message("NookQuests","This replaces this week's goals for everyone with fresh progress. Old progress, rewards, balances and contributed stock are retained. New goals can pay again. Use only for the prelaunch switch; once per week."));
-                    sender.sendMessage(NookUi.command("/nookquests activate-config confirm"));
+                    sender.sendMessage(NookUi.command("/quests activate-config confirm"));
                     activations.put(actor,new Activation(week.id(),now+60000));return true;
                 }
-                if(args.length!=2 || !args[1].equalsIgnoreCase("confirm"))throw new IllegalArgumentException("Use /nookquests activate-config to preview the change.");
+                if(args.length!=2 || !args[1].equalsIgnoreCase("confirm"))throw new IllegalArgumentException("Use /quests activate-config to preview the change.");
                 var pending=activations.remove(actor);
-                if(pending==null || pending.expires()<now || !pending.week().equals(week.id()))throw new IllegalArgumentException("Confirmation expired. Run /nookquests activate-config again.");
+                if(pending==null || pending.expires()<now || !pending.week().equals(week.id()))throw new IllegalArgumentException("Confirmation expired. Run /quests activate-config again.");
                 java.nio.file.Files.createDirectories(backupFolder);
                 var backup=backupFolder.resolve("quests-before-activation-"+UUID.randomUUID()+".db");store.backup(backup);
-                goals=store.activateQuestConfig(week.id(),proposed,now);lastBiome.clear();capacityNotified.clear();
+                goals=store.activateQuestConfig(week.id(),proposed,now);lastBiome.clear();capacityNotified.clear();notices.clear();
                 sender.sendMessage(NookUi.message("NookQuests","Configured goals are now active. Backup: "+backup.getFileName()));
-                Bukkit.broadcast(NookUi.message("NookQuests","The launch quests are now available. View them with ").append(NookUi.command("/nookquests")));return true;
+                Bukkit.broadcast(NookUi.message("NookQuests","The launch quests are now available. View them with ").append(NookUi.command("/quests")));return true;
             }
             if(args.length==1 && args[0].equalsIgnoreCase("contribute")){
                 if(!(sender instanceof Player donor))throw new IllegalArgumentException("Contribute in game.");
@@ -213,16 +218,16 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
             UUID player;
             if(args.length==2 && args[0].equalsIgnoreCase("inspect") && sender.hasPermission("nookcore.admin"))player=store.byName(args[1]).orElseThrow(()->new IllegalArgumentException("Unknown player")).id();
             else if(args.length==0 || args.length==1 && args[0].equalsIgnoreCase("list")){
-                if(!(sender instanceof Player p)){sender.sendMessage(NookUi.message("NookQuests","Use nookquests inspect <player> from console."));return true;}player=p.getUniqueId();
+                if(!(sender instanceof Player p)){sender.sendMessage(NookUi.message("NookQuests","Use quests inspect <player> from console."));return true;}player=p.getUniqueId();
             }else{
-                NookUi.help(sender,"Weekly quests","/nookquests — view your progress and rewards");
-                if(sender.hasPermission("nookcore.admin"))NookUi.help(sender,"Staff","/nookquests inspect <player> — view progress without changing it");return true;
+                NookUi.help(sender,"Weekly quests","/quests — view your progress and rewards");
+                if(sender.hasPermission("nookcore.admin"))NookUi.help(sender,"Staff","/quests inspect <player> — view progress without changing it");return true;
             }
             rotation(clock.getAsLong());
             sender.sendMessage(Component.empty());sender.sendMessage(Component.text("NookQuests",NookUi.ACCENT).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD));
             for(var g:goals)if(g.reward()!=3000)sender.sendMessage(QuestUi.row(g,store.questProgress(player,week.id(),g.id())));
             for(var g:goals)if(g.reward()==3000)sender.sendMessage(QuestUi.row(g,store.questProgress(player,week.id(),g.id())));
-            if(goals.stream().anyMatch(g->g.kind().equals("DEPOSIT")))sender.sendMessage(NookUi.command("/nookquests contribute").append(NookUi.text(" · donated materials stay with the community; no weekly refund")));
+            if(goals.stream().anyMatch(g->g.kind().equals("DEPOSIT")))sender.sendMessage(NookUi.command("/quests contribute").append(NookUi.text(" · donated materials stay with the community; no weekly refund")));
             sender.sendMessage(Component.text("Resets "+NookUi.date(week.nextReset()),NookUi.MUTED));
         }catch(IllegalArgumentException e){sender.sendMessage(NookUi.problem("NookQuests",e.getMessage()));}
         catch(Exception e){failure.accept(e);sender.sendMessage(NookUi.problem("NookQuests","Could not read quests; please contact staff."));}

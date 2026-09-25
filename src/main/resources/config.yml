@@ -159,3 +159,6 @@ shop-setup-preview-enabled: false
 
 # Opt-in native Nooks trading. Requires the tested rental gate; ChestShop may coexist on separate containers.
 native-shops-enabled: false
+
+# Absolute opening time, including timezone offset. Blank allows new rentals immediately.
+plot-rentals-open-at: ""

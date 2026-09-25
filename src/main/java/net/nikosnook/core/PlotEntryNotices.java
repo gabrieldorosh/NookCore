@@ -31,7 +31,7 @@ final class PlotEntryNotices {
                     if(!tracker.entered(id,plot,System.currentTimeMillis()))continue;
                     Component message;
                     if(gate.manages(plot))message=NookUi.plot(store,store.plot(plot));
-                    else if(ShopTradePolicy.ROAD.equals(plot))message=NookUi.text("Shopping district · /nookplots list");
+                    else if(ShopTradePolicy.ROAD.equals(plot))message=NookUi.text("Shopping district · /plots list");
                     else continue;
                     try{show(player,message,display);}
                     catch(RuntimeException e){plugin.getLogger().warning("Plot-entry display failed: "+e.getClass().getSimpleName());}

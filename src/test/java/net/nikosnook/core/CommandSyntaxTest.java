@@ -22,10 +22,10 @@ class CommandSyntaxTest {
     }
     @Test void rentalInputsRejectFractionsOverflowAndInvalidRoles(){
         for(String value:new String[]{"half","1.5","0","5","999999999999999999999"})
-            assertThrows(IllegalArgumentException.class,()->CommandSyntax.check("nookplots",new String[]{"prepay","one",value}));
-        assertThrows(IllegalArgumentException.class,()->CommandSyntax.check("nookplots",new String[]{"role","one","Alex","admin"}));
-        assertDoesNotThrow(()->CommandSyntax.check("nookplots",new String[]{"invite","one","Alex","BOTH"}));
-        assertDoesNotThrow(()->CommandSyntax.check("nookplots",new String[]{"role","one","Alex","build_stock"}));
+            assertThrows(IllegalArgumentException.class,()->CommandSyntax.check("plots",new String[]{"prepay","one",value}));
+        assertThrows(IllegalArgumentException.class,()->CommandSyntax.check("plots",new String[]{"role","one","Alex","admin"}));
+        assertDoesNotThrow(()->CommandSyntax.check("plots",new String[]{"invite","one","Alex","BOTH"}));
+        assertDoesNotThrow(()->CommandSyntax.check("plots",new String[]{"role","one","Alex","build_stock"}));
     }
     @Test void staffMutationsRequireAuditReasonsAndValidSwitches(){
         assertThrows(IllegalArgumentException.class,()->CommandSyntax.check("nookadmin",new String[]{"give","Alex","10"}));
@@ -35,15 +35,15 @@ class CommandSyntaxTest {
         assertDoesNotThrow(()->CommandSyntax.check("nookadmin",new String[]{"plotabsence","one","OFF","returned","early"}));
     }
     @Test void unknownCommandsAreNotTreatedAsHelpOrPreview(){
-        for(String root:new String[]{"nooks","nookplots","nookchat","nookadmin"}){
+        for(String root:new String[]{"nooks","plots","nookchat","nookadmin"}){
             var error=assertThrows(IllegalArgumentException.class,()->CommandSyntax.check(root,new String[]{"typo"}));
             assertTrue(error.getMessage().contains("/"+root+" help"));
         }
     }
     @Test void shortInvitationsAndConfiguredMultiwordPronounsStayValid(){
-        assertDoesNotThrow(()->CommandSyntax.check("nookplots",new String[]{"accept"}));
-        assertDoesNotThrow(()->CommandSyntax.check("nookplots",new String[]{"decline","Alex"}));
+        assertDoesNotThrow(()->CommandSyntax.check("plots",new String[]{"accept"}));
+        assertDoesNotThrow(()->CommandSyntax.check("plots",new String[]{"decline","Alex"}));
         assertDoesNotThrow(()->CommandSyntax.check("nookchat",new String[]{"pronouns","ask","me"}));
-        assertDoesNotThrow(()->CommandSyntax.check("nookplots",new String[]{"abandon","one","confirm"}));
+        assertDoesNotThrow(()->CommandSyntax.check("plots",new String[]{"abandon","one","confirm"}));
     }
 }
