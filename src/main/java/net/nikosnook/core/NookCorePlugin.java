@@ -28,6 +28,9 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         try{new org.bukkit.configuration.file.YamlConfiguration().load(getDataFolder().toPath().resolve("config.yml").toFile());}
         catch(Exception e){getLogger().log(Level.SEVERE,"NookCore could not initialise: invalid config.yml",e);blockStartup("Invalid config.yml; restore a valid configuration before restarting.");return;}
         new SmitePrank(this);
+        getServer().getPluginManager().registerEvents(new SelectiveMobGriefing(
+            getConfig().getBoolean("mob-protection.prevent-creeper-block-damage",true),
+            getConfig().getBoolean("mob-protection.prevent-enderman-block-changes",true)),this);
         if(getConfig().getBoolean("exact-world-spawn-enabled",false))getServer().getPluginManager().registerEvents(new ExactWorldSpawn(this,AdminTeleports::safeReturn,message->getLogger().warning(message)),this);
         adminTeleports=new AdminTeleports(Bukkit::getPlayerExact,message->getLogger().info(message));
         getServer().getPluginManager().registerEvents(adminTeleports,this);

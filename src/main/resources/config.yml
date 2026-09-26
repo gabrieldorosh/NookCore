@@ -167,3 +167,9 @@ plot-rentals-open-at: ""
 bunny-boots:
   enabled: false
   cents-per-minute: 0
+
+# Targeted protection in all worlds; keep the vanilla mobGriefing gamerule enabled.
+# Creepers still damage players/mobs. Other mobs, including villagers, stay unchanged.
+mob-protection:
+  prevent-creeper-block-damage: true
+  prevent-enderman-block-changes: true
