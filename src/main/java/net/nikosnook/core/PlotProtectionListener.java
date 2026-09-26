@@ -44,11 +44,16 @@ public final class PlotProtectionListener implements Listener {
         return true; // Crafting/virtual inventories carry no plot stock themselves.
     }
     private boolean protectedInventory(Inventory inventory){
-        var holder=inventory.getHolder();
+        return protectedInventory(inventory.getHolder(),this::protectedLocation);
+    }
+    static boolean protectedInventory(InventoryHolder holder,Predicate<Location> protectedLocation){
         if(holder instanceof HumanEntity)return false;
-        if(holder instanceof DoubleChest chest)return protectedInventory(chest.getLeftSide().getInventory()) || protectedInventory(chest.getRightSide().getInventory());
-        if(holder instanceof Container container)return protectedLocation(container.getLocation());
-        if(holder instanceof Entity entity)return protectedLocation(entity.getLocation());
+        // A chest half's getInventory() can return the joined inventory again.
+        // Inspect the half's holder/location directly instead of following that cycle.
+        if(holder instanceof DoubleChest chest)return protectedInventory(chest.getLeftSide(),protectedLocation)
+            || protectedInventory(chest.getRightSide(),protectedLocation);
+        if(holder instanceof Container container)return protectedLocation.test(container.getLocation());
+        if(holder instanceof Entity entity)return protectedLocation.test(entity.getLocation());
         return false;
     }
     private void deny(Cancellable event,Player player){event.setCancelled(true);player.sendMessage(NookUi.message("NookPlots","This area is protected. Use /plots list for rental spaces, or ask staff for help."));}
