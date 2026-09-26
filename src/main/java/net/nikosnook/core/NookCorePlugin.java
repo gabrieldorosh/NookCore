@@ -20,6 +20,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     private boolean healthy=true, awardsEnabled;
     private ChestShopRentalGate plotGate;
     private NookChat chat;
+    private BunnyBoots bunnyBoots;
     private AdminTeleports adminTeleports;
     @Override public void onEnable(){
         saveDefaultConfig();
@@ -44,6 +45,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
                 if(amount<0 || amount>Money.MAX || !key.startsWith("minecraft:"))throw new IllegalArgumentException("Invalid reward: "+key);
                 rewards.put(key,amount);
             }
+            bunnyBoots=new BunnyBoots(this,store,()->healthy,this::fail);
             awardsEnabled=getConfig().getBoolean("advancement-rewards-enabled",true);
             if(getServer().getPluginManager().getPlugin("Vault")!=null && getConfig().getBoolean("vault-enabled",true)){
                 getServer().getServicesManager().register(net.milkbowl.vault.economy.Economy.class,new VaultBridge(store,()->healthy && isEnabled(),this::fail),this,org.bukkit.plugin.ServicePriority.Highest);
@@ -337,5 +339,6 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         }catch(SQLException e){fail(e);}
         return NookUi.complete(args[args.length-1],values);
     }
-    @Override public void onDisable(){healthy=false;if(chat!=null)chat.close();getServer().getServicesManager().unregisterAll(this);if(store!=null)try{store.close();}catch(SQLException e){getLogger().log(Level.SEVERE,"Database close failed",e);}}
+    @Override public void onDisable(){
+        if(bunnyBoots!=null)bunnyBoots.close();healthy=false;if(chat!=null)chat.close();getServer().getServicesManager().unregisterAll(this);if(store!=null)try{store.close();}catch(SQLException e){getLogger().log(Level.SEVERE,"Database close failed",e);}}
 }

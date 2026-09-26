@@ -162,3 +162,8 @@ native-shops-enabled: false
 
 # Absolute opening time, including timezone offset. Blank allows new rentals immediately.
 plot-rentals-open-at: ""
+
+# Prototype; choose a price before opening purchases. Zero keeps purchases closed.
+bunny-boots:
+  enabled: false
+  cents-per-minute: 0

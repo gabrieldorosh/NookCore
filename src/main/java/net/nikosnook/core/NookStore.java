@@ -35,6 +35,8 @@ public final class NookStore implements AutoCloseable {
             s.execute("CREATE TABLE IF NOT EXISTS ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, time INTEGER NOT NULL, uuid TEXT NOT NULL REFERENCES accounts(uuid), delta INTEGER NOT NULL, kind TEXT NOT NULL, reference TEXT NOT NULL)");
             s.execute("CREATE INDEX IF NOT EXISTS ledger_account ON ledger(uuid,id)");
             s.execute("CREATE TABLE IF NOT EXISTS offline_income (ledger_id INTEGER PRIMARY KEY REFERENCES ledger(id))");
+            s.execute("CREATE TABLE IF NOT EXISTS bunny_time (uuid TEXT PRIMARY KEY REFERENCES accounts(uuid), seconds INTEGER NOT NULL CHECK(seconds BETWEEN 0 AND 360000))");
+            s.execute("CREATE TABLE IF NOT EXISTS bunny_grants (id INTEGER PRIMARY KEY, uuid TEXT NOT NULL, seconds INTEGER NOT NULL, actor TEXT NOT NULL, time INTEGER NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS income_sharing (lease TEXT PRIMARY KEY, enabled INTEGER NOT NULL CHECK(enabled IN (0,1)))");
             s.execute("CREATE TABLE IF NOT EXISTS plots (id TEXT PRIMARY KEY, weekly INTEGER NOT NULL CHECK(weekly>0), owner TEXT REFERENCES accounts(uuid), paid_until INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL DEFAULT 'AVAILABLE' CHECK(state IN ('AVAILABLE','ACTIVE','GRACE','RECLAIM')))");
             s.execute("CREATE TABLE IF NOT EXISTS members (uuid TEXT PRIMARY KEY REFERENCES accounts(uuid), plot TEXT NOT NULL REFERENCES plots(id), role TEXT NOT NULL)");
@@ -203,6 +205,28 @@ public final class NookStore implements AutoCloseable {
     private static void bind(PreparedStatement p, Object... args) throws SQLException {
         for (int i=0;i<args.length;i++) p.setObject(i+1,args[i] instanceof UUID ? args[i].toString() : args[i]);
     }
+    synchronized long bunnySeconds(UUID id)throws SQLException {
+        try(var p=db.prepareStatement("SELECT seconds FROM bunny_time WHERE uuid=?")){
+            bind(p,id);try(var r=p.executeQuery()){return r.next()?r.getLong(1):0;}
+        }
+    }
+    private void creditBunnyTime(UUID id,int minutes)throws SQLException {
+        if(minutes<1 || minutes>60)throw new IllegalArgumentException("Choose 1 to 60 minutes.");
+        long seconds=Math.addExact(bunnySeconds(id),minutes*60L);
+        if(seconds>360000)throw new IllegalArgumentException("You can hold at most 100 hours of bunny time.");
+        update("INSERT INTO bunny_time(uuid,seconds) VALUES(?,?) ON CONFLICT(uuid) DO UPDATE SET seconds=excluded.seconds",id,seconds);
+    }
+    void buyBunnyTime(UUID id,int minutes,long price,long now)throws SQLException {
+        if(price<1 || price>Money.MAX)throw new IllegalArgumentException("Bunny time purchases are not open yet.");
+        tx(()->{creditBunnyTime(id,minutes);mutate(id,-Math.multiplyExact(price,minutes),"bunny-time",minutes+" minutes",now);return null;});
+    }
+    void grantBunnyTime(UUID id,int minutes,String actor,long now)throws SQLException {
+        tx(()->{creditBunnyTime(id,minutes);update("INSERT INTO bunny_grants(uuid,seconds,actor,time) VALUES(?,?,?,?)",id,minutes*60L,actor,now);return null;});
+    }
+    boolean consumeBunnySecond(UUID id)throws SQLException {
+        return tx(()->update("UPDATE bunny_time SET seconds=seconds-1 WHERE uuid=? AND seconds>0",id)==1);
+    }
+
     synchronized void online(UUID id,boolean value){if(value)onlineAccounts.add(id);else onlineAccounts.remove(id);}
     synchronized IncomeReport offlineIncome(UUID id)throws SQLException {
         long through=0,payments=0,sales=0;

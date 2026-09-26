@@ -41,7 +41,8 @@ final class NookUi {
             case "rent-reopen"->"Plot reopened · "+entry.reference();
             case "rent-refund"->"Unused rent refunded · "+entry.reference().split(" lease=",2)[0];
             case "native-shop-buy"->"Shop purchase";
-            case "native-shop-sale"->"Shop sale";
+            case "native-shop-sale"->"Shop sale income";
+            case "bunny-time"->"Bunny time · "+entry.reference();
             case "staff"->"Staff adjustment";
             case "integration"->entry.delta()<0?"Payment sent through a plugin":"Payment received through a plugin";
             default->"Balance adjustment";
