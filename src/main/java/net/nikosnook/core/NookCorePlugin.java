@@ -21,6 +21,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     private ChestShopRentalGate plotGate;
     private NookChat chat;
     private BunnyBoots bunnyBoots;
+    private GroundedTravel groundedTravel;
     private AdminTeleports adminTeleports;
     @Override public void onEnable(){
         saveDefaultConfig();
@@ -49,6 +50,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
                 rewards.put(key,amount);
             }
             bunnyBoots=new BunnyBoots(this,store,()->healthy,this::fail);
+            groundedTravel=new GroundedTravel(this);
             awardsEnabled=getConfig().getBoolean("advancement-rewards-enabled",true);
             if(getServer().getPluginManager().getPlugin("Vault")!=null && getConfig().getBoolean("vault-enabled",true)){
                 getServer().getServicesManager().register(net.milkbowl.vault.economy.Economy.class,new VaultBridge(store,()->healthy && isEnabled(),this::fail),this,org.bukkit.plugin.ServicePriority.Highest);
@@ -343,5 +345,5 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         return NookUi.complete(args[args.length-1],values);
     }
     @Override public void onDisable(){
-        if(bunnyBoots!=null)bunnyBoots.close();healthy=false;if(chat!=null)chat.close();getServer().getServicesManager().unregisterAll(this);if(store!=null)try{store.close();}catch(SQLException e){getLogger().log(Level.SEVERE,"Database close failed",e);}}
+        if(groundedTravel!=null)groundedTravel.close();if(bunnyBoots!=null)bunnyBoots.close();healthy=false;if(chat!=null)chat.close();getServer().getServicesManager().unregisterAll(this);if(store!=null)try{store.close();}catch(SQLException e){getLogger().log(Level.SEVERE,"Database close failed",e);}}
 }

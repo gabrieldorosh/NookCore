@@ -26,6 +26,23 @@ travel:
   lock-nether: true
   lock-end: true
   block-command-teleports: true
+  # Local Travel Update candidate. Enable only after route tests and tuning.
+  grounded:
+    enabled: false
+    roads:
+      enabled: true
+      multiplier: 3.0
+      grace-ticks: 30
+      ramp-ticks: 20
+      mounts: [HORSE, DONKEY, MULE, CAMEL, SKELETON_HORSE, ZOMBIE_HORSE]
+      materials: [DIRT_PATH, COARSE_DIRT, PODZOL, MUD, COBBLESTONE, STONE_BRICKS, COBBLESTONE_SLAB, STONE_BRICK_SLAB, COBBLESTONE_STAIRS, STONE_BRICK_STAIRS]
+    minecarts:
+      enabled: true
+      max-blocks-per-second: 32.0
+      acceleration-per-tick: 0.04
+    elytra:
+      enabled: true
+      takeoff-ticks: 60
 advancement-rewards:
   "minecraft:adventure/adventuring_time": 4500
   "minecraft:adventure/arbalistic": 1800
