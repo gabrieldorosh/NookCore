@@ -26,7 +26,7 @@ text=(repo/'src/main/resources/config.yml').read_text(encoding='utf-8').replace(
 bin=root/'tools/jdk/jdk-25.0.4.1+1/bin'
 classes=repo/'target/travel-probe';classes.mkdir(parents=True,exist_ok=True)
 classpath=os.pathsep.join(str(p) for p in (root/'tools/m2').rglob('*.jar'))
-subprocess.run([str(bin/'javac.exe'),'-cp',classpath,'-d',str(classes),str(Path(__file__).with_name('TravelProbe.java'))],check=True)
+subprocess.run([str(bin/'javac.exe'),'-cp',classpath,'-d',str(classes),str(Path(__file__).with_name('TravelProbe.java')),str(Path(__file__).with_name('TravelCourse.java'))],check=True)
 (classes/'plugin.yml').write_text('name: TravelProbe\nversion: 1\nmain: TravelProbe\napi-version: 26.2\ndepend: [NookCore]\n')
 subprocess.run([str(bin/'jar.exe'),'cf',str(plugins/'TravelProbe.jar'),'-C',str(classes),'.'],check=True)
 log=server/'travel-probe.log';lines=[]
@@ -41,7 +41,7 @@ except subprocess.TimeoutExpired:
  try:proc.wait(timeout=30)
  except subprocess.TimeoutExpired:proc.terminate();proc.wait(timeout=15)
 thread.join(timeout=5)
-result={'passed':any('TRAVEL_PROBE_PASS' in l for l in lines) and not any('TRAVEL_PROBE_FAILED' in l for l in lines),'exit_code':proc.returncode,'log':str(log),'checks':[l.strip() for l in lines if 'PASS ' in l or 'TRAVEL_PROBE_' in l]}
+result={'passed':any('TRAVEL_PROBE_PASS' in l for l in lines) and not any('TRAVEL_PROBE_FAILED' in l for l in lines),'exit_code':proc.returncode,'course_prepared':any('TRAVEL_COURSE_READY' in l for l in lines),'log':str(log),'checks':[l.strip() for l in lines if 'PASS ' in l or 'TRAVEL_PROBE_' in l]}
 (server/'RESULT.json').write_text(json.dumps(result,indent=2),encoding='utf-8')
 if result['passed']:
  (plugins/'TravelProbe.jar').replace(server/'TravelProbe.jar.disabled')

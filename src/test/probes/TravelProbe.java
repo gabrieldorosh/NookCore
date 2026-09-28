@@ -27,6 +27,11 @@ public final class TravelProbe extends JavaPlugin {
             getServer().getScheduler().runTaskLater(this,()->{try{runChecks();}catch(Throwable e){failed(e);}finally{Bukkit.shutdown();}},30);
         }catch(Throwable e){failed(e);Bukkit.shutdown();}
     },40);}
+    private Player mockPlayer(UUID id,World inWorld,GameMode mode){
+        return (Player)Proxy.newProxyInstance(getClassLoader(),new Class[]{Player.class},(o,m,a)->switch(m.getName()){
+            case "getUniqueId"->id;case "getWorld"->inWorld;case "getGameMode"->mode;case "isDead"->false;default->null;
+        });
+    }
     private void failed(Throwable e){getLogger().log(java.util.logging.Level.SEVERE,"TRAVEL_PROBE_FAILED",e);}
     @SuppressWarnings("unchecked") private void runChecks()throws Exception {
         check((boolean)call("roadUnder",new Class[]{Location.class},new Location(world,8.5,65,8.5)),"cobblestone surface");
@@ -64,6 +69,13 @@ public final class TravelProbe extends JavaPlugin {
         RideableMinecart cart=world.spawn(new Location(world,15.5,65.1,8.5),RideableMinecart.class);cart.setMaxSpeed(.6);cart.setVelocity(new org.bukkit.util.Vector(.3,0,0));
         call("updateCart",new Class[]{RideableMinecart.class},cart);
         check(Math.abs(cart.getMaxSpeed()-1.6)<1e-6,"straight track raises cart cap");check(cart.getVelocity().getX()>.3,"powered rail accelerates cart");
+        world.getBlockAt(18,64,8).setType(Material.STONE);
+        var brake=world.getBlockAt(18,65,8);var brakeData=brake.getBlockData();((Powerable)brakeData).setPowered(false);brake.setBlockData(brakeData,false);
+        cart.setVelocity(new org.bukkit.util.Vector(1.6,0,0));call("updateCart",new Class[]{RideableMinecart.class},cart);
+        check(Math.abs(cart.getMaxSpeed()-.6)<1e-6 && cart.getVelocity().getX()<=.600001,"unpowered braking rail ahead slows before entry");
+        cart.teleport(new Location(world,18.5,65.1,8.5));cart.setVelocity(new org.bukkit.util.Vector(1.6,0,0));call("updateCart",new Class[]{RideableMinecart.class},cart);
+        check(Math.abs(cart.getMaxSpeed()-.6)<1e-6 && cart.getVelocity().getX()<=.600001,"braking rail itself retains original cap");
+        cart.teleport(new Location(world,15.5,65.1,8.5));
         world.getBlockAt(18,65,8).setType(Material.AIR);cart.setVelocity(new org.bukkit.util.Vector(1.6,0,0));call("updateCart",new Class[]{RideableMinecart.class},cart);
         check(Math.abs(cart.getMaxSpeed()-.6)<1e-6 && cart.getVelocity().getX()<=.600001,"track gap ahead restores original cap and slows");
         call("restore",new Class[]{Entity.class},cart);
@@ -79,6 +91,27 @@ public final class TravelProbe extends JavaPlugin {
         ((Map<UUID,Long>)field("lastGround")).put(id,100L);tick(160);
         var allowed=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);call("rocket",new Class[]{PlayerElytraBoostEvent.class},allowed);check(!allowed.isCancelled(),"three-second boundary allows takeoff rocket");
         tick(161);var expired=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);call("rocket",new Class[]{PlayerElytraBoostEvent.class},expired);check(expired.isCancelled(),"boost does not extend window");
-        call("close",new Class[]{});horse.remove();cart.remove();firework.remove();getLogger().info("TRAVEL_PROBE_PASS checks="+checks);
+        for(World.Environment environment:new World.Environment[]{World.Environment.NETHER,World.Environment.THE_END}){
+            World exemptWorld=(World)Proxy.newProxyInstance(getClassLoader(),new Class[]{World.class},(o,m,a)->m.getName().equals("getEnvironment")?environment:null);
+            Player exempt=mockPlayer(UUID.randomUUID(),exemptWorld,GameMode.SURVIVAL);
+            var event=new PlayerElytraBoostEvent(exempt,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.OFF_HAND);
+            call("rocket",new Class[]{PlayerElytraBoostEvent.class},event);
+            check(!event.isCancelled() && event.shouldConsume(),"rocket exemption remains "+environment);
+        }
+        var creative=new PlayerElytraBoostEvent(mockPlayer(UUID.randomUUID(),world,GameMode.CREATIVE),new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);
+        call("rocket",new Class[]{PlayerElytraBoostEvent.class},creative);check(!creative.isCancelled(),"creative rockets remain unrestricted");
+        var offhand=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.OFF_HAND);
+        call("rocket",new Class[]{PlayerElytraBoostEvent.class},offhand);check(offhand.isCancelled() && !offhand.shouldConsume(),"expired offhand rocket is not consumed");
+        call("close",new Class[]{});
+        cart.setMaxSpeed(1.6);cart.getPersistentDataContainer().set(new NamespacedKey("nookcore","travel-original-cart-speed"),PersistentDataType.DOUBLE,.6);
+        var core=(JavaPlugin)getServer().getPluginManager().getPlugin("NookCore");
+        core.getConfig().set("travel.grounded.enabled",false);
+        Constructor<?> constructor=type.getDeclaredConstructor(JavaPlugin.class);constructor.setAccessible(true);
+        travel=constructor.newInstance(core);
+        check(Math.abs(cart.getMaxSpeed()-.6)<1e-6 && !cart.getPersistentDataContainer().has(new NamespacedKey("nookcore","travel-original-cart-speed"),PersistentDataType.DOUBLE),"disabled feature startup recovers saved cart limit");
+        var disabledRocket=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);
+        call("rocket",new Class[]{PlayerElytraBoostEvent.class},disabledRocket);check(!disabledRocket.isCancelled(),"disabled feature does not restrict rockets");
+        call("close",new Class[]{});core.getConfig().set("travel.grounded.enabled",true);
+        horse.remove();cart.remove();firework.remove();TravelCourse.build(world);getLogger().info("TRAVEL_COURSE_READY spawn=8,181,3 markers=50,150");getLogger().info("TRAVEL_PROBE_PASS checks="+checks);
     }
 }

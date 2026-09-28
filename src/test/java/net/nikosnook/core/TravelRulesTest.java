@@ -3,6 +3,9 @@ package net.nikosnook.core;
 import java.lang.reflect.Proxy;
 import java.util.concurrent.atomic.AtomicReference;
 import org.bukkit.GameMode;
+import org.bukkit.entity.Entity;
+import java.util.List;
+import java.util.UUID;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.minecart.RideableMinecart;
 import org.bukkit.util.Vector;
@@ -41,5 +44,29 @@ class TravelRulesTest {
             case "getVelocity"->velocity.get().clone();case "setVelocity"->{velocity.set((Vector)a[0]);yield null;}case "setMaxSpeed"->{maximum.set((Double)a[0]);yield null;}default->null;
         });
         GroundedTravel.limitCart(cart,.4);assertEquals(.4,maximum.get());assertEquals(.24,velocity.get().getX(),1e-9);assertEquals(.32,velocity.get().getZ(),1e-9);assertEquals(.2,velocity.get().getY(),1e-9);
+    }
+    private static Player passenger(UUID id,GameMode mode,boolean dead){
+        return (Player)Proxy.newProxyInstance(TravelRulesTest.class.getClassLoader(),new Class[]{Player.class},(o,m,a)->switch(m.getName()){
+            case "getUniqueId"->id;case "getGameMode"->mode;case "isDead"->dead;default->null;
+        });
+    }
+    private static Entity vehicle(Player... passengers){
+        return (Entity)Proxy.newProxyInstance(TravelRulesTest.class.getClassLoader(),new Class[]{Entity.class},(o,m,a)->m.getName().equals("getPassengers")?List.of(passengers):null);
+    }
+    @Test void leavingCamelPassengerDoesNotResetRemainingSurvivalRider(){
+        UUID leaving=UUID.randomUUID();
+        assertTrue(GroundedTravel.hasOtherRider(vehicle(passenger(leaving,GameMode.SURVIVAL,false),passenger(UUID.randomUUID(),GameMode.SURVIVAL,false)),leaving));
+    }
+    @Test void lastCamelRiderLeavingRestoresVehicle(){
+        UUID leaving=UUID.randomUUID();
+        assertFalse(GroundedTravel.hasOtherRider(vehicle(passenger(leaving,GameMode.SURVIVAL,false)),leaving));
+        assertFalse(GroundedTravel.hasOtherRider(vehicle(),leaving));
+    }
+    @Test void ineligibleRemainingPassengerDoesNotKeepBoost(){
+        UUID leaving=UUID.randomUUID();
+        for(GameMode mode:List.of(GameMode.CREATIVE,GameMode.SPECTATOR))
+            assertFalse(GroundedTravel.hasOtherRider(vehicle(passenger(UUID.randomUUID(),mode,false)),leaving));
+        assertFalse(GroundedTravel.hasOtherRider(vehicle(passenger(UUID.randomUUID(),GameMode.SURVIVAL,true)),leaving));
+        assertTrue(GroundedTravel.hasOtherRider(vehicle(passenger(UUID.randomUUID(),GameMode.ADVENTURE,false)),leaving));
     }
 }

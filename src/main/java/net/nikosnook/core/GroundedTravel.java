@@ -106,13 +106,16 @@ final class GroundedTravel implements Listener {
         var velocity=cart.getVelocity();
         boolean straight=rail.getShape()==Rail.Shape.NORTH_SOUTH || rail.getShape()==Rail.Shape.EAST_WEST;
         boolean powered=block.getType()==Material.POWERED_RAIL && block.getBlockData() instanceof Powerable p && p.isPowered();
-        if(!straight || !clearTrackAhead(block,rail.getShape(),velocity)){limitCart(cart,original);return;}
+        if(!straight || brakingRail(block) || !clearTrackAhead(block,rail.getShape(),velocity)){limitCart(cart,original);return;}
         cart.setMaxSpeed(Math.max(original,cartSpeed));
         if(powered){
             double horizontal=Math.hypot(velocity.getX(),velocity.getZ());
             // Vanilla provides the initial direction and unpowered rails still brake normally.
             if(horizontal>0.02 && horizontal<cartSpeed){double scale=Math.min(cartSpeed,horizontal+cartAcceleration)/horizontal;cart.setVelocity(velocity.clone().setX(velocity.getX()*scale).setZ(velocity.getZ()*scale));}
         }
+    }
+    private static boolean brakingRail(Block block){
+        return block.getType()==Material.POWERED_RAIL && block.getBlockData() instanceof Powerable p && !p.isPowered();
     }
     private boolean clearTrackAhead(Block block,Rail.Shape shape,org.bukkit.util.Vector velocity){
         boolean eastWest=shape==Rail.Shape.EAST_WEST;
@@ -122,8 +125,9 @@ final class GroundedTravel implements Listener {
         for(int step=1;step<=4;step++){
             int x=block.getX()+(eastWest?direction*step:0),z=block.getZ()+(eastWest?0:direction*step);
             if(!block.getWorld().isChunkLoaded(x>>4,z>>4))return false;
-            var next=block.getWorld().getBlockAt(x,block.getY(),z).getBlockData();
-            if(!(next instanceof Rail r) || r.getShape()!=shape)return false;
+            Block ahead=block.getWorld().getBlockAt(x,block.getY(),z);
+            var next=ahead.getBlockData();
+            if(!(next instanceof Rail r) || r.getShape()!=shape || brakingRail(ahead))return false;
         }
         return true;
     }
@@ -148,16 +152,21 @@ final class GroundedTravel implements Listener {
     }
     private void forget(Player player){
         lastGround.remove(player.getUniqueId());lastNotice.remove(player.getUniqueId());
-        Entity vehicle=player.getVehicle();if(vehicle!=null){restore(vehicle);activeMounts.remove(vehicle.getUniqueId());activeCarts.remove(vehicle.getUniqueId());}
+        releaseVehicle(player.getVehicle(),player.getUniqueId());
+    }
+    static boolean hasOtherRider(Entity vehicle,UUID leaving){
+        return vehicle.getPassengers().stream().anyMatch(e->!e.getUniqueId().equals(leaving) && e instanceof Player p && rider(p));
+    }
+    private void releaseVehicle(Entity vehicle,UUID leaving){
+        if(vehicle==null || hasOtherRider(vehicle,leaving))return;
+        restore(vehicle);activeMounts.remove(vehicle.getUniqueId());activeCarts.remove(vehicle.getUniqueId());
     }
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void dismount(EntityDismountEvent event){
-        Entity vehicle=event.getDismounted();
-        if(vehicle.getPassengers().stream().anyMatch(e->!e.getUniqueId().equals(event.getEntity().getUniqueId()) && e instanceof Player p && rider(p)))return;
-        restore(vehicle);activeMounts.remove(vehicle.getUniqueId());activeCarts.remove(vehicle.getUniqueId());
+        releaseVehicle(event.getDismounted(),event.getEntity().getUniqueId());
     }
     @EventHandler public void quit(PlayerQuitEvent event){forget(event.getPlayer());}
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void teleport(PlayerTeleportEvent event){forget(event.getPlayer());}
-    @EventHandler public void mode(PlayerGameModeChangeEvent event){forget(event.getPlayer());}
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void mode(PlayerGameModeChangeEvent event){forget(event.getPlayer());}
     @EventHandler public void load(EntitiesLoadEvent event){for(Entity entity:event.getEntities())restore(entity);}
     @EventHandler public void unload(EntitiesUnloadEvent event){for(Entity entity:event.getEntities()){restore(entity);activeMounts.remove(entity.getUniqueId());activeCarts.remove(entity.getUniqueId());}}
     void close(){for(var state:activeMounts.values())restore(state.horse);for(var cart:activeCarts.values())restore(cart);activeMounts.clear();activeCarts.clear();lastGround.clear();lastNotice.clear();}
