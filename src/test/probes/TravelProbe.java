@@ -39,6 +39,16 @@ public final class TravelProbe extends JavaPlugin {
         world.getBlockAt(12,64,8).setType(Material.COBBLESTONE_STAIRS);
         var stairs=(org.bukkit.block.data.type.Stairs)world.getBlockAt(12,64,8).getBlockData();stairs.setFacing(org.bukkit.block.BlockFace.NORTH);world.getBlockAt(12,64,8).setBlockData(stairs,false);
         check((boolean)call("roadUnder",new Class[]{Location.class},new Location(world,12.5,64.5,8.8)),"lower stair tread supports road boost");
+        for(Material material:new Material[]{Material.BRICKS,Material.GRAVEL,Material.MOSSY_COBBLESTONE,Material.CRACKED_STONE_BRICKS,Material.COARSE_DIRT,Material.PODZOL}){
+            world.getBlockAt(13,64,8).setType(material);
+            check((boolean)call("roadUnder",new Class[]{Location.class},new Location(world,13.5,65,8.5)),"mixed road surface "+material);
+        }
+        world.getBlockAt(13,64,8).setType(Material.BRICK_SLAB);
+        check((boolean)call("roadUnder",new Class[]{Location.class},new Location(world,13.5,64.5,8.5)),"brick slab supports road boost");
+        var speed=horse.getAttribute(Attribute.MOVEMENT_SPEED);
+        double unmodifiedBase=speed.getBaseValue();
+        var existingKey=new NamespacedKey(this,"existing-speed");
+        speed.addTransientModifier(new AttributeModifier(existingKey,.25,AttributeModifier.Operation.ADD_SCALAR));
         check(horse.isOnGround(),"horse settled on course");
         double base=horse.getAttribute(Attribute.MOVEMENT_SPEED).getValue();
         for(int i=1;i<=20;i++){tick(i);call("updateMount",new Class[]{AbstractHorse.class},horse);}
@@ -47,6 +57,9 @@ public final class TravelProbe extends JavaPlugin {
         check(Math.abs(horse.getAttribute(Attribute.MOVEMENT_SPEED).getValue()-base*3)<1e-6,"road gap retains boost");
         for(int i=51;i<=80;i++){tick(i);call("updateMount",new Class[]{AbstractHorse.class},horse);}
         check(Math.abs(horse.getAttribute(Attribute.MOVEMENT_SPEED).getValue()-base)<1e-6,"off-road returns to original attribute");
+        check(Math.abs(speed.getBaseValue()-unmodifiedBase)<1e-6 && speed.getModifier(existingKey)!=null,"road boost preserves base and existing percentage modifier");
+        speed.removeModifier(existingKey);
+        check(Math.abs(speed.getValue()-unmodifiedBase)<1e-6,"removing independent modifier leaves original speed");
         for(int x=14;x<=26;x++){world.getBlockAt(x,64,8).setType(Material.REDSTONE_BLOCK);var b=world.getBlockAt(x,65,8);b.setType(Material.POWERED_RAIL);var data=b.getBlockData();((Rail)data).setShape(Rail.Shape.EAST_WEST);((Powerable)data).setPowered(true);b.setBlockData(data,false);}
         RideableMinecart cart=world.spawn(new Location(world,15.5,65.1,8.5),RideableMinecart.class);cart.setMaxSpeed(.6);cart.setVelocity(new org.bukkit.util.Vector(.3,0,0));
         call("updateCart",new Class[]{RideableMinecart.class},cart);

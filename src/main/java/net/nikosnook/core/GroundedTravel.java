@@ -80,7 +80,7 @@ final class GroundedTravel implements Listener {
         double amount=(multiplier-1)*state.boost;
         if(existing!=null && Math.abs(existing.getAmount()-amount)<0.000001)return;
         if(existing!=null)attribute.removeModifier(existing);
-        if(amount>0)attribute.addTransientModifier(new AttributeModifier(speedKey,amount,AttributeModifier.Operation.ADD_SCALAR));
+        if(amount>0)attribute.addTransientModifier(new AttributeModifier(speedKey,amount,AttributeModifier.Operation.MULTIPLY_SCALAR_1));
     }
     boolean roadUnder(Location feet){
         World world=feet.getWorld();
