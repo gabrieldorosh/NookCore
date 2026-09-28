@@ -938,6 +938,10 @@ public final class NookStore implements AutoCloseable {
             update("DELETE FROM members WHERE plot=?",id);update("UPDATE plots SET owner=NULL,paid_until=0,state='AVAILABLE' WHERE id=?",id);return null;});
     }
     public synchronized boolean canTrade(String id,long now)throws SQLException {Plot p=plot(id);return p.state().equals("ACTIVE")&&now<p.paidUntil();}
+    EconomyReports.Snapshot economyReport(long since,long until)throws SQLException {
+        return tx(()->EconomyReports.read(db,since,until));
+    }
+
     public synchronized void backup(Path destination)throws SQLException {
         // SQLite creates a standalone consistent snapshot, including committed WAL data.
         if(java.nio.file.Files.exists(destination))throw new IllegalArgumentException("Backup file already exists.");
