@@ -47,7 +47,7 @@ final class GroundedTravel implements Listener {
         mounts=new HashSet<>(c.getStringList(root+"roads.mounts"));
         if(mounts.isEmpty())mounts.addAll(List.of("HORSE","DONKEY","MULE","CAMEL","SKELETON_HORSE","ZOMBIE_HORSE"));
         var materials=c.getStringList(root+"roads.materials");
-        if(materials.isEmpty())materials=List.of("DIRT_PATH","COARSE_DIRT","PODZOL","MUD","COBBLESTONE","STONE_BRICKS","COBBLESTONE_SLAB","STONE_BRICK_SLAB","COBBLESTONE_STAIRS","STONE_BRICK_STAIRS");
+        if(materials.isEmpty())materials=List.of("DIRT_PATH","COARSE_DIRT","PODZOL","MUD","GRAVEL","BRICKS","BRICK_SLAB","BRICK_STAIRS","COBBLESTONE","COBBLESTONE_SLAB","COBBLESTONE_STAIRS","MOSSY_COBBLESTONE","MOSSY_COBBLESTONE_SLAB","MOSSY_COBBLESTONE_STAIRS","STONE_BRICKS","STONE_BRICK_SLAB","STONE_BRICK_STAIRS","CRACKED_STONE_BRICKS");
         for(String name:materials){Material material=Material.matchMaterial(name);if(material==null || !material.isBlock())throw new IllegalArgumentException("Unknown road block: "+name);roads.add(material);}
         speedKey=new NamespacedKey(plugin,"road-speed");cartOriginalKey=new NamespacedKey(plugin,"travel-original-cart-speed");
         plugin.getServer().getPluginManager().registerEvents(this,plugin);
