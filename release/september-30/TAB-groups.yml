@@ -1,0 +1,7 @@
+# NookCore supplies the visible rank, name colour and pronouns.
+_DEFAULT_:
+  tabprefix: "%nookcore_rank%"
+  tagprefix: "%luckperms-prefix%"
+  customtabname: "%nookcore_name%"
+  tabsuffix: "%nookcore_pronouns%"
+  tagsuffix: "%luckperms-suffix%"

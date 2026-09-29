@@ -6,6 +6,8 @@ advancement-rewards-enabled: true
 vault-enabled: true
 chat:
   enabled: true
+  # Account UUID -> mr-duck, mrs-bee or mrs-niko. Cosmetic only.
+  display-titles: {}
   pronoun-options: [he/him, she/her, they/them, he/they, she/they, they/he, they/she, it/its, any, ask]
   # Leave blank until the real rank pack is prepared. Must match its delivered pack UUID.
   rank-images:
@@ -43,6 +45,7 @@ travel:
     elytra:
       enabled: true
       takeoff-ticks: 60
+      grounded-rearm-ticks: 60
 advancement-rewards:
   "minecraft:adventure/adventuring_time": 4500
   "minecraft:adventure/arbalistic": 1800

@@ -21,12 +21,13 @@ final class GroundedTravel implements Listener {
     private final NamespacedKey speedKey,cartOriginalKey;
     private final boolean enabled,roadsEnabled,cartsEnabled,elytraEnabled;
     private final double multiplier,cartSpeed,cartAcceleration;
-    private final int grace,ramp,window;
+    private final int grace,ramp,window,rearm;
     private final Set<Material> roads=new HashSet<>();
     private final Set<String> mounts;
     private final Map<UUID,MountState> activeMounts=new HashMap<>();
     private final Map<UUID,RideableMinecart> activeCarts=new HashMap<>();
-    private final Map<UUID,Long> lastGround=new HashMap<>(),lastNotice=new HashMap<>();
+    private final Map<UUID,TravelRules.Takeoff> takeoffs=new HashMap<>();
+    private final Map<UUID,Long> lastNotice=new HashMap<>();
     private long tick;
     private static final class MountState {
         final AbstractHorse horse; long lastRoad=-1; double boost;
@@ -44,6 +45,7 @@ final class GroundedTravel implements Listener {
         grace=(int)TravelRules.bounded(c.getInt(root+"roads.grace-ticks",30),0,60,"Road grace");
         ramp=(int)TravelRules.bounded(c.getInt(root+"roads.ramp-ticks",20),1,100,"Road ramp");
         window=(int)TravelRules.bounded(c.getInt(root+"elytra.takeoff-ticks",60),1,100,"Takeoff window");
+        rearm=(int)TravelRules.bounded(c.getInt(root+"elytra.grounded-rearm-ticks",60),1,200,"Grounded rearm");
         mounts=new HashSet<>(c.getStringList(root+"roads.mounts"));
         if(mounts.isEmpty())mounts.addAll(List.of("HORSE","DONKEY","MULE","CAMEL","SKELETON_HORSE","ZOMBIE_HORSE"));
         var materials=c.getStringList(root+"roads.materials");
@@ -59,15 +61,19 @@ final class GroundedTravel implements Listener {
     private void tick(){
         tick++;Set<UUID> seenMounts=new HashSet<>(),seenCarts=new HashSet<>();
         for(Player player:Bukkit.getOnlinePlayers()){
-            if(player.getWorld().getEnvironment()!=World.Environment.NORMAL || !rider(player)){lastGround.remove(player.getUniqueId());continue;}
-            // Never replenish takeoff time from gliding, swimming or riding a vehicle.
-            if(player.isOnGround() && !player.isGliding() && !player.isSwimming() && !player.isInsideVehicle())lastGround.put(player.getUniqueId(),tick);
+            if(player.getWorld().getEnvironment()!=World.Environment.NORMAL || !rider(player)){takeoffs.remove(player.getUniqueId());continue;}
+            updateTakeoff(player);
             Entity vehicle=player.getVehicle();
             if(roadsEnabled && vehicle instanceof AbstractHorse horse && mounts.contains(horse.getType().name()) && seenMounts.add(horse.getUniqueId()))updateMount(horse);
             if(cartsEnabled && vehicle instanceof RideableMinecart cart && seenCarts.add(cart.getUniqueId()))updateCart(cart);
         }
         for(UUID id:new HashSet<>(activeMounts.keySet()))if(!seenMounts.contains(id))restore(activeMounts.remove(id).horse);
         for(UUID id:new HashSet<>(activeCarts.keySet()))if(!seenCarts.contains(id))restore(activeCarts.remove(id));
+    }
+    private void updateTakeoff(Player player){
+        UUID id=player.getUniqueId();
+        if(player.isSwimming() || player.isInsideVehicle()){takeoffs.remove(id);return;}
+        takeoffs.computeIfAbsent(id,key->new TravelRules.Takeoff()).update(tick,player.isOnGround() && !player.isGliding(),rearm);
     }
     private void updateMount(AbstractHorse horse){
         var state=activeMounts.computeIfAbsent(horse.getUniqueId(),id->new MountState(horse));
@@ -146,12 +152,15 @@ final class GroundedTravel implements Listener {
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true) public void rocket(PlayerElytraBoostEvent event){
         Player player=event.getPlayer();if(!enabled || !elytraEnabled || !rider(player) || player.getWorld().getEnvironment()!=World.Environment.NORMAL)return;
-        if(TravelRules.rocketAllowed(tick,lastGround.get(player.getUniqueId()),window))return;
+        // Observe the launch immediately when a rocket arrives before the next scheduled tick.
+        updateTakeoff(player);
+        var takeoff=takeoffs.get(player.getUniqueId());
+        if(takeoff!=null && takeoff.allowed(tick,window))return;
         event.setCancelled(true);event.setShouldConsume(false);
-        if(tick-lastNotice.getOrDefault(player.getUniqueId(),-100L)>=40){lastNotice.put(player.getUniqueId(),tick);player.sendMessage(NookUi.message("NookTravel","Rockets work during take-off here. Land before boosting again."));}
+        if(tick-lastNotice.getOrDefault(player.getUniqueId(),-100L)>=40){lastNotice.put(player.getUniqueId(),tick);player.sendMessage(NookUi.message("NookTravel","Rockets work during take-off here. Stay on the ground for "+(rearm/20.0)+" seconds before taking off again."));}
     }
     private void forget(Player player){
-        lastGround.remove(player.getUniqueId());lastNotice.remove(player.getUniqueId());
+        takeoffs.remove(player.getUniqueId());lastNotice.remove(player.getUniqueId());
         releaseVehicle(player.getVehicle(),player.getUniqueId());
     }
     static boolean hasOtherRider(Entity vehicle,UUID leaving){
@@ -169,5 +178,5 @@ final class GroundedTravel implements Listener {
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void mode(PlayerGameModeChangeEvent event){forget(event.getPlayer());}
     @EventHandler public void load(EntitiesLoadEvent event){for(Entity entity:event.getEntities())restore(entity);}
     @EventHandler public void unload(EntitiesUnloadEvent event){for(Entity entity:event.getEntities()){restore(entity);activeMounts.remove(entity.getUniqueId());activeCarts.remove(entity.getUniqueId());}}
-    void close(){for(var state:activeMounts.values())restore(state.horse);for(var cart:activeCarts.values())restore(cart);activeMounts.clear();activeCarts.clear();lastGround.clear();lastNotice.clear();}
+    void close(){for(var state:activeMounts.values())restore(state.horse);for(var cart:activeCarts.values())restore(cart);activeMounts.clear();activeCarts.clear();takeoffs.clear();lastNotice.clear();}
 }

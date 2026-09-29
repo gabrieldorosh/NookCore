@@ -32,9 +32,10 @@ final class ChatStyle {
         }
         return result.append(Component.text(text.substring(start),style));
     }
-    static String rankLabel(String rank){return rank.equals("owner")?"mr. niko":rank;}
+    static String rankLabel(String rank){return switch(rank){case "owner"->"mr. niko";case "mr-duck"->"mr. duck";case "mrs-bee"->"mrs. bee";case "mrs-niko"->"mrs. niko";default->rank;};}
+    static TextColor rankColour(String rank){return switch(rank){case "mr-duck"->TextColor.fromHexString("#E8A0A0");case "mrs-bee"->TextColor.fromHexString("#F1DEA0");case "mrs-niko"->TextColor.fromHexString("#EAB8D2");case "nookling"->NookUi.GOOD;default->NookUi.ACCENT;};}
     static Component render(String rank,String name,ChatPreferences.Preference preference,Component body){
-        return render(Component.text("["+rankLabel(rank)+"]",rank.equals("nookling")?NookUi.GOOD:NookUi.ACCENT),name,preference,body);
+        return render(Component.text("["+rankLabel(rank)+"]",rankColour(rank)),name,preference,body);
     }
     static Component render(Component rank,String name,ChatPreferences.Preference preference,Component body){
         Component prefix=Component.empty().append(rank).append(Component.text(" "))

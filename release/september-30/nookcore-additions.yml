@@ -1,0 +1,24 @@
+# Merge these keys into the existing production config; do not replace that file.
+chat:
+  display-titles:
+    "0c69274e-9156-4062-925b-b123c514d0d2": mr-duck
+    "983f1c6c-7f17-4729-ab16-8c0d3407592a": mrs-bee
+    "b13b7143-03c4-42f1-a3ba-82722646dfb3": mrs-niko
+travel:
+  grounded:
+    enabled: true
+    roads:
+      enabled: true
+      multiplier: 3.0
+      grace-ticks: 30
+      ramp-ticks: 20
+      mounts: [HORSE, DONKEY, MULE, CAMEL, SKELETON_HORSE, ZOMBIE_HORSE]
+      materials: [DIRT_PATH, COARSE_DIRT, PODZOL, MUD, GRAVEL, BRICKS, BRICK_SLAB, BRICK_STAIRS, COBBLESTONE, COBBLESTONE_SLAB, COBBLESTONE_STAIRS, MOSSY_COBBLESTONE, MOSSY_COBBLESTONE_SLAB, MOSSY_COBBLESTONE_STAIRS, STONE_BRICKS, STONE_BRICK_SLAB, STONE_BRICK_STAIRS, CRACKED_STONE_BRICKS]
+    minecarts:
+      enabled: true
+      max-blocks-per-second: 32.0
+      acceleration-per-tick: 0.04
+    elytra:
+      enabled: true
+      takeoff-ticks: 60
+      grounded-rearm-ticks: 60

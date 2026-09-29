@@ -59,7 +59,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             getServer().getPluginManager().registerEvents(this,this);
             if(getConfig().getBoolean("chat.enabled",true)){
                 if(getServer().getPluginManager().getPlugin("ChatControl")!=null)getLogger().warning("NookCore chat disabled while ChatControl is installed; choose one chat formatter before testing.");
-                else {chat=new NookChat(this);getLogger().info("NookCore chat enabled with text ranks, name colours and pronouns.");}
+                else {chat=new NookChat(this,id->store.account(id).map(NookStore.Account::cents).orElse(0L));getLogger().info("NookCore chat enabled with text ranks, name colours and pronouns.");}
             }
             Objects.requireNonNull(getCommand("nooks")).setExecutor(this);
             Objects.requireNonNull(getCommand("nookadmin")).setExecutor(this);

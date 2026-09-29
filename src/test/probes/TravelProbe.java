@@ -13,6 +13,7 @@ import com.destroystokyo.paper.event.player.PlayerElytraBoostEvent;
 
 /** Disposable Paper-world adapter checks, not a substitute for rider/client tests. */
 public final class TravelProbe extends JavaPlugin {
+    private boolean grounded;
     private Object travel; private Class<?> type; private Horse horse; private World world; private int checks;
     private Object call(String name,Class<?>[] types,Object... args)throws Exception {Method m=type.getDeclaredMethod(name,types);m.setAccessible(true);return m.invoke(travel,args);}
     private Object field(String name)throws Exception {Field f=type.getDeclaredField(name);f.setAccessible(true);return f.get(travel);}
@@ -29,7 +30,7 @@ public final class TravelProbe extends JavaPlugin {
     },40);}
     private Player mockPlayer(UUID id,World inWorld,GameMode mode){
         return (Player)Proxy.newProxyInstance(getClassLoader(),new Class[]{Player.class},(o,m,a)->switch(m.getName()){
-            case "getUniqueId"->id;case "getWorld"->inWorld;case "getGameMode"->mode;case "isDead"->false;default->null;
+            case "getUniqueId"->id;case "getWorld"->inWorld;case "getGameMode"->mode;case "isDead"->false;case "isOnGround"->grounded;case "isGliding","isSwimming","isInsideVehicle"->false;default->null;
         });
     }
     private void failed(Throwable e){getLogger().log(java.util.logging.Level.SEVERE,"TRAVEL_PROBE_FAILED",e);}
@@ -83,12 +84,14 @@ public final class TravelProbe extends JavaPlugin {
         cart.setMaxSpeed(1.6);cart.getPersistentDataContainer().set(new NamespacedKey("nookcore","travel-original-cart-speed"),PersistentDataType.DOUBLE,.6);call("restore",new Class[]{Entity.class},cart);
         check(Math.abs(cart.getMaxSpeed()-.6)<1e-6,"interrupted-run saved cart speed recovered");
         UUID id=UUID.randomUUID();Player player=(Player)Proxy.newProxyInstance(getClassLoader(),new Class[]{Player.class},(o,m,a)->switch(m.getName()){
-            case "getUniqueId"->id;case "getWorld"->world;case "getGameMode"->GameMode.SURVIVAL;case "isDead"->false;default->null;
+            case "getUniqueId"->id;case "getWorld"->world;case "getGameMode"->GameMode.SURVIVAL;case "isDead"->false;case "isOnGround"->grounded;case "isGliding","isSwimming","isInsideVehicle"->false;default->null;
         });
         Firework firework=world.spawn(new Location(world,24,68,8),Firework.class);tick(100);
         var denied=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);call("rocket",new Class[]{PlayerElytraBoostEvent.class},denied);
         check(denied.isCancelled() && !denied.shouldConsume(),"airborne entry denies rocket without consumption");
-        ((Map<UUID,Long>)field("lastGround")).put(id,100L);tick(160);
+        grounded=true;tick(39);call("updateTakeoff",new Class[]{Player.class},player);
+        tick(99);call("updateTakeoff",new Class[]{Player.class},player);
+        grounded=false;tick(100);call("updateTakeoff",new Class[]{Player.class},player);tick(160);
         var allowed=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);call("rocket",new Class[]{PlayerElytraBoostEvent.class},allowed);check(!allowed.isCancelled(),"three-second boundary allows takeoff rocket");
         tick(161);var expired=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);call("rocket",new Class[]{PlayerElytraBoostEvent.class},expired);check(expired.isCancelled(),"boost does not extend window");
         for(World.Environment environment:new World.Environment[]{World.Environment.NETHER,World.Environment.THE_END}){
@@ -102,6 +105,17 @@ public final class TravelProbe extends JavaPlugin {
         call("rocket",new Class[]{PlayerElytraBoostEvent.class},creative);check(!creative.isCancelled(),"creative rockets remain unrestricted");
         var offhand=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.OFF_HAND);
         call("rocket",new Class[]{PlayerElytraBoostEvent.class},offhand);check(offhand.isCancelled() && !offhand.shouldConsume(),"expired offhand rocket is not consumed");
+        grounded=true;tick(170);call("updateTakeoff",new Class[]{Player.class},player);
+        grounded=false;tick(180);call("updateTakeoff",new Class[]{Player.class},player);
+        var bounce=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);
+        call("rocket",new Class[]{PlayerElytraBoostEvent.class},bounce);check(bounce.isCancelled() && !bounce.shouldConsume(),"short landing cannot re-arm rocket window");
+        grounded=true;tick(181);call("updateTakeoff",new Class[]{Player.class},player);tick(241);call("updateTakeoff",new Class[]{Player.class},player);
+        grounded=false;tick(242); // Rocket precedes the next contact-sampling tick.
+        var rearmed=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.OFF_HAND);
+        call("rocket",new Class[]{PlayerElytraBoostEvent.class},rearmed);check(!rearmed.isCancelled(),"three seconds continuously grounded re-arms offhand rocket");
+        call("forget",new Class[]{Player.class},player);
+        var forgotten=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);
+        call("rocket",new Class[]{PlayerElytraBoostEvent.class},forgotten);check(forgotten.isCancelled(),"relog teleport and mode cleanup removes armed flight");
         call("close",new Class[]{});
         cart.setMaxSpeed(1.6);cart.getPersistentDataContainer().set(new NamespacedKey("nookcore","travel-original-cart-speed"),PersistentDataType.DOUBLE,.6);
         var core=(JavaPlugin)getServer().getPluginManager().getPlugin("NookCore");
@@ -112,6 +126,8 @@ public final class TravelProbe extends JavaPlugin {
         var disabledRocket=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);
         call("rocket",new Class[]{PlayerElytraBoostEvent.class},disabledRocket);check(!disabledRocket.isCancelled(),"disabled feature does not restrict rockets");
         call("close",new Class[]{});core.getConfig().set("travel.grounded.enabled",true);
-        horse.remove();cart.remove();firework.remove();TravelCourse.build(world);getLogger().info("TRAVEL_COURSE_READY spawn=8,181,3 markers=50,150");getLogger().info("TRAVEL_PROBE_PASS checks="+checks);
+        horse.remove();cart.remove();firework.remove();
+        try{Class<?> release=Class.forName("ReleasePresentationChecks");var run=release.getDeclaredMethod("run",JavaPlugin.class);run.setAccessible(true);run.invoke(null,this);}catch(ClassNotFoundException ignored){}
+        TravelCourse.build(world);getLogger().info("TRAVEL_COURSE_READY spawn=8,181,3 markers=50,150");getLogger().info("TRAVEL_PROBE_PASS checks="+checks);
     }
 }

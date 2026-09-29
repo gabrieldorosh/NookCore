@@ -17,9 +17,13 @@ import net.kyori.adventure.key.Key;
 
 /** Main-thread permission snapshots keep asynchronous chat free of Bukkit permission/storage calls. */
 final class NookChat implements Listener, CommandExecutor, TabCompleter {
-    private record Snapshot(String name,String rank,ChatPreferences.Preference preference,int deaths){}
+    private record Snapshot(String name,String rank,ChatPreferences.Preference preference,int deaths,long cents){}
     private final JavaPlugin plugin;
     private final ChatPreferences preferences;
+    private final DisplayTitles titles;
+    @FunctionalInterface interface BalanceReader {long read(UUID id)throws java.sql.SQLException;}
+    private final BalanceReader balances;
+    private boolean balanceWarning;
     private final Map<UUID,Snapshot> snapshots=new ConcurrentHashMap<>();
     private final Set<UUID> rankPackLoaded=ConcurrentHashMap.newKeySet();
     private final Map<String,Component> images=new HashMap<>();
@@ -28,7 +32,8 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
     static final List<String> PRONOUNS=List.of("he/him","she/her","they/them","he/they","she/they","they/he","they/she","it/its","any","ask");
     private List<String> pronouns(){var configured=plugin.getConfig().getStringList("chat.pronoun-options");return configured.isEmpty()?PRONOUNS:configured;}
     static String selectedPronouns(String input,List<String> allowed){if((input.equalsIgnoreCase("reset") || input.equalsIgnoreCase("clear")))return "";return allowed.stream().filter(v->v.equalsIgnoreCase(input)).findFirst().orElseThrow(()->new IllegalArgumentException("Choose pronouns from: "+String.join(", ",allowed)+". Ask staff if yours are missing."));}
-    NookChat(JavaPlugin plugin)throws IOException {
+    NookChat(JavaPlugin plugin,BalanceReader balances)throws IOException {
+        this.balances=balances;this.titles=new DisplayTitles(plugin.getConfig().getConfigurationSection("chat.display-titles"));
         this.plugin=plugin;preferences=new ChatPreferences(plugin.getDataFolder().toPath().resolve("chat-preferences.properties"));
         String packId=plugin.getConfig().getString("chat.rank-images.pack-id","");
         UUID configuredPack=null;
@@ -56,16 +61,20 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
     }
     void close(){unregister.run();NookUi.preferences=null;}
     String placeholder(UUID id,String key){
-        Snapshot s=snapshots.get(id);if(s==null)return key.equals("deaths")?"0":"";
-        return switch(key){case "deaths"->Integer.toString(s.deaths());case "name"->"&"+s.preference().textColour().asHexString()+s.name()+"&r";case "pronouns"->s.preference().pronouns().isEmpty()?"":" &7· "+s.preference().pronouns()+"&r";case "rank"->("&"+(s.rank().equals("nookling")?NookUi.GOOD:NookUi.ACCENT).asHexString())+"["+ChatStyle.rankLabel(s.rank())+"] &r";default->null;};
+        Snapshot s=snapshots.get(id);if(s==null)return Set.of("deaths","balance","balance_whole").contains(key)?"0":"";
+        return switch(key){case "balance"->java.math.BigDecimal.valueOf(s.cents(),2).setScale(2).toPlainString();case "balance_whole"->Long.toString(s.cents()/100);case "deaths"->Integer.toString(s.deaths());case "name"->"&"+s.preference().textColour().asHexString()+s.name()+"&r";case "pronouns"->s.preference().pronouns().isEmpty()?"":" &7· "+s.preference().pronouns()+"&r";case "rank"->("&"+ChatStyle.rankColour(s.rank()).asHexString())+"["+ChatStyle.rankLabel(s.rank())+"] &r";default->null;};
     }
     static String displayRank(java.util.function.Predicate<String> permission){
         for(String rank:List.of("owner","admin","helper","supporter"))if(permission.test("nookcore.chat.rank."+rank))return rank;
         return "nookling";
     }
     private void refresh(Player player){
-        String rank=displayRank(player::hasPermission);
-        snapshots.put(player.getUniqueId(),new Snapshot(player.getName(),rank,preferences.get(player.getUniqueId()),player.getStatistic(org.bukkit.Statistic.DEATHS)));
+        UUID id=player.getUniqueId();
+        String rank=titles.rank(id,displayRank(player::hasPermission));
+        Snapshot previous=snapshots.get(id);long cents=previous==null?0:previous.cents();
+        try{cents=balances.read(id);balanceWarning=false;}
+        catch(java.sql.SQLException e){if(!balanceWarning){plugin.getLogger().warning("TAB balance refresh failed; keeping the last displayed balance.");balanceWarning=true;}}
+        snapshots.put(id,new Snapshot(player.getName(),rank,preferences.get(id),player.getStatistic(org.bukkit.Statistic.DEATHS),cents));
     }
     @EventHandler(priority=EventPriority.HIGH)
     public void death(org.bukkit.event.entity.PlayerDeathEvent event){
