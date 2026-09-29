@@ -21,7 +21,7 @@ Use Europe/London if supported. These UTC conversions are for this date; they ch
 
 If the panel only offers Restart, use a restart before the boundary (for example 01:55) with the candidate queued. Quests still refresh at 02:00, but road/rail/TAB/title changes become active a few minutes early. If exact 02:00 feature activation matters, use the separate Stop/Start route or arrange a staff member to perform the start. Do not invent an unsupported panel action.
 
-## At midnight while still home
+## Before bed: backup and staging
 
 1. Stop normally and wait for the process to finish. Take a full matched backup of worlds/player data, plugin data/databases, JARs and configuration. Verify it completed, preserve the old NookCore JAR and the individual config files for a code/config rollback.
 2. Start again with the ORIGINAL JAR and ORIGINAL configs. Confirm NookCore, TAB, shops and current quests are healthy before staging anything. The old JAR cannot start with the selected diamond/multiple-contribution quest config.
@@ -36,7 +36,7 @@ The midnight backup is a valid fallback, but a full restore from it would lose a
 
 ## At 02:00
 
-Ideally have one senior admin watch startup while the owner is driving. They should check NookCore and TAB enabled without errors, /quests shows the seven selected goals, /nooks and one ordinary shop purchase work, and TAB/Travel look right in Survival. The owner does not need to interact with the panel while driving. No messages to admins or live scheduler changes have been made by the assistant.
+The owner is available overnight but would prefer to sleep. Ideally have one senior admin watch startup. They should check NookCore and TAB enabled without errors, /quests shows the seven selected goals, /nooks and one ordinary shop purchase work, and TAB/Travel look right in Survival. No messages to admins or live scheduler changes have been made by the assistant.
 
 The quest refresh needs no scheduled quest command. It follows Wednesday 02:00 Europe/London automatically. If the server is stopped across the boundary, the correct week is opened on startup. Never run activate-config as a routine weekly reset.
 
@@ -46,3 +46,7 @@ The exact old live-version JAR (73338ca) was started locally. The candidate was 
 
 Paper update-folder documentation: https://docs.papermc.io/paper/updating/
 PebbleHost scheduled-task guide: https://help.pebblehost.com/en/minecraft/how-to-set-up-scheduled-tasks
+
+## Launch copy and player guides
+
+See Discord launch scheduling.md for the prepared nikos news command mentioning @nookling, plus the private-channel formatting check. No message is posted or scheduled. Road guide.md and Weekly quest guide.md are ready as companion posts.
