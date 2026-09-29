@@ -20,6 +20,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     private boolean healthy=true, awardsEnabled;
     private ChestShopRentalGate plotGate;
     private NookChat chat;
+    private EconomyMetrics economyMetrics;
     private BunnyBoots bunnyBoots;
     private GroundedTravel groundedTravel;
     private AdminTeleports adminTeleports;
@@ -49,6 +50,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
                 if(amount<0 || amount>Money.MAX || !key.startsWith("minecraft:"))throw new IllegalArgumentException("Invalid reward: "+key);
                 rewards.put(key,amount);
             }
+            try{economyMetrics=new EconomyMetrics(this,store);}catch(Exception ex){getLogger().log(Level.WARNING,"Activity metrics unavailable; gameplay is unaffected",ex);}
             bunnyBoots=new BunnyBoots(this,store,()->healthy,this::fail);
             groundedTravel=new GroundedTravel(this);
             awardsEnabled=getConfig().getBoolean("advancement-rewards-enabled",true);
@@ -197,6 +199,10 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         }return args;
     }
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
+        if(command.getName().equals("nooks") && args.length>0 && args[0].equalsIgnoreCase("metrics")){
+            if(economyMetrics==null){sender.sendMessage(NookUi.problem("Nooks","Activity metrics unavailable."));return true;}
+            return economyMetrics.command(sender,args);
+        }
         if(command.getName().equals("nooks") && args.length>0 && args[0].equalsIgnoreCase("report")){
             try{return EconomyReports.execute(sender,args,store,healthy,System.currentTimeMillis());}
             catch(SQLException ex){getLogger().log(Level.SEVERE,"Could not read economy report.",ex);sender.sendMessage(NookUi.problem("Nooks","Report unavailable. Check the server log."));return true;}
@@ -319,6 +325,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args){
         if(command.getName().equals("nooks")){
             if(args.length==1){var values=new ArrayList<>(List.of("balance","pay","history","top","help"));if(sender.hasPermission("nookcore.admin"))values.addAll(FeatureRoutes.MONEY_ADMIN);return NookUi.complete(args[0],values);}
+            if(args.length>=2 && args[0].equalsIgnoreCase("metrics"))return sender.hasPermission("nookcore.admin")?NookUi.complete(args[args.length-1],args.length==2?List.of("export","1","7","30","90"):args.length==3 && args[1].equalsIgnoreCase("export")?List.of("1","7","30","90"):List.of()):List.of();
             if(args.length==2 && args[0].equalsIgnoreCase("report"))return sender.hasPermission("nookcore.admin")?NookUi.complete(args[1],List.of("1","7","30","90")):List.of();
             if(FeatureRoutes.moneyAdmin(args))return sender.hasPermission("nookcore.admin")?completeInternal(sender,getCommand("nookadmin"),alias,FeatureRoutes.money(args)):List.of();
         }
@@ -350,5 +357,6 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         return NookUi.complete(args[args.length-1],values);
     }
     @Override public void onDisable(){
+        if(economyMetrics!=null)try{economyMetrics.close();}catch(Exception ex){getLogger().log(Level.WARNING,"Metrics close failed",ex);}
         if(groundedTravel!=null)groundedTravel.close();if(bunnyBoots!=null)bunnyBoots.close();healthy=false;if(chat!=null)chat.close();getServer().getServicesManager().unregisterAll(this);if(store!=null)try{store.close();}catch(SQLException e){getLogger().log(Level.SEVERE,"Database close failed",e);}}
 }
