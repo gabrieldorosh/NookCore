@@ -30,6 +30,8 @@ Mining, mob kills and fishing each show the first progress update, then at most 
 
 ## Final checks
 
+Owner reports Q1–Q4 PASS. These are retained as the accepted test record, not a request to repeat them. Rocket restrictions are now deferred and disabled in the final release configuration.
+
 The snapshot-derived world on 25578 preserves the current launch rotation until 02:00 UK. Its config contains the next set, which will freeze at the reset. Do not activate-config to preview it there.
 
 For immediate local checks of the selected set, use the disposable fresh quest course on 25581. Launch `& 'E:\NikosNook\SeasonTwo\staging\september-quests-check\start.ps1'`. It deliberately has the selected set active already and does not represent live progression.

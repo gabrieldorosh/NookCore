@@ -19,6 +19,6 @@ travel:
       max-blocks-per-second: 32.0
       acceleration-per-tick: 0.04
     elytra:
-      enabled: true
+      enabled: false
       takeoff-ticks: 60
       grounded-rearm-ticks: 60
