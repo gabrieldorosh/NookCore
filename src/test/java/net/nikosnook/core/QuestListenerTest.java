@@ -77,6 +77,12 @@ class QuestListenerTest {
         assertEquals(1,effects.get());assertEquals(1,cosmeticErrors.get());assertTrue(healthy.get());assertEquals(0,failures.get());assertEquals(7500,store.account(id).orElseThrow().cents());
     }
 
+    @Test void rapidKillProgressAndOverlappingGoalsDoNotFloodChat()throws Exception{
+        var q=quests(new QuestPlan.Goal("witch","Witches","KILL","WITCH",8,1500),new QuestPlan.Goal("challenge","Hostiles","KILL","HOSTILE",200,3000));
+        for(int n=0;n<200;n++){if(n<8)q.record(player,"KILL","WITCH",null);q.record(player,"KILL","HOSTILE",null);}
+        assertEquals(4,messages.size()); // first + completion for each goal, never one message per kill
+        assertEquals(10500,store.account(id).orElseThrow().cents());assertEquals(200,store.questProgress(id,QuestPlan.week(now.get()).id(),"challenge"));
+    }
     @Test void unrelatedPartialProgressDoesNotResetCapacityWarning()throws Exception{
         var q=quests(goal("hunt","KILL","SKELETON"),new QuestPlan.Goal("other","Other","KILL","ZOMBIE",2,1500));
         store.adjust(id,Money.MAX-6000,"staff","capacity test",now.get());

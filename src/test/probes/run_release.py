@@ -3,12 +3,12 @@ from pathlib import Path
 import subprocess, shutil, threading, time, json, os, socket
 repo=Path(__file__).resolve().parents[3]
 root=repo.parent
-server=root/'staging'/'september-release-check'
+server=root/'staging'/'september-quests-check'
 with socket.socket() as guard:
- guard.bind(('127.0.0.1',25580))
+ guard.bind(('127.0.0.1',25581))
 server.mkdir(parents=True,exist_ok=True)
 # Guard against accidentally changing the established owner playtest or live downloads.
-assert server.resolve()==(root/'staging'/'september-release-check').resolve()
+assert server.resolve()==(root/'staging'/'september-quests-check').resolve()
 plugins=server/'plugins';plugins.mkdir(exist_ok=True)
 for name in ['cache','libraries','versions','.paper']:
  source=root/'staging/smoke'/name
@@ -24,18 +24,18 @@ tab=plugins/'TAB';tab.mkdir(exist_ok=True)
 shutil.copy2(release/'TAB-config.yml',tab/'config.yml')
 shutil.copy2(release/'TAB-groups.yml',tab/'groups.yml')
 config=plugins/'NookCore';config.mkdir(exist_ok=True)
-shutil.copy2(release/'quests-proposal.yml',config/'quests.yml')
+shutil.copy2(release/'quests.yml',config/'quests.yml')
 text=(repo/'src/main/resources/config.yml').read_text(encoding='utf-8').replace('grounded:\n    enabled: false','grounded:\n    enabled: true')
 text=text.replace('display-titles: {}','display-titles:\n    "0c69274e-9156-4062-925b-b123c514d0d2": mr-duck\n    "983f1c6c-7f17-4729-ab16-8c0d3407592a": mrs-bee\n    "b13b7143-03c4-42f1-a3ba-82722646dfb3": mrs-niko\n')
 (config/'config.yml').write_text(text,encoding='utf-8')
 (server/'eula.txt').write_text('eula=true\n')
-(server/'server.properties').write_text('server-ip=127.0.0.1\nserver-port=25580\nonline-mode=true\nwhite-list=true\nenforce-whitelist=true\nenable-rcon=false\nview-distance=3\nsimulation-distance=3\nlevel-name=travel-course\nlevel-seed=1\nallow-nether=false\nmax-players=3\n')
+(server/'server.properties').write_text('server-ip=127.0.0.1\nserver-port=25581\nonline-mode=true\nwhite-list=true\nenforce-whitelist=true\nenable-rcon=false\nview-distance=3\nsimulation-distance=3\nlevel-name=travel-course\nlevel-seed=1\nallow-nether=false\nmax-players=3\n')
 (server/'bukkit.yml').write_text('settings:\n  allow-end: false\n')
 (server/'spigot.yml').write_text('world-settings:\n  default:\n    entity-activation-range:\n      animals: 0\n')
 bin=root/'tools/jdk/jdk-25.0.4.1+1/bin'
 classes=repo/'target/travel-probe';classes.mkdir(parents=True,exist_ok=True)
 classpath=os.pathsep.join(str(p) for p in (root/'tools/m2').rglob('*.jar'))
-subprocess.run([str(bin/'javac.exe'),'-cp',classpath,'-d',str(classes),str(Path(__file__).with_name('TravelProbe.java')),str(Path(__file__).with_name('TravelCourse.java')),str(Path(__file__).with_name('ReleasePresentationChecks.java'))],check=True)
+subprocess.run([str(bin/'javac.exe'),'-cp',classpath,'-d',str(classes),str(Path(__file__).with_name('TravelProbe.java')),str(Path(__file__).with_name('TravelCourse.java')),str(Path(__file__).with_name('ReleasePresentationChecks.java')),str(Path(__file__).with_name('ReleaseQuestChecks.java'))],check=True)
 (classes/'plugin.yml').write_text('name: TravelProbe\nversion: 1\nmain: TravelProbe\napi-version: 26.2\ndepend: [NookCore, TAB, LuckPerms]\n')
 subprocess.run([str(bin/'jar.exe'),'cf',str(plugins/'TravelProbe.jar'),'-C',str(classes),'.'],check=True)
 log=server/'travel-probe.log';lines=[]

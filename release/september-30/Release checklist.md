@@ -1,6 +1,6 @@
 # September 30 release candidate
 
-Local branch: release/september-30. Production untouched; no push, merge, tag or timed deployment performed. This package is a candidate until the final owner checks and quest selection are complete.
+Local branch: release/september-30. Production untouched; no push, merge, tag or timed deployment performed. This package is a candidate until the final owner checks are complete; quest selection is confirmed.
 
 ## Included
 
@@ -12,7 +12,7 @@ Local branch: release/september-30. Production untouched; no push, merge, tag or
 
 ## Still needed from owner
 
-1. Pick six regular quests and one challenge from Quest choices.md. The earlier quests-proposal.yml is unselected and must not be uploaded as an approved rotation. No final quests.yml is packaged yet.
+1. The owner has selected the seven goals in quests.yml. See Selected quests and estimates.md for confirmed amounts, expected effort and focused checks. This build adds diamond ore, multiple distinct contribution materials and quiet combat/fishing progress.
 2. Start the updated Season Two copy using `& 'E:\NikosNook\SeasonTwo\staging\travel-live-matched-20260928\start.ps1'`, join 127.0.0.1:25578 and switch to Survival.
 3. Rockets: stand/walk grounded for at least three seconds, take off and boost; after four seconds a rocket must be denied without consumption. Touch down briefly and repeat: still denied. Land for three full seconds: take-off boost returns. Check both hands; no renewed window from swimming, mounting, relogging or teleporting while airborne.
 4. TAB: with two accounts at different balances, confirm descending order, correct cents versus /nooks, and updated order after a transfer (allow six seconds). Equal balances sort by name. Footer displays TPS without a raw placeholder. Confirm the three title labels/colours when those accounts join and that existing names/pronouns remain intact.
@@ -22,9 +22,9 @@ Optional economy reporting is separate and is not included. Existing disposable 
 
 ## Deployment at 02:00 UK
 
-The owner controls deployment. Confirm a final quest selection and completed candidate checks first. Stop the production server before 02:00, take a matched stopped-server backup, and install the selected candidate while stopped. If the old server runs beyond the boundary it can freeze the old quests for the new week; do not silently overwrite that saved rotation or use activate-config as a routine reset.
+The owner controls deployment. The final quest selection is confirmed; complete candidate checks first. Stop the production server before 02:00, take a matched stopped-server backup, and install the selected candidate while stopped. If the old server runs beyond the boundary it can freeze the old quests for the new week; do not silently overwrite that saved rotation or use activate-config as a routine reset.
 
-Replace plugins/NookCore.jar. Merge nookcore-additions.yml into existing plugins/NookCore/config.yml without duplicating YAML keys, preserving all operational settings. Compare TAB-config.yml against current production TAB settings before copying; it was based on the September 27 snapshot. TAB-groups.yml retains the existing rank/name/pronoun placeholders. Install the FINAL selected quests.yml, once prepared, into plugins/NookCore/quests.yml. No database, world or isolated server configuration belongs in an upload.
+Replace plugins/NookCore.jar. Merge nookcore-additions.yml into existing plugins/NookCore/config.yml without duplicating YAML keys, preserving all operational settings. Compare TAB-config.yml against current production TAB settings before copying; it was based on the September 27 snapshot. TAB-groups.yml retains the existing rank/name/pronoun placeholders. Install the selected quests.yml into plugins/NookCore/quests.yml. No database, world or isolated server configuration belongs in an upload.
 
 Start at/after 02:00 with someone observing. Check NookCore and TAB enabled, /quests lists the selected seven goals and the next reset, /nooks matches balances, shops work, and Travel/TAB work in Survival. For a pre-reset configuration restart, the stored current rotation should remain intact; the new file becomes the next rotation. Never use /reload for NookCore or replace a database to reset quests.
 
@@ -32,6 +32,6 @@ Rollback: stop cleanly and restore the previous JAR and changed config files. Re
 
 ## Verification
 
-377 automated tests passed. Synthetic Paper checks: 37 Travel and 22 presentation checks passed. They exercise rocket re-arming, title identity/colour, read-only balance output including maximum supported balance, refresh after debit, numeric fallback and TAB configuration startup. They do not prove client rendering or observed multiplayer order. See bundled Paper and integration results for build identity and restart evidence.
+The final selected-quest candidate passed 384 automated tests, 37 Travel + 22 presentation + 7 quest Paper checks, and enabled/disabled copied-world restarts. Existing quest tables, progress and receipts were unchanged by the upgrade. They exercise rocket re-arming, title identity/colour, read-only balance output including maximum supported balance, refresh after debit, numeric fallback and TAB configuration startup. They do not prove client rendering or observed multiplayer order. See bundled Paper and integration results for build identity and restart evidence.
 
 TAB references: https://github.com/NEZNAMY/TAB/wiki/Feature-guide:-Sorting-players-in-tablist ; https://github.com/NEZNAMY/TAB/wiki/Feature-guide:-Playerlist-Objective ; https://github.com/NEZNAMY/TAB/wiki/Placeholders

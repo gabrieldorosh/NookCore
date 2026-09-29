@@ -45,12 +45,12 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
             if(g.kind().equals("KILL") && !g.target().equals("HOSTILE"))EntityType.valueOf(g.target());
             if(g.kind().equals("FISH") && !Set.of("COD","SALMON","TROPICAL_FISH","PUFFERFISH").contains(g.target()))throw new IllegalArgumentException("Invalid fish target");
             if(g.kind().equals("BIOME") && !g.target().equals("ANY"))throw new IllegalArgumentException("Biome quests use ANY");
-            if(g.kind().equals("MINE") && !Set.of("COAL","IRON").contains(g.target()))throw new IllegalArgumentException("Mining target must be COAL or IRON");
+            if(g.kind().equals("MINE") && !Set.of("COAL","IRON","DIAMOND").contains(g.target()))throw new IllegalArgumentException("Mining target must be COAL, IRON or DIAMOND");
             if(g.kind().equals("DEPOSIT") && (Material.matchMaterial(g.target())==null || !Material.valueOf(g.target()).isItem()))throw new IllegalArgumentException("Invalid contribution item");
             parsed.add(g);
         }
         if(parsed.size()!=7 || parsed.stream().filter(g->g.reward()==1500).count()!=6 || parsed.stream().filter(g->g.reward()==3000).count()!=1)throw new IllegalArgumentException("Configure six quests at 1500 cents and one challenge at 3000 cents");
-        if(parsed.stream().filter(g->g.kind().equals("DEPOSIT")).count()>1)throw new IllegalArgumentException("Only one contribution goal per week is supported");
+        validateContributions(parsed);
         proposed=List.copyOf(parsed);
         var command=Objects.requireNonNull(plugin.getCommand("quests"));command.setExecutor(this);command.setTabCompleter(this);
         if(enabled){
@@ -104,7 +104,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
     void setCelebration(BiConsumer<Player,Boolean> celebration,Consumer<Exception> error){this.celebration=celebration;this.cosmeticFailure=error;}
     private void celebrate(Player player,boolean challenge){try{celebration.accept(player,challenge);}catch(RuntimeException e){cosmeticFailure.accept(e);}}
     private static String position(org.bukkit.block.Block block){return block.getWorld().getUID()+":"+block.getX()+":"+block.getY()+":"+block.getZ();}
-    static String ore(Material type){return switch(type){case COAL_ORE,DEEPSLATE_COAL_ORE->"COAL";case IRON_ORE,DEEPSLATE_IRON_ORE->"IRON";default->null;};}
+    static String ore(Material type){return switch(type){case COAL_ORE,DEEPSLATE_COAL_ORE->"COAL";case IRON_ORE,DEEPSLATE_IRON_ORE->"IRON";case DIAMOND_ORE,DEEPSLATE_DIAMOND_ORE->"DIAMOND";default->null;};}
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void place(BlockPlaceEvent e){
         if(ore(e.getBlockPlaced().getType())!=null)try{store.markQuestBlock(position(e.getBlockPlaced()));}catch(Exception error){failure.accept(error);}
     }
@@ -138,12 +138,29 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         catch(Exception e){player.getInventory().setStorageContents(before);persistContributionInventory(player);store.finishQuestClaim(receipt,false);throw e;}
         player.sendMessage(NookUi.message("NookQuests","Collected "+amount+" "+type.name().toLowerCase(Locale.ROOT).replace('_',' ')+" for the community project. Recorded in the contribution ledger."));
     }
-    private void contribute(Player player)throws Exception {
+    static void validateContributions(List<QuestPlan.Goal> goals){
+        var deposits=goals.stream().filter(g->g.kind().equals("DEPOSIT")).toList();
+        if(deposits.stream().map(QuestPlan.Goal::target).distinct().count()!=deposits.size())throw new IllegalArgumentException("Each contribution goal must request a different material");
+    }
+    static QuestPlan.Goal contribution(List<QuestPlan.Goal> goals,String requested){
+        var deposits=goals.stream().filter(g->g.kind().equals("DEPOSIT")).toList();
+        if(deposits.isEmpty())throw new IllegalArgumentException("There is no material contribution this week.");
+        if(requested==null && deposits.size()==1)return deposits.getFirst();
+        if(requested==null)throw new IllegalArgumentException("Choose which material to contribute.");
+        return deposits.stream().filter(g->g.target().equalsIgnoreCase(requested)).findFirst().orElseThrow(()->new IllegalArgumentException("That material is not requested this week. Use /quests contribute to see the choices."));
+    }
+    private void contribute(Player player,String requested)throws Exception {
         if(!eligible(player))throw new IllegalArgumentException("Contribute while playing survival in the overworld.");
         long now=clock.getAsLong();rotation(now);
-        var goal=goals.stream().filter(g->g.kind().equals("DEPOSIT")).findFirst().orElseThrow(()->new IllegalArgumentException("There is no material contribution this week."));
+        var deposits=goals.stream().filter(g->g.kind().equals("DEPOSIT")).toList();
+        if(requested==null && deposits.size()>1){
+            player.sendMessage(NookUi.heading("NookQuests · Choose a contribution"));
+            for(var g:deposits)player.sendMessage(NookUi.command("/quests contribute "+g.target().toLowerCase(Locale.ROOT)).append(NookUi.text(" · "+g.title()+" ("+store.questProgress(player.getUniqueId(),week.id(),g.id())+"/"+g.amount()+")")));
+            player.sendMessage(NookUi.text("Only the material you choose will be taken. Donated items stay with the community."));return;
+        }
+        var goal=contribution(goals,requested);
         int remaining=goal.amount()-store.questProgress(player.getUniqueId(),week.id(),goal.id());
-        if(remaining<=0)throw new IllegalArgumentException("You have completed this week's contribution.");
+        if(remaining<=0)throw new IllegalArgumentException("You have completed this contribution. Other goals are listed in /quests.");
         ItemStack[] before=player.getInventory().getStorageContents();ItemStack[] after=Arrays.stream(before).map(item->item==null?null:item.clone()).toArray(ItemStack[]::new);
         int removed=0;Material material=Material.valueOf(goal.target());
         for(int i=0;i<after.length && removed<remaining;i++){
@@ -200,9 +217,9 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
                 sender.sendMessage(NookUi.message("NookQuests","Configured goals are now active. Backup: "+backup.getFileName()));
                 Bukkit.broadcast(NookUi.message("NookQuests","The launch quests are now available. View them with ").append(NookUi.command("/quests")));return true;
             }
-            if(args.length==1 && args[0].equalsIgnoreCase("contribute")){
+            if((args.length==1 || args.length==2) && args[0].equalsIgnoreCase("contribute")){
                 if(!(sender instanceof Player donor))throw new IllegalArgumentException("Contribute in game.");
-                contribute(donor);return true;
+                contribute(donor,args.length==2?args[1]:null);return true;
             }
             if(args.length==1 && args[0].equalsIgnoreCase("contributions") && sender.hasPermission("nookcore.admin")){
                 sender.sendMessage(NookUi.heading("NookQuests · Contribution ledger"));for(String line:store.questDepositReport())sender.sendMessage(NookUi.text(line));return true;
@@ -231,6 +248,10 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args){
         if(args.length==1)return NookUi.complete(args[0],sender.hasPermission("nookcore.admin")?List.of("list","help","inspect","contribute","contributions","collect","activate-config"):List.of("list","help","contribute"));
+        if(args.length==2 && args[0].equalsIgnoreCase("contribute")){
+            if(!enabled || !healthy.getAsBoolean())return List.of();
+            try{rotation(clock.getAsLong());return NookUi.complete(args[1],goals.stream().filter(g->g.kind().equals("DEPOSIT")).map(g->g.target().toLowerCase(Locale.ROOT)).toList());}catch(Exception e){failure.accept(e);return List.of();}
+        }
         if(args.length==2 && args[0].equalsIgnoreCase("activate-config") && sender.hasPermission("nookcore.admin"))return NookUi.complete(args[1],List.of("confirm"));
         if(args.length==2 && args[0].equalsIgnoreCase("inspect") && sender.hasPermission("nookcore.admin"))try{return NookUi.complete(args[1],store.accounts().stream().map(NookStore.Account::name).toList());}catch(Exception e){failure.accept(e);}
         return List.of();

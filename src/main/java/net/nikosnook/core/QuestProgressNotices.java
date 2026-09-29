@@ -2,14 +2,14 @@ package net.nikosnook.core;
 
 import java.util.*;
 
-/** Limits mining chat frequency without delaying the first update or completion. */
+/** Limits rapid mining, combat and fishing chat frequency without delaying the first update or completion. */
 final class QuestProgressNotices {
     private record Key(UUID player, String goal) {}
     private final Map<Key, Long> nextNotice = new HashMap<>();
 
     boolean immediate(UUID player, NookStore.QuestUpdate update, long now) {
         var key = new Key(player, update.goal().id());
-        if (update.paid() || !update.goal().kind().equals("MINE")) {
+        if (update.paid() || !Set.of("MINE","KILL","FISH").contains(update.goal().kind())) {
             nextNotice.remove(key);
             return true;
         }

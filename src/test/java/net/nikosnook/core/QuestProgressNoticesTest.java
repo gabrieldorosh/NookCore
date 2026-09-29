@@ -23,9 +23,16 @@ class QuestProgressNoticesTest {
         assertFalse(notices.immediate(player,update("coal","MINE",99,false),1));
         assertTrue(notices.immediate(player,update("coal","MINE",100,true),2));
     }
+    @Test void combatAndFishBurstsAreThrottledButCompletionIsImmediate(){
+        for(String kind:List.of("KILL","FISH")){
+            assertTrue(notices.immediate(player,update(kind.toLowerCase(Locale.ROOT),kind,1,false),0));
+            for(int n=2;n<100;n++)assertFalse(notices.immediate(player,update(kind.toLowerCase(Locale.ROOT),kind,n,false),n));
+            assertTrue(notices.immediate(player,update(kind.toLowerCase(Locale.ROOT),kind,100,true),100));
+        }
+    }
     @Test void otherKindsStayImmediate(){
-        assertTrue(notices.immediate(player,update("fish","FISH",1,false),0));
-        assertTrue(notices.immediate(player,update("fish","FISH",2,false),1));
+        assertTrue(notices.immediate(player,update("visit","BIOME",1,false),0));
+        assertTrue(notices.immediate(player,update("visit","BIOME",2,false),1));
     }
     @Test void playersAndGoalsHaveIndependentCooldowns(){
         assertTrue(notices.immediate(player,update("coal","MINE",1,false),0));

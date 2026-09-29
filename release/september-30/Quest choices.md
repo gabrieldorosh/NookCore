@@ -1,6 +1,6 @@
 # Quest choices — 30 September
 
-Choose six regular quests (15 Nooks each) and one challenge (30 Nooks): 120 total. All are supported by the current plugin. Quantities are proposed tuning, not selections. At most one item-contribution quest across the whole set. Contributions consume the items and put them into staff-collectable community stock; these are individual player targets, not a server-wide shared target. All progression is Survival in the Overworld.
+Original choice menu: six regular quests (15 Nooks each) and one challenge (30 Nooks), 120 total. Final selections are recorded at the bottom and in quests.yml. Other entries remain unused options. The final implementation supports multiple contribution quests when each requests a different material. Contributions consume the items and put them into staff-collectable community stock; these are individual player targets, not a server-wide shared target. All progression is Survival in the Overworld.
 
 | ID | Regular quest — 15 Nooks |
 |---|---|
@@ -42,6 +42,6 @@ Choose six regular quests (15 Nooks each) and one challenge (30 Nooks): 120 tota
 
 Avoid pairing a regular quest with its harder version unless you want the same actions to progress both. Hostile-mob quests overlap specific hunts. The current mixed-hostile list includes zombies, skeletons, spiders, cave spiders, creepers, husks, strays, drowned, witches, phantoms and pillagers. Endermen and slimes do not count towards that mixed category.
 
-Suggested balanced set: R01, R02, R05, R06, R13, R16 + C07. Alternative railway contribution: C09. These are suggestions only; owner selection is pending.
+Suggested balanced set: R01, R02, R05, R06, R13, R16 + C07. Alternative railway contribution: C09. Final owner selection: R09 (8 witches), R20 (128 rails), R21 (256 oak logs), R16 (8 biomes), R13 (32 salmon), a new 8-diamond-ore quest, and C03 (200 hostiles). See Selected quests and estimates.md.
 
 Progress for these targets already exists. Travel-distance, rails-placed, tree-felling and crafting-count objectives would need new tracking and are not being promised for this release. The separate paid enchantments/power-ups update should cover vein mining, tree lumber and jump boost, with Nook usage charges and pricing still to agree.

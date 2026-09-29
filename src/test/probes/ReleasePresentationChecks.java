@@ -45,5 +45,6 @@ final class ReleasePresentationChecks {
         check(tc.getStringList("scoreboard-teams.sorting-types").equals(List.of("PLACEHOLDER_HIGH_TO_LOW:%nookcore_balance%","PLACEHOLDER_A_TO_Z:%player%")),"TAB numeric descending balance then name",log);
         check(tc.getStringList("header-footer.designs.default.footer").stream().anyMatch(s->s.contains("%tps% TPS")),"TAB footer uses native TPS",log);
         log.getLogger().info("RELEASE_PRESENTATION_PASS checks="+checks);
+        ReleaseQuestChecks.run(log);
     }
 }
