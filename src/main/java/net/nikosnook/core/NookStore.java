@@ -297,6 +297,14 @@ public final class NookStore implements AutoCloseable {
         if(cents<=0 || cents>Money.MAX || from.equals(to)) throw new IllegalArgumentException("Choose another player and a positive amount.");
         tx(()-> { String ref=UUID.randomUUID().toString(); mutate(from,-cents,"transfer",ref,now); mutate(to,cents,"transfer",ref,now); return null; });
     }
+    synchronized Map<UUID,Long> metricEarnings(long since,long until)throws SQLException {
+        if(since<0 || until<=since)throw new IllegalArgumentException("Invalid metrics interval.");
+        var result=new HashMap<UUID,Long>();
+        try(var p=db.prepareStatement("SELECT uuid,SUM(delta) FROM ledger WHERE time>=? AND time<? AND kind='award' AND delta>0 AND (reference LIKE 'minecraft:%' OR reference LIKE 'quest:%') GROUP BY uuid")){
+            p.setLong(1,since);p.setLong(2,until);try(var r=p.executeQuery()){while(r.next())result.put(UUID.fromString(r.getString(1)),r.getLong(2));}
+        }return Map.copyOf(result);
+    }
+
     public void adjust(UUID id,long delta,String actor,String reason,long now) throws SQLException {
         if(delta==0 || delta>Money.MAX || delta < -Money.MAX || reason.isBlank()) throw new IllegalArgumentException("Provide an amount and reason.");
         tx(()-> { mutate(id,delta,"staff",actor+": "+reason,now); return null; });
