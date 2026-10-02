@@ -10,7 +10,7 @@ final class DisplayTitles {
         if(section==null)return;
         for(String key:section.getKeys(false)){
             String title=section.getString(key,"");
-            if(!Set.of("mr-duck","mrs-bee","mrs-niko").contains(title))throw new IllegalArgumentException("Unknown display title: "+title);
+            if(!Set.of("mr-duck","mrs-bee","miss-bee","mrs-niko").contains(title))throw new IllegalArgumentException("Unknown display title: "+title);
             assignments.put(UUID.fromString(key),title);
         }
     }

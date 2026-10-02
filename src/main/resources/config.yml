@@ -6,8 +6,20 @@ advancement-rewards-enabled: true
 vault-enabled: true
 chat:
   enabled: true
-  # Account UUID -> mr-duck, mrs-bee or mrs-niko. Cosmetic only.
+  # Account UUID -> mr-duck, miss-bee or mrs-niko (legacy mrs-bee also displays miss bee). Cosmetic only.
   display-titles: {}
+  # Private keyword tips; never cancels chat, pings staff, or runs commands.
+  # Built-in defaults apply if this section is absent. Changes require a restart.
+  help-replies:
+    enabled: true
+    cooldown-seconds: 300
+    topics:
+      lag:
+        phrases: [lag, lagging, laggy]
+        reply: "Seeing lag? TAB shows the server TPS. When asking staff for help, describe whether you see low FPS, freezing, or rubber-banding, and when it started. TPS alone does not explain every issue."
+      staff:
+        phrases: [admin, admins, staff, helper, helpers]
+        reply: "Need staff help? Describe the issue in chat, or contact an admin privately on the server Discord for sensitive reports. This tip does not notify or summon staff."
   pronoun-options: [he/him, she/her, they/them, he/they, she/they, they/he, they/she, it/its, any, ask]
   # Leave blank until the real rank pack is prepared. Must match its delivered pack UUID.
   rank-images:

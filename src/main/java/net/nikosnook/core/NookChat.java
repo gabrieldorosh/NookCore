@@ -21,6 +21,7 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
     private final JavaPlugin plugin;
     private final ChatPreferences preferences;
     private final DisplayTitles titles;
+    private ChatHelp help;
     @FunctionalInterface interface BalanceReader {long read(UUID id)throws java.sql.SQLException;}
     private final BalanceReader balances;
     private boolean balanceWarning;
@@ -51,6 +52,8 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
             }
         }catch(IllegalArgumentException e){configuredPack=null;images.clear();plugin.getLogger().warning("Rank images disabled: "+e.getMessage());}
         rankPack=configuredPack;
+        try { help=new ChatHelp(plugin); }
+        catch(IllegalArgumentException e){plugin.getLogger().warning("Keyword help disabled: "+e.getMessage());}
         NookUi.preferences=preferences;
         Objects.requireNonNull(plugin.getCommand("nookchat")).setExecutor(this);
         plugin.getCommand("nookchat").setTabCompleter(this);
@@ -59,7 +62,7 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
         Bukkit.getScheduler().runTaskTimer(plugin,()->{for(Player player:Bukkit.getOnlinePlayers())refresh(player);},100,100);
         if(Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")){var expansion=new NookPlaceholders(this);if(expansion.register()){unregister=()->expansion.unregister();plugin.getLogger().info("Registered NookCore name, rank and pronoun placeholders for TAB.");}}
     }
-    void close(){unregister.run();NookUi.preferences=null;}
+    void close(){if(help!=null)help.close();unregister.run();NookUi.preferences=null;}
     String placeholder(UUID id,String key){
         Snapshot s=snapshots.get(id);if(s==null)return Set.of("deaths","balance","balance_whole").contains(key)?"0":"";
         return switch(key){case "balance"->java.math.BigDecimal.valueOf(s.cents(),2).setScale(2).toPlainString();case "balance_whole"->Long.toString(s.cents()/100);case "deaths"->Integer.toString(s.deaths());case "name"->"&"+s.preference().textColour().asHexString()+s.name()+"&r";case "pronouns"->s.preference().pronouns().isEmpty()?"":" &7· "+s.preference().pronouns()+"&r";case "rank"->("&"+ChatStyle.rankColour(s.rank()).asHexString())+"["+ChatStyle.rankLabel(s.rank())+"] &r";default->null;};
