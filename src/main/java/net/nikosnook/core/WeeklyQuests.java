@@ -47,6 +47,8 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
             if(g.kind().equals("BIOME") && !g.target().equals("ANY"))throw new IllegalArgumentException("Biome quests use ANY");
             if(g.kind().equals("MINE") && !Set.of("COAL","IRON","DIAMOND").contains(g.target()))throw new IllegalArgumentException("Mining target must be COAL, IRON or DIAMOND");
             if(g.kind().equals("DEPOSIT") && (Material.matchMaterial(g.target())==null || !Material.valueOf(g.target()).isItem()))throw new IllegalArgumentException("Invalid contribution item");
+            if(g.kind().equals("HARVEST") && !g.target().equals("MATURE_CROPS"))throw new IllegalArgumentException("Harvest quests use MATURE_CROPS");
+            if(g.kind().equals("TRADE") && !g.target().equals("VILLAGER"))throw new IllegalArgumentException("Trade quests use VILLAGER");
             parsed.add(g);
         }
         if(parsed.size()!=7 || parsed.stream().filter(g->g.reward()==1500).count()!=6 || parsed.stream().filter(g->g.reward()==3000).count()!=1)throw new IllegalArgumentException("Configure six quests at 1500 cents and one challenge at 3000 cents");
@@ -116,6 +118,27 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void mine(BlockBreakEvent e){
         String target=ore(e.getBlock().getType());if(target==null || !eligible(e.getPlayer()))return;
         try{String pos=position(e.getBlock());if(!store.changedQuestBlock(pos))record(e.getPlayer(),"MINE",target,pos);}catch(Exception error){failure.accept(error);}
+    }
+    static boolean matureCrop(org.bukkit.block.BlockState state){
+        if(!Set.of(Material.WHEAT,Material.CARROTS,Material.POTATOES,Material.BEETROOTS).contains(state.getType()))return false;
+        return state.getBlockData() instanceof org.bukkit.block.data.Ageable age && age.getAge()==age.getMaximumAge();
+    }
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
+    public void harvest(BlockDropItemEvent event){
+        // The state is from before the completed break; cancelled breaks never reach this event.
+        // Count blocks, not item drops, so Fortune and extra drops do not multiply progress.
+        if(!event.isCancelled() && eligible(event.getPlayer()) && matureCrop(event.getBlockState()))
+            record(event.getPlayer(),"HARVEST","MATURE_CROPS",null);
+    }
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
+    public void trade(PlayerStatisticIncrementEvent event){
+        // Paper awards this statistic only after MerchantOffer.take has consumed payment.
+        // Each completed trade emits one increment, including each trade within shift-click.
+        if(event.isCancelled() || event.getStatistic()!=Statistic.TRADED_WITH_VILLAGER
+            || (long)event.getNewValue()-event.getPreviousValue()!=1 || !eligible(event.getPlayer()))return;
+        var top=event.getPlayer().getOpenInventory().getTopInventory();
+        if(top instanceof org.bukkit.inventory.MerchantInventory merchant && merchant.getMerchant() instanceof Villager)
+            record(event.getPlayer(),"TRADE","VILLAGER",null);
     }
     private void persistContributionInventory(Player player)throws Exception {
         // A void saveData return is not proof of persistence. Verify a fresh marker in the saved NBT.

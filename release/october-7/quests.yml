@@ -1,0 +1,46 @@
+# Owner-selected October 7 rotation. Nether materials can be handed in after Friday's opening.
+enabled: true
+celebrations-enabled: true
+goals:
+  drowned:
+    title: "Defeat 24 drowned"
+    kind: KILL
+    target: DROWNED
+    amount: 24
+    reward-cents: 1500
+  iron:
+    title: "Mine 48 natural iron ore"
+    kind: MINE
+    target: IRON
+    amount: 48
+    reward-cents: 1500
+  pillagers:
+    title: "Defeat 12 pillagers"
+    kind: KILL
+    target: PILLAGER
+    amount: 12
+    reward-cents: 1500
+  glowstone:
+    title: "Contribute 32 glowstone blocks"
+    kind: DEPOSIT
+    target: GLOWSTONE
+    amount: 32
+    reward-cents: 1500
+  green_fingers:
+    title: "Green fingers: harvest 64 fully grown crops"
+    kind: HARVEST
+    target: MATURE_CROPS
+    amount: 64
+    reward-cents: 1500
+  local_trade:
+    title: "Local trade: complete 8 villager trades"
+    kind: TRADE
+    target: VILLAGER
+    amount: 8
+    reward-cents: 1500
+  ghast_tears:
+    title: "Contribute 4 ghast tears"
+    kind: DEPOSIT
+    target: GHAST_TEAR
+    amount: 4
+    reward-cents: 3000
