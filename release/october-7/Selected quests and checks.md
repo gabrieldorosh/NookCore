@@ -8,8 +8,8 @@ Owner-approved October 7 set. Six regular quests pay 15 Nooks each; challenge pa
 | Iron | Mine 48 natural iron ore blocks; normal/deepslate both count, Fortune does not multiply progress |
 | Pillagers | Defeat 12 pillagers |
 | Glowstone | Contribute 32 glowstone BLOCKS, not dust |
-| Green fingers | Harvest 64 fully grown wheat, carrots, potatoes or beetroot blocks |
-| Local trade | Complete 8 transactions with villagers |
+| Crops | Harvest 64 fully grown wheat, carrots, potatoes or beetroot blocks |
+| Villager trading | Complete 8 transactions with villagers |
 | Challenge | Contribute 4 ghast tears |
 
 All tracking remains Survival in the Overworld. Nether materials can be brought back after the Nether opens Friday 9 October; existing owned or traded materials also count. This update does not open the Nether itself. Contributions consume the items and put them into community stock; they are not merely ownership checks. Use /quests contribute glowstone or /quests contribute ghast_tear.
