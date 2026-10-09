@@ -27,8 +27,8 @@ public class AfkProbe extends JavaPlugin {
             case "getIdleDuration"->{check(Bukkit.isPrimaryThread(),"idle timer read on server thread");yield idle;}
             default->null;
         });
-        refresh();String rank=value("rank"),name=value("name"),balance=value("balance"),pronouns=value("pronouns");Component activeChat=rendered();
-        check(rank.contains("#f1dea0") && rank.contains("miss bee"),"active title retains colour");check(value("afk").equals("false"),"active placeholder false");
+        refresh();String rank=value("rank"),name=value("name"),balance=value("balance"),pronouns=value("pronouns");Component activeChat=rendered();getLogger().info("DISPLAY rank="+rank+" name="+name);
+        check(rank.toLowerCase(java.util.Locale.ROOT).contains("#f1dea0") && rank.contains("miss bee"),"active title retains colour");check(value("afk").equals("false"),"active placeholder false");
         idle=Duration.ofMillis(299999);refresh();check(value("rank").equals(rank),"no early greying");
         idle=Duration.ofSeconds(300);refresh();check(value("afk").equals("true"),"five minutes becomes AFK");
         check(value("rank").equals("&#AAAAAA[miss bee] &r"),"AFK title grey through real PlaceholderAPI");check(value("name").equals("&#AAAAAATestPlayer&r"),"AFK name grey through real PlaceholderAPI");
