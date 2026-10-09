@@ -681,6 +681,30 @@ public final class NookStore implements AutoCloseable {
         });
     }
 
+    private static final String RENT_REDUCTION="plot-rent-reduction:2026-10-09";
+    public synchronized boolean rentReductionApplied()throws SQLException {
+        try(var p=db.prepareStatement("SELECT 1 FROM metadata WHERE key=?")){bind(p,RENT_REDUCTION);try(var r=p.executeQuery()){return r.next();}}
+    }
+    static long reducedRent(long cents){if(cents<1)throw new IllegalArgumentException("Invalid rent");return Math.max(1,cents/5+(cents%5>=3?1:0));}
+    public synchronized long defaultPlotRent(long area)throws SQLException {
+        long original=PlotPricing.weekly(area);return rentReductionApplied()?reducedRent(original):original;
+    }
+    public synchronized void reducePlotRents(List<Plot> expected,String actor,long now)throws SQLException {
+        tx(()->{
+            if(rentReductionApplied())throw new IllegalArgumentException("The 80% rent reduction has already been applied.");
+            if(expected.isEmpty())throw new IllegalArgumentException("There are no plots to reprice.");
+            if(!plots().equals(expected))throw new IllegalArgumentException("Plot records changed. Preview the rent cut again.");
+            StringBuilder audit=new StringBuilder(actor+" at "+now);
+            for(var plot:expected){
+                long reduced=reducedRent(plot.weekly());
+                update("UPDATE plots SET weekly=? WHERE id=?",reduced,plot.id());
+                audit.append("\n").append(plot.id()).append(": ").append(plot.weekly()).append(" -> ").append(reduced);
+            }
+            update("INSERT INTO metadata(key,value) VALUES(?,?)",RENT_REDUCTION,audit.toString());
+            return null;
+        });
+    }
+
     public synchronized void definePlot(String id,long weekly) throws SQLException {
         if(!id.matches("[a-z0-9_-]{1,32}") || weekly<=0 || weekly>Money.MAX/4) throw new IllegalArgumentException("Invalid plot definition.");
         // Existing lease prices are intentionally not silently rewritten by config reloads.

@@ -52,6 +52,7 @@ public final class ChestShopRentalGate implements Listener {
             List<String> locations=new ArrayList<>();locations.add(regionAt(event.getSign().getLocation()));
             var container=uBlock.findConnectedContainer(event.getSign());
             if(container==null)throw new IllegalArgumentException("A physical stock container is required.");
+            ShopLabels.rejectNative(container.getInventory().getHolder());
             containers(container.getInventory().getHolder(),locations);
             for(String location:locations)if(!permissions.allowed(location,event.getPlayer().getUniqueId(),PlotPermissions.Action.ALTER_CONTAINER))
                 throw new IllegalArgumentException("Creating a plot shop requires BUILD and STOCK permissions.");
@@ -166,6 +167,7 @@ public final class ChestShopRentalGate implements Listener {
             if(!healthy.getAsBoolean())throw new IllegalArgumentException("Shop payments are paused; contact staff.");
             List<String> locations=new ArrayList<>();locations.add(regionAt(event.getSign().getLocation()));
             if(event.getOwnerInventory()==null)throw new IllegalArgumentException("A physical stock container is required.");
+            ShopLabels.rejectNative(event.getOwnerInventory().getHolder());
             containers(event.getOwnerInventory().getHolder(),locations);
             policy.checkCustomer(locations,event.getOwnerAccount()==null?null:event.getOwnerAccount().getUuid(),event.getClient().getUniqueId(),System.currentTimeMillis());
         }catch(IllegalArgumentException ex) {

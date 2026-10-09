@@ -18,7 +18,7 @@ import java.util.function.*;
 
 /** Add-only region setup. A durable journal blocks trading if a multi-file save is interrupted. */
 final class PlotSetup implements CommandExecutor,TabCompleter,Listener {
-    private record Draft(UUID world,String id,boolean district,PlotLayout box,long rent,String address,long expires){}
+    private record Draft(UUID world,String id,boolean district,PlotLayout box,long rent,String address,long expires,boolean reduced){}
     private final JavaPlugin plugin;
     private final NookStore store;
     private final BooleanSupplier healthy;
@@ -31,6 +31,7 @@ final class PlotSetup implements CommandExecutor,TabCompleter,Listener {
     @EventHandler public void quit(PlayerQuitEvent event){drafts.remove(event.getPlayer().getUniqueId());}
     private RegionManager manager(Player p){return Objects.requireNonNull(WorldGuard.getInstance().getPlatform().getRegionContainer().get(BukkitAdapter.adapt(p.getWorld())),"WorldGuard region storage unavailable");}
     private void validate(Player p,Draft d)throws Exception {
+        if(d.reduced()!=store.rentReductionApplied())throw new IllegalArgumentException("Rent prices changed. Preview the plot again.");
         if(!p.getWorld().getUID().equals(d.world()))throw new IllegalArgumentException("Return to the selection's world first.");
         if(d.box().area()>1_000_000)throw new IllegalArgumentException("Choose an area no larger than 1,000,000 blocks.");
         var manager=manager(p);
@@ -98,13 +99,13 @@ final class PlotSetup implements CommandExecutor,TabCompleter,Listener {
                 if(!(selected instanceof CuboidRegion))throw new IllegalArgumentException("Use a cuboid selection: //sel cuboid, then select two corners with //wand.");
                 var a=selected.getMinimumPoint();var b=selected.getMaximumPoint();
                 PlotLayout footprint=new PlotLayout(a.x(),a.z(),b.x(),b.z());
-                long rent=district?0:args.length==3?Money.parse(args[2]):PlotPricing.weekly(footprint.area());
+                long rent=district?0:args.length==3?Money.parse(args[2]):store.defaultPlotRent(footprint.area());
                 if(!district && (rent<=0 || rent>Money.MAX/4))throw new IllegalArgumentException("Choose a positive weekly rent within the supported range.");
                 Set<String> used=new HashSet<>(manager(p).getRegions().keySet());
                 for(var plot:store.plots()){used.add(plot.id());used.add(store.plotAddress(plot.id()).toLowerCase(Locale.ROOT).replace(' ','-'));}
                 var address=district?null:PlotAddresses.choose(used::contains,new Random());
                 if(id==null)id=address.id();
-                Draft d=new Draft(p.getWorld().getUID(),id,district,footprint,rent,address==null?null:address.label(),System.currentTimeMillis()+60_000);
+                Draft d=new Draft(p.getWorld().getUID(),id,district,footprint,rent,address==null?null:address.label(),System.currentTimeMillis()+60000,store.rentReductionApplied());
                 validate(p,d);drafts.put(p.getUniqueId(),d);
                 p.sendMessage(NookUi.heading("NookPlots · "+(district?"District":"Plot")+" preview"));
                 p.sendMessage(NookUi.text(id+" · X "+a.x()+" to "+b.x()+", Z "+a.z()+" to "+b.z()+" · "+d.box().area()+" blocks · full world height"));

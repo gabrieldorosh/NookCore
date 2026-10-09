@@ -44,7 +44,7 @@ final class NativeShops implements Listener {
     private Block origin(Block block){return containers(block).stream().map(Container::getBlock).min(java.util.Comparator.comparing(NativeShops::location)).orElseThrow();}
     private void noChestShop(Block block){
         for(var side:containers(block))for(int x=-1;x<=1;x++)for(int y=-1;y<=1;y++)for(int z=-1;z<=1;z++)
-            if(side.getBlock().getRelative(x,y,z).getState() instanceof Sign)throw new IllegalArgumentException("Use a separate container away from signs. ChestShop and NookShops must not share a container.");
+            if(side.getBlock().getRelative(x,y,z).getState() instanceof Sign sign && com.Acrobot.ChestShop.Signs.ChestShopSign.isValid(sign))throw new IllegalArgumentException("Use an ordinary label, not a ChestShop trading sign. ChestShop and NookShops must not share a container.");
     }
     void publish(Player player,Block block,ItemStack item,ShopDraft terms)throws Exception {
         ready(player);
@@ -184,6 +184,8 @@ final class NativeShops implements Listener {
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=false) public void interact(PlayerInteractEvent event){
         if(!enabled() || event.getHand()!=EquipmentSlot.HAND || event.getAction()!=org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK || event.getClickedBlock()==null)return;
         var block=event.getClickedBlock();if(!(block.getState() instanceof Container container) || !container.getPersistentDataContainer().has(anchor,PersistentDataType.STRING))return;
+        // Vanilla sneak-placement handles ordinary signs; never override another protection decision.
+        if(ShopLabels.placingLabel(event.getPlayer().isSneaking(),event.getItem()==null?Material.AIR:event.getItem().getType()))return;
         event.setCancelled(true);
         var p=event.getPlayer();
         try{ready(p);var offer=at(block);open(p,offer,offer.owner().equals(p.getUniqueId()));}catch(Exception e){problem(p,e);}

@@ -3,6 +3,8 @@ import org.bukkit.command.*;
 import java.util.*;
 /** Staff setup routes remain reachable when rentals are unavailable. */
 final class PlotRoutes implements CommandExecutor,TabCompleter {
+ private CommandExecutor rentReduction;
+ void rentReduction(CommandExecutor command){rentReduction=command;}
  private final PlotCommands plots;private final PlotSetup setup;private final CommandExecutor admin;private final TabCompleter completion;
  PlotRoutes(PlotCommands plots,PlotSetup setup,CommandExecutor admin,TabCompleter completion){this.plots=plots;this.setup=setup;this.admin=admin;this.completion=completion;}
  private boolean staff(String[] args){return args.length>0 && (args[0].equalsIgnoreCase("admin") || args[0].equalsIgnoreCase("setup"));}
@@ -14,8 +16,9 @@ final class PlotRoutes implements CommandExecutor,TabCompleter {
    if(setup==null){sender.sendMessage(NookUi.problem("NookPlots","Plot setup requires WorldEdit and WorldGuard."));return true;}
    return setup.onCommand(sender,command,label,rest);
   }
+  if(rest.length>0 && rest[0].equalsIgnoreCase("rent-cut") && rentReduction!=null)return rentReduction.onCommand(sender,command,label,rest);
   if(rest.length==0 || rest[0].equalsIgnoreCase("help")){
-   NookUi.help(sender,"NookPlots · Administration","/plots admin clear <address> <storage-note> — record clearance","/plots admin evict <address> <reason|confirm> — preview/confirm eviction","/plots admin storage <address> — read storage notes","/plots admin membership <player> — inspect membership","/plots admin absence <address> <days|off> <reason> — allow a break","/plots admin define <id> <rent> — create a database record","/plots setup help — create district and plot regions");return true;
+   NookUi.help(sender,"NookPlots · Administration","/plots admin clear <address> <storage-note> — record clearance","/plots admin evict <address> <reason|confirm> — preview/confirm eviction","/plots admin storage <address> — read storage notes","/plots admin membership <player> — inspect membership","/plots admin absence <address> <days|off> <reason> — allow a break","/plots admin rent-cut [confirm] — preview/apply the one-time 80% reduction","/plots admin define <id> <rent> — create a database record","/plots setup help — create district and plot regions");return true;
   }
   try{return admin.onCommand(sender,command,label,FeatureRoutes.plot(rest));}
   catch(IllegalArgumentException e){sender.sendMessage(NookUi.problem("NookPlots",e.getMessage()));return true;}
@@ -25,7 +28,7 @@ final class PlotRoutes implements CommandExecutor,TabCompleter {
    if(!sender.hasPermission("nookcore.admin"))return List.of();
    var rest=Arrays.copyOfRange(args,1,args.length);
    if(args[0].equalsIgnoreCase("setup"))return setup==null?List.of():setup.onTabComplete(sender,command,label,rest);
-   if(rest.length<=1)return NookUi.complete(rest.length==0?"":rest[0],FeatureRoutes.PLOT_ADMIN);
+   if(rest.length<=1)return NookUi.complete(rest.length==0?"":rest[0],java.util.stream.Stream.concat(FeatureRoutes.PLOT_ADMIN.stream(),java.util.stream.Stream.of("rent-cut")).toList());
    try{return completion.onTabComplete(sender,command,label,FeatureRoutes.plot(rest));}catch(IllegalArgumentException e){return List.of();}
   }
   var result=new ArrayList<>(plots.onTabComplete(sender,command,label,args));

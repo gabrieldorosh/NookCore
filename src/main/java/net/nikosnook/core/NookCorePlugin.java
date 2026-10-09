@@ -85,6 +85,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             plots.locator(finder::show);
             plots.currentPlot(player->plotGate.regionAt(player.getLocation()));
             var routes=new PlotRoutes(plots,setup,(sender,command,label,args)->executeInternal(sender,getCommand("nookadmin"),label,args),(sender,command,label,args)->completeInternal(sender,getCommand("nookadmin"),label,args));
+            routes.rentReduction(new RentReduction(this,store,()->healthy,this::fail));
             Objects.requireNonNull(getCommand("plots")).setExecutor(routes);getCommand("plots").setTabCompleter(routes);
             Bukkit.getScheduler().runTaskTimer(this,()->plots.expireConfirmations((id,plot)->{
                 Player player=Bukkit.getPlayer(id);
