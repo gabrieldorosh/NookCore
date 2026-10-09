@@ -6,6 +6,10 @@ advancement-rewards-enabled: true
 vault-enabled: true
 chat:
   enabled: true
+  # TAB title/name only. Paper activity timer; no kicks or public messages.
+  afk:
+    enabled: true
+    after-seconds: 300
   # Account UUID -> mr-duck, miss-bee or mrs-niko (legacy mrs-bee also displays miss bee). Cosmetic only.
   display-titles: {}
   # Private keyword tips; never cancels chat, pings staff, or runs commands.
