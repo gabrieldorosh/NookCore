@@ -42,3 +42,7 @@ Sneak while placing an ordinary sign on a NookShop chest. Ordinary nearby labels
 ## Recovery
 
 Retain the October 7 JAR and current config. A JAR rollback while stopped does not undo the database rent cut; existing rents remain lower, but older automatic setup quotes use old rates. Avoid creating new plots with an older JAR until reviewed. Never restore an older economy database over newer player inventories merely to revert a price. No automatic rollback or refund has been implemented.
+
+## Title colour follow-up
+
+mr. duck now uses the stronger pastel red #EF8585 in his displayed title. Replace any previously queued October 9 JAR with this updated NookCore.jar before restarting. The colour change has 403 passing automated tests; the 21 isolated Paper checks cover the preceding fe9e759 build with identical shop/rent behaviour. Check the title visually in chat and TAB after installing.

@@ -23,7 +23,7 @@ final class ReleasePresentationChecks {
             invoke(chat,"refresh",new Class[]{Player.class},player);
             String rank=(String)invoke(chat,"placeholder",new Class[]{UUID.class,String.class},id,"rank");
             String label=switch(title){case "mr-duck"->"mr. duck";case "mrs-bee"->"miss bee";default->"mrs. niko";};
-            String colour=switch(title){case "mr-duck"->"#E8A0A0";case "mrs-bee"->"#F1DEA0";default->"#EAB8D2";};
+            String colour=switch(title){case "mr-duck"->"#EF8585";case "mrs-bee"->"#F1DEA0";default->"#EAB8D2";};
             check(rank.toLowerCase(Locale.ROOT).contains(colour.toLowerCase(Locale.ROOT)) && rank.contains("["+label+"]"),"account-specific title and colour "+name,log);
             check(!player.hasPermission("nookcore.admin"),"title does not require or grant admin "+name,log);
             Object account=((Optional<?>)invoke(store,"account",new Class[]{UUID.class},id)).orElseThrow();

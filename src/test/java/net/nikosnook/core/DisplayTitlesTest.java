@@ -12,7 +12,7 @@ class DisplayTitlesTest {
         assertEquals("admin",titles.rank(UUID.randomUUID(),"admin"));
         var rendered=ChatStyle.render(titles.rank(id,"admin"),"qahar0",new ChatPreferences.Preference("aqua","he/him"),Component.text("Hello"));
         assertEquals("[mr. duck] qahar0 · he/him: Hello",PlainTextComponentSerializer.plainText().serialize(rendered));
-        assertEquals(net.kyori.adventure.text.format.TextColor.fromHexString("#E8A0A0"),rendered.children().getFirst().color());
+        assertEquals(net.kyori.adventure.text.format.TextColor.fromHexString("#EF8585"),rendered.children().getFirst().color());
     }
     @Test void rejectsUnrecognisedTitleAndMalformedAccount(){
         var c=new YamlConfiguration();c.set(UUID.randomUUID().toString(),"admin");assertThrows(IllegalArgumentException.class,()->new DisplayTitles(c));
