@@ -34,7 +34,8 @@ public class AfkProbe extends JavaPlugin {
         check(value("rank").equals("&#AAAAAA[miss bee] &r"),"AFK title grey through real PlaceholderAPI");check(value("name").equals("&#AAAAAATestPlayer&r"),"AFK name grey through real PlaceholderAPI");
         check(value("balance").equals(balance) && value("pronouns").equals(pronouns),"balance and pronouns preserved");check(rendered().equals(activeChat),"public chat keeps normal colours while AFK");
         idle=Duration.ZERO;refresh();check(value("rank").equals(rank) && value("name").equals(name) && value("afk").equals("false"),"activity restores original display");
-        Bukkit.getPluginManager().callEvent(new org.bukkit.event.player.PlayerQuitEvent(player,Component.empty()));check(value("name").isEmpty(),"quit removes cached display");
+        // Test our cache cleanup directly: this controlled proxy is not a connected world player.
+        invoke(chat,"quit",new Class[]{org.bukkit.event.player.PlayerQuitEvent.class},new org.bukkit.event.player.PlayerQuitEvent(player,Component.empty()));check(value("name").isEmpty(),"quit removes cached display");
         getLogger().info("AFK_PASS checks="+checks);
     }catch(Throwable e){getLogger().log(java.util.logging.Level.SEVERE,"AFK_FAILED",e);}finally{Bukkit.shutdown();}},40);}
 }
