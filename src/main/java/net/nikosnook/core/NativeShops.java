@@ -64,15 +64,20 @@ final class NativeShops implements Listener {
         player.sendMessage(NookUi.message("NookShops","Shop created. Use Add stock to deposit matching items from your inventory. The container itself stays empty."));open(player,offer,true);
     }
     private NativeShop.Offer at(Block block)throws Exception {
+        Block clicked=block;
+        Block target=ShopLabels.target(clicked);
+        if(target==null)throw new IllegalArgumentException("There is no native shop here.");
+        block=target;
         var result=store.nativeAt(location(origin(block))).orElseThrow(()->new IllegalArgumentException("There is no native shop here."));
         for(var side:containers(block))if(!result.id().toString().equals(side.getPersistentDataContainer().get(anchor,PersistentDataType.STRING)))throw new IllegalArgumentException("The shop container changed. Its owner can close it from /nookshops mine.");
         if(!result.plot().equals(plot.apply(block)))throw new IllegalArgumentException("This shop is outside its configured plot.");
         for(var side:containers(block))if(!result.plot().equals(plot.apply(side.getBlock())))throw new IllegalArgumentException("This container crosses the plot boundary.");
+        if(!result.plot().equals(plot.apply(clicked)))throw new IllegalArgumentException("The shop label must be inside the same plot as its container.");
         noChestShop(block);return result;
     }
     private NativeShop.Offer nearby(Player player,UUID expected)throws Exception {
-        Block target=player.getTargetBlockExact(5);if(target==null)throw new IllegalArgumentException("Look at the shop container within five blocks.");
-        var offer=at(target);if(!offer.id().equals(expected))throw new IllegalArgumentException("Look at this shop's container to trade or add stock.");return offer;
+        Block target=player.getTargetBlockExact(5);if(target==null)throw new IllegalArgumentException("Look at the shop container or its label within five blocks.");
+        var offer=at(target);if(!offer.id().equals(expected))throw new IllegalArgumentException("Look at this shop's container or label to trade or add stock.");return offer;
     }
     boolean recover(org.bukkit.command.CommandSender sender,String[] args){return recovery.command(sender,args);}
     boolean review(org.bukkit.command.CommandSender sender,String[] args){
@@ -136,11 +141,11 @@ final class NativeShops implements Listener {
         var item=ItemStack.deserializeBytes(offer.item());item.setAmount(Math.min(offer.bundle(),item.getMaxStackSize()));menu.inventory.setItem(13,item);
         menu.inventory.setItem(4,icon(Material.PAPER,offer.bundle()+" × "+name(offer.item()),"Price: "+price(offer)+" per bundle","Stock: "+offer.stock()+" items",offer.closed()?"Closed":"Plot: "+store.plotAddress(offer.plot())));
         if(owner){
-            if(!offer.closed()){menu.inventory.setItem(11,icon(Material.CHEST,"Manage stock","Deposit or withdraw a chosen quantity.","Look at your shop container to manage it."));menu.inventory.setItem(22,icon(Material.RED_DYE,"Close shop","Stop sales. Stock remains yours to collect.","Create a new draft to change item, price or bundle."));}
+            if(!offer.closed()){menu.inventory.setItem(11,icon(Material.CHEST,"Manage stock","Deposit or withdraw a chosen quantity.","Shift-click matching inventory stacks to stock now."));menu.inventory.setItem(22,icon(Material.RED_DYE,"Close shop","Stop sales. Stock remains yours to collect.","Create a new draft to change item, price or bundle."));}
             else menu.inventory.setItem(22,icon(Material.CHEST,"Collect remaining stock","Collect up to 64 items. Make room first.","Works even after your rental has ended."));
         }else menu.inventory.setItem(22,icon(Material.LIME_DYE,"Buy "+offer.bundle()+" for "+price(offer),"Click once to confirm this purchase.","Payment is credited even when the shop members are offline."));
         if(!owner && stockMember(offer,player.getUniqueId()) && !offer.closed()){
-            menu.inventory.setItem(11,icon(Material.CHEST,"Manage stock","Deposit or withdraw a chosen quantity."));
+            menu.inventory.setItem(11,icon(Material.CHEST,"Manage stock","Deposit or withdraw a chosen quantity.","Shift-click matching inventory stacks to stock now."));
             menu.inventory.setItem(22,icon(Material.PAPER,"You help stock this shop","Plot members cannot purchase from their own plot."));
         }
         var payment=store.nativePayment(offer.id());
@@ -154,7 +159,7 @@ final class NativeShops implements Listener {
         if(!stockMember(offer,player.getUniqueId()) || offer.closed())throw new IllegalArgumentException("You need stock access to an open shop.");
         Menu menu=new Menu(player.getUniqueId(),offer,offer.owner().equals(player.getUniqueId()));menu.stock=true;menu.amount=Math.clamp(amount,1,64);
         menu.inventory=Bukkit.createInventory(menu,27,Component.text("NookShops · Stock",NamedTextColor.DARK_GRAY));
-        menu.inventory.setItem(4,icon(Material.PAPER,"Stock: "+offer.stock()+" items","Selected amount: "+menu.amount,"Click an inventory stack to deposit it.","Right-click an inventory stack to deposit one."));
+        menu.inventory.setItem(4,icon(Material.PAPER,"Stock: "+offer.stock()+" items","Selected amount: "+menu.amount,"Click or shift-click a matching stack to deposit it.","Right-click an inventory stack to deposit one."));
         var item=ItemStack.deserializeBytes(offer.item());item.setAmount(Math.min(menu.amount,item.getMaxStackSize()));menu.inventory.setItem(13,item);
         menu.inventory.setItem(10,icon(Material.RED_DYE,"Fewer items","Click: -1 · Shift-click: -8"));
         menu.inventory.setItem(16,icon(Material.LIME_DYE,"More items","Click: +1 · Shift-click: +8"));
@@ -181,7 +186,7 @@ final class NativeShops implements Listener {
                     if(slot>=27){
                         if(clicked==null || clicked.getType().isAir())return;
                         if(!Base64.getEncoder().encodeToString(NativeInventoryCodec.saleItem(clicked)).equals(exact.key()))throw new IllegalArgumentException("Only exactly matching sale items can be stocked here.");
-                        count=click==ClickType.RIGHT || click==ClickType.SHIFT_RIGHT?1:Math.min(64,clicked.getAmount());
+                        count=click==ClickType.RIGHT?1:Math.min(64,clicked.getAmount());
                     }
                     if(slot==22){
                         NativeInventoryPlan.deliver(inventory.capture(),exact,count);
@@ -193,10 +198,13 @@ final class NativeShops implements Listener {
             }catch(Exception error){problem(player,error);}
         });
     }
-    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=false) public void interact(PlayerInteractEvent event){
+    @EventHandler(priority=EventPriority.LOWEST,ignoreCancelled=false) public void interact(PlayerInteractEvent event){
         if(!enabled() || event.getHand()!=EquipmentSlot.HAND || event.getAction()!=org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK || event.getClickedBlock()==null)return;
-        var block=event.getClickedBlock();if(!(block.getState() instanceof Container container) || !container.getPersistentDataContainer().has(anchor,PersistentDataType.STRING))return;
-        // Vanilla sneak-placement handles ordinary signs; never override another protection decision.
+        if(event.useInteractedBlock()==Event.Result.DENY)return;
+        var block=event.getClickedBlock();if(ShopLabels.target(block)==null)return;
+        // Sneak-editing and placement still go through normal plot protection.
+        if(block.getState() instanceof Sign && event.getPlayer().isSneaking())return;
+        // Cancel physical interaction before WorldGuard considers chest/sign access.
         if(ShopLabels.placingLabel(event.getPlayer().isSneaking(),event.getItem()==null?Material.AIR:event.getItem().getType()))return;
         event.setCancelled(true);
         var p=event.getPlayer();
@@ -206,7 +214,11 @@ final class NativeShops implements Listener {
         if(!(e.getView().getTopInventory().getHolder() instanceof Menu menu))return;e.setCancelled(true);
         if(!(e.getWhoClicked() instanceof Player p) || !menu.viewer.equals(p.getUniqueId()) || e.getRawSlot()<0)return;
         if(menu.stock){stockClick(p,menu,e.getRawSlot(),e.getClick(),e.getCurrentItem()==null?null:e.getCurrentItem().clone());return;}
-        if(e.getRawSlot()>=27)return;
+        if(e.getRawSlot()>=27){
+            // All clicks stay cancelled: quick stocking uses the same receipt-backed deposit.
+            if(e.isShiftClick())stockClick(p,menu,e.getRawSlot(),e.getClick(),e.getCurrentItem()==null?null:e.getCurrentItem().clone());
+            return;
+        }
         int slot=e.getRawSlot();if(slot!=11 && slot!=22 && slot!=26)return;Bukkit.getScheduler().runTask(plugin,()->{
             if(!p.isOnline() || p.getOpenInventory().getTopInventory()!=menu.inventory)return;
             p.closeInventory(); // A queued duplicate click can no longer spend again.
