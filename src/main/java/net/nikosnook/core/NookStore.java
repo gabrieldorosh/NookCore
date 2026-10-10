@@ -55,6 +55,7 @@ public final class NookStore implements AutoCloseable {
             s.execute("CREATE TABLE IF NOT EXISTS native_stock_receipts (id TEXT PRIMARY KEY, offer TEXT NOT NULL REFERENCES native_offers(id), actor TEXT NOT NULL REFERENCES accounts(uuid), quantity INTEGER NOT NULL, time INTEGER NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS native_trade_receipts (id TEXT PRIMARY KEY, offer TEXT NOT NULL REFERENCES native_offers(id), buyer TEXT NOT NULL REFERENCES accounts(uuid), seller TEXT NOT NULL REFERENCES accounts(uuid), quantity INTEGER NOT NULL, cents INTEGER NOT NULL, revision INTEGER NOT NULL, item BLOB NOT NULL, time INTEGER NOT NULL, delivery TEXT NOT NULL DEFAULT 'PENDING' CHECK(delivery IN ('PENDING','REVIEW','DELIVERED')))");
             s.execute("CREATE TABLE IF NOT EXISTS native_stock_intents (receipt TEXT PRIMARY KEY, offer TEXT NOT NULL REFERENCES native_offers(id), actor TEXT NOT NULL REFERENCES accounts(uuid), quantity INTEGER NOT NULL CHECK(quantity BETWEEN 1 AND 64), before_hash BLOB NOT NULL, after_hash BLOB NOT NULL, state TEXT NOT NULL DEFAULT 'REVIEW' CHECK(state IN ('REVIEW','COMPLETE')), time INTEGER NOT NULL)");
+            s.execute("CREATE TABLE IF NOT EXISTS native_stock_resolutions (receipt TEXT PRIMARY KEY REFERENCES native_stock_intents(receipt), resolution TEXT NOT NULL CHECK(resolution IN ('CREDIT','NO_CREDIT')), staff TEXT NOT NULL, reason TEXT NOT NULL, time INTEGER NOT NULL)");
             s.execute("CREATE UNIQUE INDEX IF NOT EXISTS native_one_deposit_per_actor ON native_stock_intents(actor) WHERE state='REVIEW'");
             s.execute("CREATE TABLE IF NOT EXISTS native_payment_terms (offer TEXT PRIMARY KEY REFERENCES native_offers(id), item BLOB NOT NULL, quantity INTEGER NOT NULL CHECK(quantity BETWEEN 1 AND 64))");
             s.execute("CREATE TABLE IF NOT EXISTS native_payment_balances (actor TEXT NOT NULL REFERENCES accounts(uuid), offer TEXT NOT NULL REFERENCES native_offers(id), quantity INTEGER NOT NULL CHECK(quantity BETWEEN 0 AND 1000000), PRIMARY KEY(actor,offer))");
@@ -446,13 +447,40 @@ public final class NookStore implements AutoCloseable {
     }
     synchronized NativeStockReview nativeStockReview(UUID receipt)throws SQLException {
         if(receipt==null)throw new IllegalArgumentException("A stock receipt UUID is required.");
-        try(var p=db.prepareStatement("SELECT i.receipt,i.offer,i.actor,a.name,i.quantity,i.time,i.state,o.plot,o.item,i.before_hash,i.after_hash,c.quantity AS credited_quantity,o.stock FROM native_stock_intents i JOIN native_offers o ON o.id=i.offer JOIN accounts a ON a.uuid=i.actor LEFT JOIN native_stock_receipts c ON c.id=i.receipt WHERE i.receipt=?")){
+        try(var p=db.prepareStatement("SELECT i.receipt,i.offer,i.actor,a.name,i.quantity,i.time,i.state,o.plot,o.item,i.before_hash,i.after_hash,c.quantity AS credited_quantity,o.stock,x.resolution,x.staff,x.reason,x.time AS resolved_time FROM native_stock_intents i JOIN native_offers o ON o.id=i.offer JOIN accounts a ON a.uuid=i.actor LEFT JOIN native_stock_receipts c ON c.id=i.receipt LEFT JOIN native_stock_resolutions x ON x.receipt=i.receipt WHERE i.receipt=?")){
             bind(p,receipt);try(var r=p.executeQuery()){
                 if(!r.next())throw new IllegalArgumentException("Unknown stock receipt.");
                 int credited=r.getInt("credited_quantity");Integer creditedQuantity=r.wasNull()?null:credited;
-                return new NativeStockReview(receipt,UUID.fromString(r.getString("offer")),UUID.fromString(r.getString("actor")),r.getString("name"),r.getInt("quantity"),r.getLong("time"),r.getString("state"),r.getString("plot"),r.getBytes("item"),r.getBytes("before_hash"),r.getBytes("after_hash"),creditedQuantity,r.getInt("stock"));
+                String recovery=r.getString("resolution");
+                var resolution=recovery==null?null:new NativeStockReview.Resolution(NativeStockReview.Recovery.valueOf(recovery),r.getString("staff"),r.getString("reason"),r.getLong("resolved_time"));
+                return new NativeStockReview(receipt,UUID.fromString(r.getString("offer")),UUID.fromString(r.getString("actor")),r.getString("name"),r.getInt("quantity"),r.getLong("time"),r.getString("state"),r.getString("plot"),r.getBytes("item"),r.getBytes("before_hash"),r.getBytes("after_hash"),creditedQuantity,r.getInt("stock"),resolution);
             }
         }
+    }
+    // Explicit staff decision only: never reads, removes or restores player inventory.
+    boolean resolveNativeStock(NativeStockReview expected,NativeStockReview.Recovery recovery,String staff,String reason,long now)throws SQLException {
+        if(expected==null || recovery==null || !"REVIEW".equals(expected.state()) || expected.creditedQuantity()!=null || expected.resolution()!=null)throw new IllegalArgumentException("An unresolved stock receipt preview is required.");
+        if(staff==null || staff.isBlank() || staff.length()>128 || staff.chars().anyMatch(Character::isISOControl))throw new IllegalArgumentException("A staff identifier is required.");
+        if(reason==null || reason.isBlank() || reason.length()>500 || reason.chars().anyMatch(Character::isISOControl))throw new IllegalArgumentException("Record a single-line recovery reason of up to 500 characters.");
+        if(now<expected.time())throw new IllegalArgumentException("Recovery cannot precede the stock receipt.");
+        return tx(()->{
+            var current=nativeStockReview(expected.receipt());
+            if(current.resolution()!=null){
+                var old=current.resolution();
+                boolean credited=old.recovery()==NativeStockReview.Recovery.CREDIT?Objects.equals(current.creditedQuantity(),current.quantity()):current.creditedQuantity()==null;
+                if(current.sameIntent(expected) && "COMPLETE".equals(current.state()) && credited && old.recovery()==recovery && old.staff().equals(staff) && old.reason().equals(reason))return false;
+                throw new IllegalArgumentException("This stock receipt already has a different resolution.");
+            }
+            if(!current.sameSnapshot(expected) || !"REVIEW".equals(current.state()) || current.creditedQuantity()!=null)throw new IllegalArgumentException("The stock receipt or shop stock changed. Inspect it and create a fresh preview.");
+            if(recovery==NativeStockReview.Recovery.CREDIT){
+                if((long)current.currentStock()+current.quantity()>NativeShop.MAX_STOCK)throw new IllegalArgumentException("The shop cannot hold the recovered stock. Leave the receipt for review.");
+                update("UPDATE native_offers SET stock=stock+? WHERE id=?",current.quantity(),current.offer());
+                update("INSERT INTO native_stock_receipts(id,offer,actor,quantity,time) VALUES(?,?,?,?,?)",current.receipt(),current.offer(),current.actor(),current.quantity(),now);
+            }
+            update("INSERT INTO native_stock_resolutions(receipt,resolution,staff,reason,time) VALUES(?,?,?,?,?)",current.receipt(),recovery.name(),staff,reason,now);
+            update("UPDATE native_stock_intents SET state='COMPLETE' WHERE receipt=?",current.receipt());
+            return true;
+        });
     }
     private UUID nativeLease(String plot)throws SQLException {
         try(var p=db.prepareStatement("SELECT lease FROM plot_leases WHERE plot=?")){

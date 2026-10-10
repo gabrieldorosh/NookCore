@@ -34,7 +34,7 @@ final class ShopSetup implements Listener,CommandExecutor,TabCompleter {
     static boolean stockContainer(Material type){return type==Material.CHEST || type==Material.TRAPPED_CHEST || type==Material.BARREL || type.name().endsWith("SHULKER_BOX");}
     private boolean enabled(){return live.enabled() || plugin.getConfig().getBoolean("shop-setup-preview-enabled",false);}
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
-        if(live.review(sender,args))return true;
+        if(live.recover(sender,args) || live.review(sender,args))return true;
         if(!enabled()){sender.sendMessage(NookUi.message("NookShops","Shop setup preview is not enabled on this server."));return true;}
         if(!(sender instanceof Player player)){sender.sendMessage(NookUi.message("NookShops","Use shop setup in game."));return true;}
         if(live.enabled() && live.command(player,args))return true;

@@ -21,11 +21,12 @@ final class NativeShops implements Listener {
         Menu(UUID viewer,NativeShop.Offer offer,boolean owner){this.viewer=viewer;this.offer=offer.id();this.revision=offer.revision();this.owner=owner;}
         public Inventory getInventory(){return inventory;}
     }
-    private final JavaPlugin plugin;private final NookStore store;private final NativeCustody custody;
+    private final JavaPlugin plugin;private final NookStore store;private final NativeCustody custody;private final NativeStockRecovery recovery;
     private final BooleanSupplier ready;private final Function<Block,String> plot;private final Consumer<Exception> failure;
     private final NamespacedKey anchor=new NamespacedKey("nookcore","native-shop");
     NativeShops(JavaPlugin plugin,NookStore store,BooleanSupplier ready,Function<Block,String> plot,Consumer<Exception> failure){
         this.plugin=plugin;this.store=store;this.custody=new NativeCustody(store);this.ready=ready;this.plot=plot;this.failure=failure;
+        this.recovery=new NativeStockRecovery(plugin,store,ready,failure);
         Bukkit.getPluginManager().registerEvents(this,plugin);
     }
     boolean enabled(){return plugin.getConfig().getBoolean("native-shops-enabled",false);}
@@ -73,6 +74,7 @@ final class NativeShops implements Listener {
         Block target=player.getTargetBlockExact(5);if(target==null)throw new IllegalArgumentException("Look at the shop container within five blocks.");
         var offer=at(target);if(!offer.id().equals(expected))throw new IllegalArgumentException("Look at this shop's container to trade or add stock.");return offer;
     }
+    boolean recover(org.bukkit.command.CommandSender sender,String[] args){return recovery.command(sender,args);}
     boolean review(org.bukkit.command.CommandSender sender,String[] args){
         if(args.length==0 || !args[0].equalsIgnoreCase("review"))return false;
         if(!sender.hasPermission("nookcore.admin")){sender.sendMessage(NookUi.problem("NookShops","This command is for admins."));return true;}
