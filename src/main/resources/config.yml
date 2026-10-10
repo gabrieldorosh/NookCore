@@ -205,3 +205,7 @@ bunny-boots:
 mob-protection:
   prevent-creeper-block-damage: true
   prevent-enderman-block-changes: true
+
+# Private local activity counters; no chat messages or economy changes.
+economy-metrics:
+  enabled: true

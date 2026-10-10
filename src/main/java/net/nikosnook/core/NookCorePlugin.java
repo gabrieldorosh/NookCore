@@ -20,6 +20,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     private boolean healthy=true, awardsEnabled;
     private ChestShopRentalGate plotGate;
     private NookChat chat;
+    private EconomyMetrics economyMetrics;
     private BunnyBoots bunnyBoots;
     private GroundedTravel groundedTravel;
     private AdminTeleports adminTeleports;
@@ -49,6 +50,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
                 if(amount<0 || amount>Money.MAX || !key.startsWith("minecraft:"))throw new IllegalArgumentException("Invalid reward: "+key);
                 rewards.put(key,amount);
             }
+            try{economyMetrics=new EconomyMetrics(this,store);}catch(Exception ex){getLogger().log(Level.WARNING,"Activity metrics unavailable; gameplay is unaffected",ex);}
             bunnyBoots=new BunnyBoots(this,store,()->healthy,this::fail);
             groundedTravel=new GroundedTravel(this);
             awardsEnabled=getConfig().getBoolean("advancement-rewards-enabled",true);
@@ -198,6 +200,14 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         }return args;
     }
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
+        if(command.getName().equals("nooks") && args.length>0 && args[0].equalsIgnoreCase("metrics")){
+            if(economyMetrics==null){sender.sendMessage(NookUi.problem("Nooks","Activity metrics unavailable."));return true;}
+            return economyMetrics.command(sender,args);
+        }
+        if(command.getName().equals("nooks") && args.length>0 && args[0].equalsIgnoreCase("report")){
+            try{return EconomyReports.execute(sender,args,store,healthy,System.currentTimeMillis());}
+            catch(SQLException ex){getLogger().log(Level.SEVERE,"Could not read economy report.",ex);sender.sendMessage(NookUi.problem("Nooks","Report unavailable. Check the server log."));return true;}
+        }
         if(command.getName().equals("nooks") && FeatureRoutes.moneyAdmin(args))return executeInternal(sender,getCommand("nookadmin"),label,FeatureRoutes.money(args));
         if(command.getName().equals("nookadmin") && (args.length==0 || !Set.of("teleport","return").contains(args[0].toLowerCase(Locale.ROOT)))){
             if(!sender.hasPermission("nookcore.admin")){sender.sendMessage(NookUi.problem("NookAdmin","This command is for admins."));return true;}
@@ -207,7 +217,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     }
     private boolean executeInternal(CommandSender sender,Command command,String label,String[] args){
         if(command.getName().equals("nooks") && !(sender instanceof Player) && args.length==1 && args[0].equalsIgnoreCase("help")){
-            if(sender.hasPermission("nookcore.admin"))NookUi.help(sender,"Nooks · Administration","/nooks balance <player> — inspect a balance","/nooks give <player> <amount> <reason> — credit Nooks","/nooks take <player> <amount> <reason> — debit Nooks","/nooks advancements <on|off> — toggle advancement payouts","/nooks backup — save an economy snapshot");return true;
+            if(sender.hasPermission("nookcore.admin"))NookUi.help(sender,"Nooks · Administration","/nooks balance <player> — inspect a balance","/nooks give <player> <amount> <reason> — credit Nooks","/nooks take <player> <amount> <reason> — debit Nooks","/nooks advancements <on|off> — toggle advancement payouts","/nooks backup — save an economy snapshot","/nooks report [days] — private economy and delivered-sales summary");return true;
         }
         if(command.getName().equals("baltop")){return showBaltop(sender,args);}
         if(command.getName().equals("nookadmin")){
@@ -280,7 +290,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
                 }
                 if(args.length==2 && args[0].equalsIgnoreCase("balance")){var a=resolve(args[1]);sender.sendMessage(NookUi.prefix(section).append(NookUi.name(a.id(),a.name())).append(NookUi.text(": "+Money.format(a.cents()))));return true;}
                 if(args.length>=4 && Set.of("give","take").contains(args[0].toLowerCase(Locale.ROOT))){var a=resolve(args[1]);long value=Money.parse(args[2]);if(args[0].equalsIgnoreCase("take"))value=-value;String reason=String.join(" ",Arrays.copyOfRange(args,3,args.length));store.adjust(a.id(),value,sender.getName(),reason,now);Player affected=Bukkit.getPlayer(a.id());if(affected!=null)affected.sendMessage(NookUi.message("Nooks","Staff "+(value>0?"added ":"removed ")+Money.format(Math.abs(value))+(value>0?" to":" from")+" your balance. Reason: "+reason+". Balance: "+Money.format(store.account(a.id()).orElseThrow().cents())+"."));sender.sendMessage(NookUi.message(section,"Recorded adjustment for ").append(NookUi.name(a.id(),a.name())).append(NookUi.text(": "+Money.format(value))));return true;}
-                NookUi.help(sender,"NookAdmin","/nookadmin teleport <player> [destination-player] — visit a player, or move one player to another","/nookadmin return [player] — return after a staff teleport (30-minute window)","/nooks balance <player> — inspect a balance","/nooks give <player> <amount> <reason> — credit Nooks","/nooks take <player> <amount> <reason> — debit Nooks","/nooks backup — save an economy snapshot","/nooks advancements <on|off> — toggle advancement payments","/plots admin define <id> <weekly-price> — create a plot record","/plots admin evict <address> <reason|confirm> — preview and confirm an eviction with refund","/plots admin clear <address> <storage-note> — release a cleared plot; record where belongings are stored","/plots admin storage <id> — read the latest 10 clearance storage notes","/plots admin membership <player> — inspect the player's plot allowance","/plots admin absence <id> <days|off> <reason> — record an absence");return true;
+                NookUi.help(sender,"NookAdmin","/nookadmin teleport <player> [destination-player] — visit a player, or move one player to another","/nookadmin return [player] — return after a staff teleport (30-minute window)","/nooks balance <player> — inspect a balance","/nooks give <player> <amount> <reason> — credit Nooks","/nooks take <player> <amount> <reason> — debit Nooks","/nooks backup — save an economy snapshot","/nooks report [days] — private economy and delivered-sales summary","/nooks advancements <on|off> — toggle advancement payments","/plots admin define <id> <weekly-price> — create a plot record","/plots admin evict <address> <reason|confirm> — preview and confirm an eviction with refund","/plots admin clear <address> <storage-note> — release a cleared plot; record where belongings are stored","/plots admin storage <id> — read the latest 10 clearance storage notes","/plots admin membership <player> — inspect the player's plot allowance","/plots admin absence <id> <days|off> <reason> — record an absence");return true;
             }
             if(!(sender instanceof Player p)){sender.sendMessage(NookUi.message(section,"Use /nooks balance <player> from console."));return true;}
             CommandSyntax.check("nooks",args);
@@ -295,7 +305,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             if(args.length==3 && args[0].equalsIgnoreCase("pay")){
                 var recipient=resolve(args[1]);long amount=Money.parse(args[2]);store.transfer(p.getUniqueId(),recipient.id(),amount,now);sender.sendMessage(NookUi.message(section,"Paid ").append(NookUi.name(recipient.id(),recipient.name())).append(NookUi.text(" "+Money.format(amount)+".")));Player target=Bukkit.getPlayer(recipient.id());if(target!=null)target.sendMessage(NookUi.prefix("Nooks").append(NookUi.name(p.getUniqueId(),p.getName())).append(NookUi.text(" paid you "+Money.format(amount)+".")));return true;
             }
-            if(sender.hasPermission("nookcore.admin"))NookUi.help(sender,"Nooks · Administration","/nooks balance <player> — inspect a balance","/nooks give <player> <amount> <reason> — credit Nooks","/nooks take <player> <amount> <reason> — debit Nooks","/nooks advancements <on|off> — toggle advancement payouts","/nooks backup — save an economy snapshot");
+            if(sender.hasPermission("nookcore.admin"))NookUi.help(sender,"Nooks · Administration","/nooks balance <player> — inspect a balance","/nooks give <player> <amount> <reason> — credit Nooks","/nooks take <player> <amount> <reason> — debit Nooks","/nooks advancements <on|off> — toggle advancement payouts","/nooks backup — save an economy snapshot","/nooks report [days] — private economy and delivered-sales summary");
             NookUi.help(sender,"Nooks","/nooks — check your balance","/nooks pay <player> <amount> — send Nooks, including offline players","/nooks history — recent transactions");return true;
         }catch(NumberFormatException e){sender.sendMessage(NookUi.problem(section,"Choose a whole number of days from 1 to 365, or off."));return true;}
         catch(IllegalArgumentException e){sender.sendMessage(NookUi.problem(section,e.getMessage()));return true;}
@@ -316,6 +326,8 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args){
         if(command.getName().equals("nooks")){
             if(args.length==1){var values=new ArrayList<>(List.of("balance","pay","history","top","help"));if(sender.hasPermission("nookcore.admin"))values.addAll(FeatureRoutes.MONEY_ADMIN);return NookUi.complete(args[0],values);}
+            if(args.length>=2 && args[0].equalsIgnoreCase("metrics"))return sender.hasPermission("nookcore.admin")?NookUi.complete(args[args.length-1],args.length==2?List.of("export","1","7","30","90"):args.length==3 && args[1].equalsIgnoreCase("export")?List.of("1","7","30","90"):List.of()):List.of();
+            if(args.length==2 && args[0].equalsIgnoreCase("report"))return sender.hasPermission("nookcore.admin")?NookUi.complete(args[1],List.of("1","7","30","90")):List.of();
             if(FeatureRoutes.moneyAdmin(args))return sender.hasPermission("nookcore.admin")?completeInternal(sender,getCommand("nookadmin"),alias,FeatureRoutes.money(args)):List.of();
         }
         if(command.getName().equals("nookadmin")){
@@ -346,5 +358,6 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         return NookUi.complete(args[args.length-1],values);
     }
     @Override public void onDisable(){
+        if(economyMetrics!=null)try{economyMetrics.close();}catch(Exception ex){getLogger().log(Level.WARNING,"Metrics close failed",ex);}
         if(groundedTravel!=null)groundedTravel.close();if(bunnyBoots!=null)bunnyBoots.close();healthy=false;if(chat!=null)chat.close();getServer().getServicesManager().unregisterAll(this);if(store!=null)try{store.close();}catch(SQLException e){getLogger().log(Level.SEVERE,"Database close failed",e);}}
 }
