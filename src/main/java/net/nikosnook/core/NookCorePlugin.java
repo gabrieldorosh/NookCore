@@ -24,6 +24,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     private BunnyBoots bunnyBoots;
     private GroundedTravel groundedTravel;
     private AdminTeleports adminTeleports;
+    private StaffMode staffMode;
     @Override public void onEnable(){
         saveDefaultConfig();
         if(Files.exists(getDataFolder().toPath().resolve("plot-setup-pending.yml"))){blockStartup("Unfinished plot setup: recover plot-setup-pending.yml before enabling trades.");return;}
@@ -43,6 +44,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         try {
             Files.createDirectories(getDataFolder().toPath());
             store=new NookStore(getDataFolder().toPath().resolve("nooks.db"));
+            staffMode=new StaffMode(this);
             var section=getConfig().getConfigurationSection("advancement-rewards");
             if(section==null)throw new IllegalArgumentException("Missing advancement reward map.");
             for(String key:section.getKeys(false)) {
@@ -169,7 +171,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     @EventHandler public void join(PlayerJoinEvent e){try{joinPlayer(e.getPlayer());}catch(SQLException ex){fail(ex);}}
     @EventHandler public void quit(PlayerQuitEvent e){if(store!=null)store.online(e.getPlayer().getUniqueId(),false);if(healthy)try{store.touch(e.getPlayer().getUniqueId(),System.currentTimeMillis());}catch(SQLException ex){fail(ex);}}
     @EventHandler public void advancement(PlayerAdvancementDoneEvent e){
-        if(!healthy || !awardsEnabled)return;
+        if(!healthy || !awardsEnabled || StaffMode.active(e.getPlayer().getUniqueId()))return;
         String key=e.getAdvancement().getKey().toString();Long amount=rewards.get(key);if(amount==null)return;
         try{
             // Advancement events can precede join handlers on some paths: never silently lose an award.
@@ -183,7 +185,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void teleport(PlayerTeleportEvent e){
-        if(e.getTo()==null || adminTeleports.consume(e) || e.getPlayer().hasPermission("nookcore.travel.bypass"))return;
+        if(e.getTo()==null || staffMode!=null && staffMode.returning(e) || adminTeleports.consume(e) || e.getPlayer().hasPermission("nookcore.travel.bypass"))return;
         World.Environment env=e.getTo().getWorld().getEnvironment();
         if((env==World.Environment.NETHER && getConfig().getBoolean("travel.lock-nether",true)) || (env==World.Environment.THE_END && getConfig().getBoolean("travel.lock-end",true))){e.setCancelled(true);e.getPlayer().sendMessage(NookUi.message("NookCore","That dimension has not opened yet."));return;}
         if(getConfig().getBoolean("travel.block-command-teleports",true) && (e.getCause()==PlayerTeleportEvent.TeleportCause.COMMAND || e.getCause()==PlayerTeleportEvent.TeleportCause.PLUGIN)){

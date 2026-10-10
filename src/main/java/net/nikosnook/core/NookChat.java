@@ -17,7 +17,7 @@ import net.kyori.adventure.key.Key;
 
 /** Main-thread permission snapshots keep asynchronous chat free of Bukkit permission/storage calls. */
 final class NookChat implements Listener, CommandExecutor, TabCompleter {
-    private record Snapshot(String name,String rank,ChatPreferences.Preference preference,int deaths,long cents,boolean afk){}
+    private record Snapshot(String name,String rank,ChatPreferences.Preference preference,int deaths,long cents,boolean afk,boolean staff){}
     private final JavaPlugin plugin;
     private final ChatPreferences preferences;
     private final DisplayTitles titles;
@@ -69,7 +69,7 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
     void close(){if(help!=null)help.close();unregister.run();NookUi.preferences=null;}
     String placeholder(UUID id,String key){
         Snapshot s=snapshots.get(id);if(s==null)return Set.of("deaths","balance","balance_whole").contains(key)?"0":"";
-        return switch(key){case "afk"->Boolean.toString(s.afk());case "balance"->java.math.BigDecimal.valueOf(s.cents(),2).setScale(2).toPlainString();case "balance_whole"->Long.toString(s.cents()/100);case "deaths"->Integer.toString(s.deaths());case "name"->"&"+(s.afk()?AfkDisplay.COLOUR:s.preference().textColour().asHexString())+s.name()+"&r";case "pronouns"->s.preference().pronouns().isEmpty()?"":" &7· "+s.preference().pronouns()+"&r";case "rank"->("&"+(s.afk()?AfkDisplay.COLOUR:ChatStyle.rankColour(s.rank()).asHexString()))+"["+ChatStyle.rankLabel(s.rank())+"] &r";default->null;};
+        return switch(key){case "staffmode"->Boolean.toString(s.staff());case "afk"->Boolean.toString(s.afk());case "balance"->java.math.BigDecimal.valueOf(s.cents(),2).setScale(2).toPlainString();case "balance_whole"->Long.toString(s.cents()/100);case "deaths"->Integer.toString(s.deaths());case "name"->"&"+(s.afk()?AfkDisplay.COLOUR:s.preference().textColour().asHexString())+s.name()+"&r";case "pronouns"->s.preference().pronouns().isEmpty()?"":" &7· "+s.preference().pronouns()+"&r";case "rank"->(s.staff()?"&7[on duty] &r":"")+("&"+(s.afk()?AfkDisplay.COLOUR:ChatStyle.rankColour(s.rank()).asHexString()))+"["+ChatStyle.rankLabel(s.rank())+"] &r";default->null;};
     }
     static String displayRank(java.util.function.Predicate<String> permission){
         for(String rank:List.of("owner","admin","helper","supporter"))if(permission.test("nookcore.chat.rank."+rank))return rank;
@@ -81,7 +81,7 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
         Snapshot previous=snapshots.get(id);long cents=previous==null?0:previous.cents();
         try{cents=balances.read(id);balanceWarning=false;}
         catch(java.sql.SQLException e){if(!balanceWarning){plugin.getLogger().warning("TAB balance refresh failed; keeping the last displayed balance.");balanceWarning=true;}}
-        snapshots.put(id,new Snapshot(player.getName(),rank,preferences.get(id),player.getStatistic(org.bukkit.Statistic.DEATHS),cents,AfkDisplay.idle(afkEnabled,afkSeconds,player.getIdleDuration())));
+        snapshots.put(id,new Snapshot(player.getName(),rank,preferences.get(id),player.getStatistic(org.bukkit.Statistic.DEATHS),cents,AfkDisplay.idle(afkEnabled,afkSeconds,player.getIdleDuration()),StaffMode.active(id)));
     }
     @EventHandler(priority=EventPriority.HIGH)
     public void death(org.bukkit.event.entity.PlayerDeathEvent event){
@@ -94,7 +94,7 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
     }
     @EventHandler(priority=EventPriority.HIGH) public void advancement(PlayerAdvancementDoneEvent event){
         var player=event.getPlayer();
-        event.message(PlayerPresentation.colourName(event.message(),player.getName(),preferences.get(player.getUniqueId()).textColour()));
+        event.message(StaffMode.active(player.getUniqueId())?null:PlayerPresentation.colourName(event.message(),player.getName(),preferences.get(player.getUniqueId()).textColour()));
     }
     @EventHandler(priority=EventPriority.HIGH) public void join(PlayerJoinEvent event){
         refresh(event.getPlayer());

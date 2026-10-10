@@ -4,9 +4,12 @@ main: net.nikosnook.core.NookCorePlugin
 api-version: '26.2'
 description: Niko's Nook season-two economy foundation
 author: NikosNook
-softdepend: [Vault, WorldGuard, WorldEdit, PlaceholderAPI]
+softdepend: [DiscordSRV, Vault, WorldGuard, WorldEdit, PlaceholderAPI]
 loadbefore: [ChestShop]
 commands:
+  staffmode:
+    description: Hidden spectator tools and saved return position
+    usage: /staffmode [on|off|list|tp <player>|spectate <player>|inspect <player>]
   bunny:
     description: Bunny boots time and charging
     usage: /bunny
@@ -40,6 +43,23 @@ commands:
     permission: nookcore.admin
     usage: /nookadmin <teleport|return> ...
 permissions:
+  nookcore.staff:
+    description: Staff mode tools without economy administration or general teleport bypass
+    default: op
+    children:
+      nookcore.staff.use: true
+      nookcore.staff.see: true
+      nookcore.staff.teleport: true
+      nookcore.staff.inspect: true
+      tab.seevanished: true
+  nookcore.staff.use:
+    default: op
+  nookcore.staff.see:
+    default: op
+  nookcore.staff.teleport:
+    default: op
+  nookcore.staff.inspect:
+    default: op
   nookcore.chat.rank.owner:
     description: Cosmetic owner rank only; does not grant staff access
     default: false
