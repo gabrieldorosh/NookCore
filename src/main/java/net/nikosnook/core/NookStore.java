@@ -444,6 +444,16 @@ public final class NookStore implements AutoCloseable {
             while(r.next())result.add(r.getString(1)+" · "+r.getString(2)+" · player "+r.getString(3));
         }return result;
     }
+    synchronized NativeStockReview nativeStockReview(UUID receipt)throws SQLException {
+        if(receipt==null)throw new IllegalArgumentException("A stock receipt UUID is required.");
+        try(var p=db.prepareStatement("SELECT i.receipt,i.offer,i.actor,a.name,i.quantity,i.time,i.state,o.plot,o.item,i.before_hash,i.after_hash,c.quantity AS credited_quantity,o.stock FROM native_stock_intents i JOIN native_offers o ON o.id=i.offer JOIN accounts a ON a.uuid=i.actor LEFT JOIN native_stock_receipts c ON c.id=i.receipt WHERE i.receipt=?")){
+            bind(p,receipt);try(var r=p.executeQuery()){
+                if(!r.next())throw new IllegalArgumentException("Unknown stock receipt.");
+                int credited=r.getInt("credited_quantity");Integer creditedQuantity=r.wasNull()?null:credited;
+                return new NativeStockReview(receipt,UUID.fromString(r.getString("offer")),UUID.fromString(r.getString("actor")),r.getString("name"),r.getInt("quantity"),r.getLong("time"),r.getString("state"),r.getString("plot"),r.getBytes("item"),r.getBytes("before_hash"),r.getBytes("after_hash"),creditedQuantity,r.getInt("stock"));
+            }
+        }
+    }
     private UUID nativeLease(String plot)throws SQLException {
         try(var p=db.prepareStatement("SELECT lease FROM plot_leases WHERE plot=?")){
             bind(p,plot);try(var rows=p.executeQuery()){if(!rows.next())throw new IllegalArgumentException("No current rental lease.");return UUID.fromString(rows.getString(1));}

@@ -128,6 +128,7 @@ final class ShopSetup implements Listener,CommandExecutor,TabCompleter {
     public void drag(InventoryDragEvent event){if(event.getView().getTopInventory().getHolder() instanceof Menu)event.setCancelled(true);}
     @EventHandler public void quit(PlayerQuitEvent event){drafts.remove(event.getPlayer().getUniqueId());}
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String label,String[] args){
+        if(args.length==1 && sender.hasPermission("nookcore.admin") && args[0].toLowerCase(Locale.ROOT).startsWith("rev"))return NookUi.complete(args[0],List.of("review"));
         if(!enabled())return List.of();
         if(args.length==1)return NookUi.complete(args[0],live.enabled()?List.of("create","preview","price","payment","cancel","mine","manage","collect","help"):List.of("create","preview","price","payment","cancel","help"));
         if(args.length==2 && args[0].equalsIgnoreCase("payment"))return NookUi.complete(args[1],Arrays.stream(Material.values()).filter(m->m.isItem() && !m.isAir()).map(m->m.name().toLowerCase(Locale.ROOT)).toList());

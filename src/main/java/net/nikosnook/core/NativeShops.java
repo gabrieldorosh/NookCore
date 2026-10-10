@@ -74,9 +74,19 @@ final class NativeShops implements Listener {
         var offer=at(target);if(!offer.id().equals(expected))throw new IllegalArgumentException("Look at this shop's container to trade or add stock.");return offer;
     }
     boolean review(org.bukkit.command.CommandSender sender,String[] args){
-        if(args.length!=1 || !args[0].equalsIgnoreCase("review"))return false;
+        if(args.length==0 || !args[0].equalsIgnoreCase("review"))return false;
         if(!sender.hasPermission("nookcore.admin")){sender.sendMessage(NookUi.problem("NookShops","This command is for admins."));return true;}
-        try{var reviews=store.nativeReviews();sender.sendMessage(NookUi.message("NookShops",reviews.isEmpty()?"No shop inventory operations need review.":"Inventory operations needing review (up to 50):"));for(String line:reviews)sender.sendMessage(NookUi.message("NookShops",line));}
+        try{
+            if(args.length==2){
+                UUID id;try{id=UUID.fromString(args[1]);}catch(IllegalArgumentException e){throw new IllegalArgumentException("Use the full stock receipt UUID shown by /nookshops review.");}
+                var detail=store.nativeStockReview(id);
+                for(String line:detail.lines(name(detail.item())))sender.sendMessage(NookUi.message("NookShops",line));
+            }else if(args.length==1){
+                var reviews=store.nativeReviews();sender.sendMessage(NookUi.message("NookShops",reviews.isEmpty()?"No shop inventory operations need review.":"Inventory operations needing review (up to 50):"));
+                for(String line:reviews)sender.sendMessage(NookUi.message("NookShops",line));
+                if(!reviews.isEmpty())sender.sendMessage(NookUi.message("NookShops","Inspect a stock receipt: /nookshops review <receipt>. This does not move items or resolve it."));
+            }else throw new IllegalArgumentException("Use /nookshops review [stock-receipt].");
+        }catch(IllegalArgumentException e){sender.sendMessage(NookUi.problem("NookShops",e.getMessage()));}
         catch(Exception e){failure.accept(e);sender.sendMessage(NookUi.problem("NookShops","Could not read review records. Check the server log."));}return true;
     }
     boolean command(Player player,String[] args){
