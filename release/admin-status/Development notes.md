@@ -9,3 +9,5 @@ Build with build.ps1 -Offline to embed identity. Direct Maven builds use explici
 This branch is based on stable main, NOT the staff-mode candidate. Do not replace tonight's staff-mode JAR with this development build: it does not include staff mode. Merge/integrate and retest deliberately after the staff candidate is accepted. Tonight's bundle remains unchanged.
 
 Validation: BuildIdentity unit cases cover missing/unfiltered metadata and recorded properties. AdminStatusProbe on disposable Paper checks permission denial, identity, harmless extra arguments, paused health, no quest rotation, no SQL changes, blocked startup and absent-store handling. The probe deliberately triggers a synthetic startup-blocked log near shutdown; it is not a live server test. Run src/test/probes/run_admin_status.py only on the isolated local harness.
+
+If the external drive intermittently fails JUnit directory cleanup, build.ps1 accepts -TestTempDirectory with an existing/writable local disk path. This changes only test temporary storage; it does not skip tests or disable cleanup. Default remains target/test-tmp.

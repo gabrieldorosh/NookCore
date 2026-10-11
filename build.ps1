@@ -1,4 +1,4 @@
-param([switch]$Offline)
+param([switch]$Offline, [string]$TestTempDirectory)
 $ErrorActionPreference = 'Stop'
 New-Item -ItemType Directory -Force -Path (Join-Path $PSScriptRoot 'target\test-tmp') | Out-Null
 $nookTools = Join-Path $PSScriptRoot '..\tools'
@@ -17,6 +17,10 @@ $nookHasher = [System.Security.Cryptography.SHA256]::Create()
 try { $nookInputHash = ([BitConverter]::ToString($nookHasher.ComputeHash([Text.Encoding]::UTF8.GetBytes(($nookInputLines -join "`n"))))).Replace('-','').ToLowerInvariant() } finally { $nookHasher.Dispose() }
 $nookBuilt = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
 $nookArguments += @("-Dnook.commit=$nookCommit", "-Dnook.state=$nookState", "-Dnook.inputs=$nookInputHash", "-Dnook.built=$nookBuilt")
+if ($TestTempDirectory) {
+    New-Item -ItemType Directory -Force -Path $TestTempDirectory | Out-Null
+    $nookArguments += "-Dnook.test.tmpdir=$((Resolve-Path -LiteralPath $TestTempDirectory).Path)"
+}
 if ($Offline) { $nookArguments += '-o' }
 & $nookMaven @nookArguments
 exit $LASTEXITCODE
