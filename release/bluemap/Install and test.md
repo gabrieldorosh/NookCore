@@ -2,7 +2,7 @@
 
 Ready to upload; not deployed. Web-only changes, independent of the staff-mode JAR.
 
-Includes the existing server icon/favicon, cream and green light/dark themes, a collapsible community card, the verified Discord invite and joining information. BlueMap attribution and high-contrast mode remain. The card starts collapsed and hides during native-menu and free-flight use. No map data, player lists, permissions, render settings or server admission rules are changed.
+Includes the existing server icon/favicon, cream and green map controls and a compact pastel-yellow card with exactly three lines: "niko's nook <3", "season two map", and the clickable "join our discord". BlueMap attribution remains in its native Info menu, and high-contrast mode remains. The card hides during native-menu and free-flight use. No map data, player lists, permissions, render settings or server admission rules are changed.
 
 ## Install
 
@@ -12,10 +12,10 @@ Includes the existing server icon/favicon, cream and green light/dark themes, a 
 
 ```hocon
 scripts: [
-  "nook-theme/nook-map.js?v=20261011"
+  "nook-theme/nook-map.js?v=20261011-2"
 ]
 styles: [
-  "nook-theme/nook-map.css?v=20261011"
+  "nook-theme/nook-map.css?v=20261011-2"
 ]
 ```
 
@@ -25,7 +25,7 @@ styles: [
 bluemap reload light
 ```
 
-5. Hard-refresh the map in your browser (Ctrl+F5). Confirm the icon, title and collapsible card appear. If a proxy caches settings.json, purge that specific cache and reload. No full Minecraft restart, plugin update or map re-render is needed for these web customisations.
+5. Hard-refresh the map in your browser (Ctrl+F5). Confirm the icon, title and three-line card appear. If a proxy caches settings.json, purge that specific cache and reload. No full Minecraft restart, plugin update or map re-render is needed for these web customisations.
 
 Do not upload the preview images, audit JSON, CONFIG-EDITS.conf or this guide into plugins. Do not replace index.html, hashed BlueMap assets or settings.json. New files alone do not activate the theme; the two webapp.conf entries do.
 
@@ -47,7 +47,7 @@ The theme itself does not hide staff. Test the backend: from a separate normal b
 
 - Browser preview loaded the public map with local-only asset overrides; no remote files were written.
 - Tested the current public 5.13 web interface and bundled 5.27 interface against public map data, each without JavaScript page errors.
-- Verified title/favicon, card toggle, Discord URL, keyboard Escape, native menu access, dark/light/high-contrast styling, 390px and 320px widths, script idempotence and unobstructed free-flight controls. Screenshots inspected.
+- Verified title/favicon, exact card text, pastel-yellow colour, Discord URL, keyboard focus, native menu access, dark/light/high-contrast styling, 390px and 320px widths, script idempotence and unobstructed free-flight controls. Screenshots inspected.
 - Discord invite 9AxdaMKuyX resolved to niko's nook on October 11. No Discord messages or membership changes made.
 - Current public page advertises web version 5.13; archived plugin/settings are 5.27. This package supports both and does not attempt an unrelated webapp upgrade. An outdated index.html may explain that difference, but current hosted files must be checked before changing them.
 - After upload: pan/zoom, switch Overworld/Nether, open Maps/Players/Settings/Info, follow Discord, test a real phone and check staff visibility. Keep existing BlueMap attribution.
@@ -60,3 +60,5 @@ Remove only the two nook-theme entries from scripts/styles, run bluemap reload l
 
 BlueMap's supported extension/reload instructions: https://bluemap.bluecolored.de/community/Customisation.html
 Webapp settings: https://bluemap.bluecolored.de/wiki/configs/Webapp.html
+
+Owner revision: simplified to the three requested lines, removed the expandable body/icon/extra headings from the card, and set card colour to pastel yellow #f5e7a8. Favicon retained. If the first package is already installed, replace nook-map.js/css and update both query versions to 20261011-2 before light reload.

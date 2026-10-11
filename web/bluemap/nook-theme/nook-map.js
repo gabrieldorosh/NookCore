@@ -26,25 +26,13 @@
     if (document.getElementById('nn-community')) return true;
     const panel = document.createElement('aside');
     panel.id = 'nn-community'; panel.setAttribute('aria-label', "Niko's Nook community");
-    const details = document.createElement('details');
-    const summary = document.createElement('summary');
-    summary.setAttribute('aria-label', "Niko's Nook — community and joining information");
-    const image = document.createElement('img'); image.src = icon; image.alt = ''; image.width = 40; image.height = 40;
-    const names = document.createElement('span');
-    const name = document.createElement('strong'); name.textContent = "niko's nook";
-    const subtitle = document.createElement('small'); subtitle.textContent = 'a little place to call home';
-    names.append(name, subtitle); summary.append(image, names);
-    const body = document.createElement('div'); body.className = 'nn-body';
-    const eyebrow = document.createElement('p'); eyebrow.className = 'nn-eyebrow'; eyebrow.textContent = 'Explore together';
-    const description = document.createElement('p'); description.textContent = 'Follow a road, find a neighbour, or plan your next build. This is our little corner of Minecraft.';
-    const join = document.createElement('p'); join.textContent = 'New here? Start in Discord for the server address, rules and account linking.';
-    const discord = document.createElement('a'); discord.className = 'nn-discord'; discord.href = 'https://discord.gg/9AxdaMKuyX'; discord.target = '_blank'; discord.rel = 'noopener noreferrer'; discord.textContent = 'Join our Discord ↗';
-    const credit = document.createElement('a'); credit.className = 'nn-credit'; credit.href = 'https://bluemap.bluecolored.de/'; credit.target = '_blank'; credit.rel = 'noopener noreferrer'; credit.textContent = 'Map powered by BlueMap ↗';
-    body.append(eyebrow, description, join, discord, credit); details.append(summary, body); panel.append(details); app.append(panel);
+    const name = document.createElement('strong'); name.textContent = "niko's nook <3";
+    const subtitle = document.createElement('small'); subtitle.textContent = 'season two map';
+    const discord = document.createElement('a'); discord.className = 'nn-discord'; discord.href = 'https://discord.gg/9AxdaMKuyX'; discord.target = '_blank'; discord.rel = 'noopener noreferrer'; discord.textContent = 'join our discord';
+    panel.append(name, subtitle, discord); app.append(panel);
     // Interacting with the card must not drag/zoom the map beneath it.
     for (const event of ['pointerdown','pointerup','click','dblclick','wheel','touchstart','touchmove','keydown','keyup']) {
       panel.addEventListener(event, e => {
-        if (e.type === 'keydown' && e.key === 'Escape' && details.open) { details.open = false; summary.focus(); e.preventDefault(); }
         e.stopPropagation();
       }, {passive: event === 'wheel' || event.startsWith('touch')});
     }
