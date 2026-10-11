@@ -49,6 +49,7 @@ final class CommandNavigation implements CommandExecutor,TabCompleter {
                 if(!Set.of("review","recover-stock").contains(rest[0].toLowerCase(Locale.ROOT)))return help(s,"Shop administration","/nookadmin shops review [receipt]","/nookadmin shops recover-stock <receipt> <credit|no-credit> <reason>");
                 return run("nookshops",s,rest);
             }
+            if(!Set.of("status","teleport","return").contains(sub)){s.sendMessage(NookUi.text("Not quite right. Try /nookadmin help"));return true;}
             return run(root,s,args);
         }
         if(root.equals("plots")){
@@ -63,6 +64,9 @@ final class CommandNavigation implements CommandExecutor,TabCompleter {
             if(Set.of("cancel","preview","collect","manage").contains(sub)){s.sendMessage(NookUi.message("NookShops","Open the shop to manage stock and collect items. Cancel setup using its Cancel button."));return true;}
             if(sub.equals("create") && args.length!=1 && args.length!=3)return help(s,"Create shop","/nookshops create [payment price] — for example: /nookshops create nooks 2.50");
             if(sub.equals("mine") && args.length!=1)return help(s,"Your shops","/nookshops mine");
+            if(sub.equals("price") && args.length!=2)return help(s,"Shop price","/nookshops price <nooks>");
+            if(sub.equals("payment") && args.length!=2 && args.length!=3)return help(s,"Shop payment","/nookshops payment <item> [quantity]");
+            if(!Set.of("create","mine","price","payment","review","recover-stock").contains(sub)){s.sendMessage(NookUi.text("Not quite right. Try /nookshops help"));return true;}
         }
         if(root.equals("quests") && sub.equals("collect") && args.length!=3)return help(s,"Contributions","/nookadmin quests contributions collect <item> <quantity>");
         return run(root,s,args);
