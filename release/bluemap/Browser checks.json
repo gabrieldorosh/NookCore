@@ -1,0 +1,14 @@
+[
+  {
+    "version": "live-5.13",
+    "checks": "title, favicon, live map canvas, links, keyboard dismissal, native menu, light/dark/contrast, 390px and 320px layout, idempotent script, free-flight controls unobstructed",
+    "menu": "Menu\nMaps\nMarkers\nSettings\nInfo\nGo Fullscreen\nReset Camera\nTake Screenshot\nUpdate Map",
+    "errors": []
+  },
+  {
+    "version": "bundle-5.27",
+    "checks": "title, favicon, live map canvas, links, keyboard dismissal, native menu, light/dark/contrast, 390px and 320px layout, idempotent script, free-flight controls unobstructed",
+    "menu": "Menu\nMaps\nMarkers\nSettings\nInfo\nGo Fullscreen\nReset Camera\nTake Screenshot\nUpdate Map",
+    "errors": []
+  }
+]
