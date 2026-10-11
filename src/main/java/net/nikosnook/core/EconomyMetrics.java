@@ -34,6 +34,7 @@ final class EconomyMetrics implements Listener,AutoCloseable {
         activity=enabled?new ActivityStore(plugin.getDataFolder().toPath().resolve("activity.db")):null;
         if(enabled){plugin.getServer().getPluginManager().registerEvents(this,plugin);Bukkit.getScheduler().runTaskTimer(plugin,this::sample,100,100);}
     }
+    String status(){return !enabled?"Metrics: disabled":"Metrics: enabled; last successful flush "+(lastFlush==0?"none yet":NookUi.date(lastFlush))+(error==null?"":"; measurement error recorded; inspect log");}
     static boolean ore(Material type){String n=type.name();return ORES.contains(n.startsWith("DEEPSLATE_")?n.substring(10):n);}
     static boolean log(Material type){String n=type.name();return !n.startsWith("STRIPPED_") && (n.endsWith("_LOG") || n.equals("CRIMSON_STEM") || n.equals("WARPED_STEM"));}
     static boolean eligible(Player p){return p.getGameMode()==GameMode.SURVIVAL && !p.isDead() && p.getWorld().getEnvironment()==World.Environment.NORMAL;}

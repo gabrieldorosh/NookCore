@@ -41,7 +41,7 @@ commands:
   nookadmin:
     description: Audited economy administration
     permission: nookcore.admin
-    usage: /nookadmin <teleport|return> ...
+    usage: /nookadmin <status|teleport|return> ...
 permissions:
   nookcore.staff:
     description: Staff mode tools without economy administration or general teleport bypass

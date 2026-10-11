@@ -16,6 +16,9 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     private record PendingEviction(NookStore.AbandonmentQuote quote,String reason,long expires){}
     private final Map<String,PendingEviction> evictions=new HashMap<>();
     private NookStore store;
+    private WeeklyQuests weeklyQuests;
+    private String healthDetail="Starting";
+    private BuildIdentity buildIdentity;
     private final Map<String,Long> rewards=new HashMap<>();
     private boolean healthy=true, awardsEnabled;
     private ChestShopRentalGate plotGate;
@@ -26,6 +29,8 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     private AdminTeleports adminTeleports;
     private StaffMode staffMode;
     @Override public void onEnable(){
+        buildIdentity=BuildIdentity.read(getResource("build-info.properties"));
+        getLogger().info("NookCore source: "+buildIdentity.commit()+" ("+buildIdentity.state()+")");
         saveDefaultConfig();
         if(Files.exists(getDataFolder().toPath().resolve("plot-setup-pending.yml"))){blockStartup("Unfinished plot setup: recover plot-setup-pending.yml before enabling trades.");return;}
         try{new org.bukkit.configuration.file.YamlConfiguration().load(getDataFolder().toPath().resolve("config.yml").toFile());}
@@ -96,7 +101,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
                 if(player!=null)player.sendMessage(PlotCommands.expiryNotice(plot));
             }),20,20);
             for(Player p:Bukkit.getOnlinePlayers())joinPlayer(p);
-            new WeeklyQuests(this,store,()->healthy,this::fail);
+            weeklyQuests=new WeeklyQuests(this,store,()->healthy,this::fail);
             Bukkit.getScheduler().runTaskTimer(this,()->{
                 if(!healthy)return;
                 try {
@@ -111,13 +116,14 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             },1200,1200);
             if(getConfig().getBoolean("shop-gate.enabled",false) || Files.exists(getDataFolder().toPath().resolve("plot-setup-pending.yml")))Bukkit.getScheduler().runTask(this,this::enableShopGate);
             getLogger().info("Economy foundation ready. Rental features are opt-in and require the separate shop gate startup check.");
+            healthDetail="Ready";
         }catch(Exception e){getLogger().log(Level.SEVERE,"NookCore could not initialise; economy unavailable.",e);blockStartup("NookCore startup failed; check the console before restarting.");}
     }
     private void blockStartup(String reason){
-        healthy=false;getLogger().severe(reason);
+        healthy=false;healthDetail="Startup blocked; inspect the server log";getLogger().severe(reason);
         for(String name:getDescription().getCommands().keySet()){
             var command=getCommand(name);if(command!=null){
-                command.setExecutor((sender,cmd,label,args)->{sender.sendMessage(NookUi.problem("NookCore","Setup is paused. Ask an admin to check the startup error."));return true;});
+                command.setExecutor((sender,cmd,label,args)->{if(cmd.getName().equals("nookadmin") && args.length>0 && args[0].equalsIgnoreCase("status"))return AdminStatus.execute(sender,args,this::statusSnapshot);sender.sendMessage(NookUi.problem("NookCore","Setup is paused. Ask an admin to check the startup error."));return true;});
                 command.setTabCompleter((sender,cmd,label,args)->List.of());
             }
         }
@@ -126,6 +132,21 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             var shop=getServer().getPluginManager().getPlugin("ChestShop");
             if(shop!=null)getServer().getPluginManager().disablePlugin(shop);
         });
+    }
+    private List<String> statusSnapshot(){
+        var lines=new ArrayList<String>();lines.add("Plugin version: "+getDescription().getVersion());
+        lines.addAll((buildIdentity==null?BuildIdentity.read(null):buildIdentity).lines());
+        lines.add("Economy/plots: "+(healthy?"available":"PAUSED")+" · "+healthDetail);
+        lines.add(chat==null?"Chat: not initialised (disabled, conflict or startup failure)":chat.status());
+        lines.add(groundedTravel==null?"Travel: unavailable":groundedTravel.status());
+        lines.add(bunnyBoots==null?"Bunny boots: unavailable":bunnyBoots.status());
+        lines.add("Protection bridge initialised: "+(plotGate!=null)+"; staff-mode command present: "+(getCommand("staffmode")!=null));
+        lines.add(weeklyQuests==null?"Quests: unavailable":weeklyQuests.status(System.currentTimeMillis()));
+        lines.add(economyMetrics==null?"Metrics: unavailable":economyMetrics.status());
+        if(store==null)lines.add("Inventory reviews: unavailable (store not initialised)");
+        else try{int n=store.nativeReviews().size();lines.add("Shop inventory reviews: "+(n==50?"at least 50":Integer.toString(n))+" · /nookshops review");}
+        catch(Exception ignored){lines.add("Shop inventory reviews: unavailable; no repair attempted");}
+        lines.add("No balances, quest rotations, receipts or settings changed by this command.");return lines;
     }
     private void enableShopGate(){
         try {
@@ -146,7 +167,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     }
     private boolean rentalsReady(){return healthy && plotGate!=null && getConfig().getBoolean("rental-commands-enabled",false);}
     private void reconcilePlots(){try{plotGate.validateConfiguration();plotGate.reconcileMembers(store);}catch(Exception ex){fail(ex);throw new IllegalStateException("WorldGuard update failed after the database operation; do not retry payment.",ex);}}
-    private void fail(Exception e){if(!healthy)return;healthy=false;getLogger().log(Level.SEVERE,"Economy/plots paused after a storage or protection failure; restart after investigating. No success should be assumed.",e);}
+    private void fail(Exception e){if(!healthy)return;healthy=false;healthDetail="Storage/protection failure; inspect the server log before retrying";getLogger().log(Level.SEVERE,"Economy/plots paused after a storage or protection failure; restart after investigating. No success should be assumed.",e);}
     private void joinPlayer(Player p)throws SQLException {
         if(!healthy)return;
         store.online(p.getUniqueId(),true);
@@ -202,6 +223,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         }return args;
     }
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
+        if(command.getName().equals("nookadmin") && args.length>0 && args[0].equalsIgnoreCase("status"))return AdminStatus.execute(sender,args,this::statusSnapshot);
         if(command.getName().equals("nooks") && args.length>0 && args[0].equalsIgnoreCase("metrics")){
             if(economyMetrics==null){sender.sendMessage(NookUi.problem("Nooks","Activity metrics unavailable."));return true;}
             return economyMetrics.command(sender,args);
@@ -213,7 +235,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         if(command.getName().equals("nooks") && FeatureRoutes.moneyAdmin(args))return executeInternal(sender,getCommand("nookadmin"),label,FeatureRoutes.money(args));
         if(command.getName().equals("nookadmin") && (args.length==0 || !Set.of("teleport","return").contains(args[0].toLowerCase(Locale.ROOT)))){
             if(!sender.hasPermission("nookcore.admin")){sender.sendMessage(NookUi.problem("NookAdmin","This command is for admins."));return true;}
-            NookUi.help(sender,"Staff travel","/nookadmin teleport <player> [destination] — administrative travel","/return [player] — return after a staff teleport","/plots admin — plot administration","/nooks help — economy commands");return true;
+            NookUi.help(sender,"Staff tools","/nookadmin status — read-only build and health summary","/nookadmin teleport <player> [destination] — administrative travel","/return [player] — return after a staff teleport","/plots admin — plot administration","/nooks help — economy commands");return true;
         }
         return executeInternal(sender,command,label,args);
     }
@@ -334,7 +356,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         }
         if(command.getName().equals("nookadmin")){
             if(!sender.hasPermission("nookcore.admin"))return List.of();
-            if(args.length==1)return NookUi.complete(args[0],List.of("teleport","return","help"));
+            if(args.length==1)return NookUi.complete(args[0],List.of("teleport","return","status","help"));
             if(args.length>0 && !Set.of("teleport","return").contains(args[0].toLowerCase(Locale.ROOT)))return List.of();
         }
         return completeInternal(sender,command,alias,args);
