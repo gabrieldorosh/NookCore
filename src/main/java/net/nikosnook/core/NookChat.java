@@ -66,6 +66,7 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
         Bukkit.getScheduler().runTaskTimer(plugin,()->{for(Player player:Bukkit.getOnlinePlayers())refresh(player);},100,100);
         if(Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")){var expansion=new NookPlaceholders(this);if(expansion.register()){unregister=()->expansion.unregister();plugin.getLogger().info("Registered NookCore name, rank and pronoun placeholders for TAB.");}}
     }
+    String status(){return "Chat: enabled; TAB AFK greying="+afkEnabled+"; threshold="+afkSeconds+" seconds";}
     void close(){if(help!=null)help.close();unregister.run();NookUi.preferences=null;}
     String placeholder(UUID id,String key){
         Snapshot s=snapshots.get(id);if(s==null)return Set.of("deaths","balance","balance_whole").contains(key)?"0":"";

@@ -80,6 +80,13 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
             if(!biome.equals(lastBiome.get(player.getUniqueId())) && record(player,"BIOME","ANY",biome))lastBiome.put(player.getUniqueId(),biome);
         }catch(Exception e){failure.accept(e);}
     }
+    String status(long now){
+        if(!enabled)return "Quests: disabled";
+        var due=QuestPlan.week(now);
+        return "Quests: active week "+(week==null?"not loaded":week.id())+"; next reset "+NookUi.date(due.nextReset())+
+            "; configured goals "+(QuestPlan.sameDefinitions(goals,proposed)?"match active":"DIFFER from active")+
+            (week!=null&&!week.id().equals(due.id())?"; rollover due (not activated by status)":"");
+    }
     private void rotation(long now)throws Exception {
         var current=QuestPlan.week(now);
         if(week==null || !week.id().equals(current.id())){

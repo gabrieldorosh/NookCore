@@ -38,7 +38,7 @@ commands:
   nookadmin:
     description: Audited economy administration
     permission: nookcore.admin
-    usage: /nookadmin <teleport|return> ...
+    usage: /nookadmin <status|teleport|return> ...
 permissions:
   nookcore.chat.rank.owner:
     description: Cosmetic owner rank only; does not grant staff access

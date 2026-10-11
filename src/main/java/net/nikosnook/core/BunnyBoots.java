@@ -35,6 +35,7 @@ final class BunnyBoots implements Listener,CommandExecutor,TabCompleter {
         for(var player:Bukkit.getOnlinePlayers())removeBoost(player);
         Bukkit.getScheduler().runTaskTimer(plugin,this::tick,20,20);
     }
+    String status(){return "Bunny boots: "+(enabled?"enabled":"disabled");}
     static boolean boots(Material type){return Set.of(Material.LEATHER_BOOTS,Material.CHAINMAIL_BOOTS,Material.IRON_BOOTS,Material.COPPER_BOOTS,Material.GOLDEN_BOOTS,Material.DIAMOND_BOOTS,Material.NETHERITE_BOOTS).contains(type);}
     private boolean wearing(Player player){var boots=player.getInventory().getBoots();return boots!=null && boots(boots.getType()) && boots.hasItemMeta() && boots.getItemMeta().getPersistentDataContainer().has(itemKey,PersistentDataType.BYTE);}
     static boolean eligible(boolean enabled,boolean healthy,boolean wearing,GameMode mode,boolean dead){return enabled && healthy && wearing && mode==GameMode.SURVIVAL && !dead;}

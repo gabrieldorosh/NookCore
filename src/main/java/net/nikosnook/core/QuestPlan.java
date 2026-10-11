@@ -16,6 +16,9 @@ final class QuestPlan {
         var now=Instant.ofEpochMilli(time);
         return new Week(WeekSchedule.start(now).atZone(WeekSchedule.ZONE).toLocalDate().toString(),WeekSchedule.next(now).toEpochMilli());
     }
+    /** Activation changes internal goal IDs; compare visible definitions as a multiset. */
+    static boolean sameDefinitions(List<Goal> a,List<Goal> b){return definitionCounts(a).equals(definitionCounts(b));}
+    private static Map<Goal,Long> definitionCounts(List<Goal> goals){return goals.stream().map(g->new Goal("status",g.title(),g.kind(),g.target(),g.amount(),g.reward())).collect(java.util.stream.Collectors.groupingBy(java.util.function.Function.identity(),java.util.stream.Collectors.counting()));}
     static String encode(List<Goal> goals){
         return goals.stream().map(g->String.join("|",g.id(),Base64.getEncoder().encodeToString(g.title().getBytes(StandardCharsets.UTF_8)),g.kind(),g.target(),Integer.toString(g.amount()),Long.toString(g.reward()))).collect(java.util.stream.Collectors.joining("\n"));
     }

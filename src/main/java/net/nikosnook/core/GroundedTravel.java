@@ -57,6 +57,7 @@ final class GroundedTravel implements Listener {
         for(World world:Bukkit.getWorlds())for(Entity entity:world.getEntities())restore(entity);
         if(enabled){Bukkit.getScheduler().runTaskTimer(plugin,this::tick,1,1);plugin.getLogger().info("Grounded travel prototype enabled: road mounts, occupied carts and takeoff-window rockets.");}
     }
+    String status(){return !enabled?"Travel: disabled":"Travel: roads="+roadsEnabled+", minecarts="+cartsEnabled+", rocket restriction="+elytraEnabled;}
     static boolean rider(Player player){return !player.isDead() && (player.getGameMode()==GameMode.SURVIVAL || player.getGameMode()==GameMode.ADVENTURE);}
     private void tick(){
         tick++;Set<UUID> seenMounts=new HashSet<>(),seenCarts=new HashSet<>();
