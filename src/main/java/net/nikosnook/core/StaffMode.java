@@ -20,7 +20,7 @@ final class StaffMode implements Listener,CommandExecutor,TabCompleter {
     private final java.util.function.Supplier<Collection<? extends Player>> players;
     private volatile Set<String> hiddenNames=Set.of();private volatile Set<UUID> seeNames=Set.of();
     private Object discordHook;private Set<Object> discordHooks;
-    private final Set<UUID> changing=new HashSet<>();private final Map<UUID,Location> returns=new HashMap<>();
+    private final Set<UUID> changing=new HashSet<>();private final Map<UUID,Location> returns=new HashMap<>();private final Map<UUID,Location> travel=new HashMap<>();
     static boolean active(UUID id){return ACTIVE.contains(id);}
     static boolean allowed(CommandSender s){return s.hasPermission("nookcore.staff.use")||s.hasPermission("nookcore.admin");}
     static boolean sees(Player p){return p.hasPermission("nookcore.staff.see")||p.hasPermission("nookcore.admin");}
@@ -29,6 +29,8 @@ final class StaffMode implements Listener,CommandExecutor,TabCompleter {
     }
     StaffMode(JavaPlugin plugin,StaffState state,java.util.function.Supplier<Collection<? extends Player>> players){
         this.plugin=plugin;this.state=state;this.players=players;ACTIVE.clear();ACTIVE.addAll(state.ids());
+        plugin.getCommand("list").setExecutor((sender,c,label,args)->{if(args.length>0){sender.sendMessage(NookUi.text("/list"));return true;}sender.sendMessage(NookUi.message("Players",String.join(", ",players.get().stream().filter(p->!active(p.getUniqueId()) || !(sender instanceof Player viewer) || sees(viewer)).map(Player::getName).sorted().toList())));return true;});
+        plugin.getCommand("list").setTabCompleter((s,c,l,a)->List.of());
         plugin.getCommand("staffmode").setExecutor(this);plugin.getCommand("staffmode").setTabCompleter(this);Bukkit.getPluginManager().registerEvents(this,plugin);
         connectDiscord();
         for(var p:players.get())if(active(p.getUniqueId()))conceal(p);
@@ -68,7 +70,7 @@ final class StaffMode implements Listener,CommandExecutor,TabCompleter {
         if(p.isDead()||p.isInsideVehicle())throw new IllegalArgumentException("Leave your vehicle and return to the world first.");
         if(p.hasMetadata("vanished") && p.getMetadata("vanished").stream().anyMatch(v->v.asBoolean()))throw new IllegalArgumentException("Another vanish system is active; disable it before using staff mode.");
         var at=p.getLocation();state.begin(p.getUniqueId(),new StaffState.Return(at.getWorld().getUID(),at.getX(),at.getY(),at.getZ(),at.getYaw(),at.getPitch(),p.getGameMode().name(),p.getAllowFlight(),p.isFlying(),p.isVisibleByDefault()));
-        ACTIVE.add(p.getUniqueId());p.closeInventory();conceal(p);if(p.getGameMode()!=GameMode.SPECTATOR)throw new IllegalArgumentException("Staff entry was interrupted; your return state has been kept.");p.saveData();notice(p,"entered");p.sendMessage(NookUi.message("Staff","Hidden staff mode enabled. /staffmode off returns you."));
+        ACTIVE.add(p.getUniqueId());p.closeInventory();conceal(p);if(p.getGameMode()!=GameMode.SPECTATOR)throw new IllegalArgumentException("Staff entry was interrupted; your return state has been kept.");p.saveData();departure(p,false);notice(p,"entered");p.sendMessage(NookUi.message("Staff","Hidden staff mode enabled. /staffmode off returns you."));
     }
     void leave(Player p)throws Exception{
         var saved=state.get(p.getUniqueId());if(saved==null)throw new IllegalArgumentException("Staff mode is already off.");
@@ -80,9 +82,15 @@ final class StaffMode implements Listener,CommandExecutor,TabCompleter {
         try{mode(p,old);p.setAllowFlight(saved.flight());p.setFlying(saved.flight()&&saved.flying());p.setFallDistance(0);p.setVelocity(new org.bukkit.util.Vector());p.saveData();state.finish(p.getUniqueId());}
         catch(Exception e){conceal(p);throw e;}
         ACTIVE.remove(p.getUniqueId());refreshNames();p.removeMetadata("vanished",plugin);p.setVisibleByDefault(saved.visible());for(var viewer:players.get())viewer.showPlayer(plugin,p);
-        notice(p,"left");p.sendMessage(NookUi.message("Staff","Staff mode off. Returned to your saved position."));
+        if(saved.presence().equals("disconnect"))departure(p,true);notice(p,"left");p.sendMessage(NookUi.message("Staff","Staff mode off. Returned to your saved position."));
     }
+    boolean moderating(PlayerTeleportEvent e){return active(e.getPlayer().getUniqueId()) && e.getCause()==PlayerTeleportEvent.TeleportCause.PLUGIN && Objects.equals(travel.get(e.getPlayer().getUniqueId()),e.getTo());}
+    private boolean visit(Player p,Location to){travel.put(p.getUniqueId(),to.clone());try{return p.teleport(to,PlayerTeleportEvent.TeleportCause.PLUGIN);}finally{travel.remove(p.getUniqueId());}}
     boolean returning(PlayerTeleportEvent e){return active(e.getPlayer().getUniqueId()) && e.getCause()==PlayerTeleportEvent.TeleportCause.PLUGIN && Objects.equals(returns.get(e.getPlayer().getUniqueId()),e.getTo());}
+    private void departure(Player p,boolean joining){
+        Component text=Component.text(p.getName()+(joining?" joined the game":" left the game"),net.kyori.adventure.text.format.NamedTextColor.YELLOW);
+        for(var viewer:players.get())if(!sees(viewer))viewer.sendMessage(text);
+    }
     private void notice(Player p,String action){plugin.getLogger().info("Staff mode: "+p.getName()+" "+action);for(var staff:players.get())if(sees(staff))staff.sendMessage(NookUi.message("Staff",p.getName()+" "+action+" staff mode."));}
     @EventHandler(priority=EventPriority.LOWEST) public void login(PlayerLoginEvent e){if(active(e.getPlayer().getUniqueId())){e.getPlayer().setVisibleByDefault(false);e.getPlayer().setMetadata("vanished",new FixedMetadataValue(plugin,true));}}
     @EventHandler(priority=EventPriority.LOWEST) public void join(PlayerJoinEvent e){if(active(e.getPlayer().getUniqueId())){conceal(e.getPlayer());e.joinMessage(null);}for(var p:players.get())if(active(p.getUniqueId()))conceal(p);}
@@ -90,11 +98,11 @@ final class StaffMode implements Listener,CommandExecutor,TabCompleter {
     @EventHandler(priority=EventPriority.LOWEST) public void quit(PlayerQuitEvent e){if(active(e.getPlayer().getUniqueId()))e.quitMessage(null);}
     @EventHandler(priority=EventPriority.HIGHEST) public void quitMessage(PlayerQuitEvent e){quit(e);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true) public void gameMode(PlayerGameModeChangeEvent e){if(active(e.getPlayer().getUniqueId())&&!changing.contains(e.getPlayer().getUniqueId())&&e.getNewGameMode()!=GameMode.SPECTATOR){e.setCancelled(true);e.getPlayer().sendMessage(NookUi.problem("Staff","Use /staffmode off to restore your saved mode and position."));}}
-    @EventHandler(priority=EventPriority.LOWEST,ignoreCancelled=true) public void chat(io.papermc.paper.event.player.AsyncChatEvent e){if(active(e.getPlayer().getUniqueId())){e.setCancelled(true);e.getPlayer().sendMessage(NookUi.problem("Staff","Public chat is blocked while hidden. Leave staff mode to speak publicly."));}}
+    @EventHandler(priority=EventPriority.LOWEST,ignoreCancelled=true) public void chat(io.papermc.paper.event.player.AsyncChatEvent e){if(active(e.getPlayer().getUniqueId())){e.setCancelled(true);e.getPlayer().sendMessage(NookUi.problem("Staff","Chat is disabled whilst in staff mode."));}}
     @EventHandler(priority=EventPriority.HIGHEST) public void ping(com.destroystokyo.paper.event.server.PaperServerListPingEvent e){int before=e.getNumPlayers(),removed=0;for(var it=e.iterator();it.hasNext();)if(active(it.next().getUniqueId())){it.remove();removed++;}e.setNumPlayers(Math.max(0,before-removed));e.getPlayerSample().removeIf(p->active(p.getId()));}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true) public void commands(PlayerCommandPreprocessEvent e){
         String root=e.getMessage().split("\\s+",2)[0].toLowerCase(Locale.ROOT);
-        if(active(e.getPlayer().getUniqueId())&&Set.of("/me","/minecraft:me","/say","/minecraft:say").contains(root)){e.setCancelled(true);e.getPlayer().sendMessage(NookUi.problem("Staff","Public messages are blocked while hidden."));return;}
+        if(active(e.getPlayer().getUniqueId())&&Set.of("/me","/minecraft:me","/say","/minecraft:say").contains(root)){e.setCancelled(true);e.getPlayer().sendMessage(NookUi.problem("Staff","Chat is disabled whilst in staff mode."));return;}
         if(Set.of("/list","/minecraft:list","/bukkit:list","/online","/who").contains(root)){e.setCancelled(true);var names=players.get().stream().filter(p->!active(p.getUniqueId())||sees(e.getPlayer())).map(Player::getName).sorted().toList();e.getPlayer().sendMessage(NookUi.message("Players",String.join(", ",names)));}
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true) public void completion(PlayerChatTabCompleteEvent e){if(!sees(e.getPlayer()))e.getTabCompletions().removeIf(name->players.get().stream().anyMatch(p->active(p.getUniqueId())&&p.getName().equalsIgnoreCase(name)));}
@@ -109,17 +117,20 @@ final class StaffMode implements Listener,CommandExecutor,TabCompleter {
         if(!(sender instanceof Player p)){sender.sendMessage("Staff mode is an in-game command.");return true;}
         try{
             String sub=args.length==0?active(p.getUniqueId())?"off":"on":args[0].toLowerCase(Locale.ROOT);
+            if(sub.equals("inspect")){if(!allowed(p))throw new IllegalArgumentException("You do not have staff-mode permission.");p.sendMessage(NookUi.text("Use /invsee <player> to view an inventory."));return true;}
+            if(sub.equals("disconnect") && args.length==1){sub="on";args=new String[]{"on"};}
+            if(sub.equals("on") && args.length==2 && args[1].equalsIgnoreCase("disconnect"))args=new String[]{"on"};
             if(sub.equals("off")&&args.length<=1){leave(p);return true;}
             if(!allowed(p))throw new IllegalArgumentException("You do not have staff-mode permission.");
             if(sub.equals("on")&&args.length<=1){enter(p);return true;}
             if(sub.equals("list")&&args.length==1){p.sendMessage(NookUi.message("Staff","On duty: "+players.get().stream().filter(x->active(x.getUniqueId())).map(Player::getName).sorted().toList()));return true;}
-            if(!Set.of("tp","inspect","spectate").contains(sub)||args.length!=2)throw new IllegalArgumentException("Use /staffmode [on|off|list|tp <player>|spectate <player>|inspect <player>].");
+            if(!Set.of("tp","inspect","spectate").contains(sub)||args.length!=2)throw new IllegalArgumentException("Use /staffmode [on [disconnect]|off|list|tp <player>|spectate <player>].");
             if(!active(p.getUniqueId()))throw new IllegalArgumentException("Enter /staffmode first.");
             if(!p.hasPermission("nookcore.staff."+(sub.equals("inspect")?"inspect":"teleport"))&&!p.hasPermission("nookcore.admin"))throw new IllegalArgumentException("You do not have permission for that staff tool.");
-            Player target=players.get().stream().filter(x->x.getName().equalsIgnoreCase(args[1])).findFirst().orElse(null);if(target==null||target==p||active(target.getUniqueId())&&!sees(p))throw new IllegalArgumentException("Choose an available online player.");
-            if(sub.equals("inspect"))inspect(p,target);else{p.setSpectatorTarget(null);if(!p.teleport(target.getLocation(),PlayerTeleportEvent.TeleportCause.PLUGIN))throw new IllegalArgumentException("Teleport was cancelled; dimension restrictions still apply.");if(sub.equals("spectate"))p.setSpectatorTarget(target);}
+            String requestedPlayer=args[1];Player target=players.get().stream().filter(x->x.getName().equalsIgnoreCase(requestedPlayer)).findFirst().orElse(null);if(target==null||target==p||active(target.getUniqueId())&&!sees(p))throw new IllegalArgumentException("Choose an available online player.");
+            if(sub.equals("inspect"))inspect(p,target);else{p.setSpectatorTarget(null);if(!visit(p,target.getLocation()))throw new IllegalArgumentException("Teleport was cancelled; dimension restrictions still apply.");if(sub.equals("spectate"))p.setSpectatorTarget(target);}
             plugin.getLogger().info("Staff tool: "+p.getName()+" "+sub+" "+target.getName());
         }catch(IllegalArgumentException e){sender.sendMessage(NookUi.problem("Staff",e.getMessage()));}catch(Exception e){plugin.getLogger().log(java.util.logging.Level.SEVERE,"Staff mode operation failed; keep saved return state",e);sender.sendMessage(NookUi.problem("Staff","Could not complete staff mode. Check the server log; saved return data was kept."));}return true;
     }
-    @Override public List<String> onTabComplete(CommandSender s,Command c,String label,String[] args){if(!allowed(s))return List.of();if(args.length==1)return NookUi.complete(args[0],List.of("on","off","list","tp","spectate","inspect"));if(args.length==2&&s instanceof Player viewer&&active(viewer.getUniqueId()))return NookUi.complete(args[1],players.get().stream().filter(p->!active(p.getUniqueId())||sees(viewer)).map(Player::getName).toList());return List.of();}
+    @Override public List<String> onTabComplete(CommandSender s,Command c,String label,String[] args){if(!allowed(s))return List.of();if(args.length==1)return NookUi.complete(args[0],List.of("on","off","list","tp","spectate","disconnect"));if(args.length==2&&args[0].equalsIgnoreCase("on"))return NookUi.complete(args[1],List.of("disconnect"));if(args.length==2&&s instanceof Player viewer&&active(viewer.getUniqueId()))return NookUi.complete(args[1],players.get().stream().filter(p->!active(p.getUniqueId())||sees(viewer)).map(Player::getName).toList());return List.of();}
 }

@@ -82,6 +82,7 @@ final class AdminTeleports implements Listener {
         permits.remove(event.getPlayer().getUniqueId());return true;
     }
     void execute(CommandSender sender,String[] args){
+        if(sender instanceof Player player && !StaffMode.active(player.getUniqueId())){sender.sendMessage(NookUi.problem("Staff","Enter /staffmode before teleporting."));return;}
         if(!authorised(sender)){sender.sendMessage(NookUi.problem("NookAdmin","Only console and authorised admins can use moderation teleports."));return;}
         if(args.length>0 && args[0].equalsIgnoreCase("return")){returnPlayer(sender,args);return;}
         if(args.length==4 || args.length==5){
@@ -138,9 +139,10 @@ final class AdminTeleports implements Listener {
     public void remoteCommand(RemoteServerCommandEvent event){consoleCommand(event);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void playerCommand(PlayerCommandPreprocessEvent event){
-        if(!authorised(event.getPlayer()))return;
+        if(!(event.getPlayer().hasPermission("nookcore.staff.use") || event.getPlayer().hasPermission("nookcore.admin")))return;
         String[] words=event.getMessage().trim().split("\\s+");
         if(!Set.of("/tp","/teleport","/minecraft:tp","/minecraft:teleport","/essentials:tp","/essentials:teleport").contains(words[0].toLowerCase(Locale.ROOT)))return;
+        if(!StaffMode.active(event.getPlayer().getUniqueId())){event.setCancelled(true);event.getPlayer().sendMessage(NookUi.problem("Staff","Enter /staffmode before teleporting."));return;}
         // Leave coordinates, selectors and other plugin grammars with their existing handlers.
         if(words.length<2 || words.length>3 || Arrays.stream(words,1,words.length).anyMatch(w->!w.matches("[A-Za-z0-9_.]{1,32}")))return;
         event.setCancelled(true);

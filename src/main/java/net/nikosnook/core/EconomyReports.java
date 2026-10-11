@@ -65,12 +65,14 @@ final class EconomyReports {
             sender.sendMessage(NookUi.heading("Nooks - Economy report"));
             var format=DateTimeFormatter.ofPattern("dd MMM HH:mm z",Locale.UK).withZone(ZoneId.of("Europe/London"));
             sender.sendMessage(NookUi.text(format.format(Instant.ofEpochMilli(report.since()))+" to "+format.format(Instant.ofEpochMilli(now))+" (rolling "+days+" days)"));
-            sender.sendMessage(NookUi.text("Current balances: "+Money.format(report.supply())+" across "+report.accounts()+" accounts."));
-            sender.sendMessage(NookUi.text("Issued/refunded: "+Money.format(report.issued())+"; removed: "+Money.format(report.sunk())+"; total recorded change: "+Money.format(report.net())+"."));
+            sender.sendMessage(NookUi.text("Nooks in circulation: "+Money.format(report.supply())+" across "+report.accounts()+" accounts."));
+            sender.sendMessage(NookUi.text("Created / refunded: "+Money.format(report.issued())));
+            sender.sendMessage(NookUi.text("Spent / removed: "+Money.format(report.sunk())));
+            sender.sendMessage(NookUi.text("Net change: "+Money.format(report.net())));
             for(var flow:report.flows())if(!INTERNAL.contains(flow.kind()))sender.sendMessage(NookUi.text(flow.kind().replace('-',' ')+": +"+Money.format(flow.added())+" / -"+Money.format(flow.removed())));
             sender.sendMessage(NookUi.text("Transfers and native-shop payments are excluded from issuance. External integration credits/debits are shown separately."));
             if(report.internalNet()!=0)sender.sendMessage(NookUi.problem("Nooks","Transfer/shop ledger entries do not net to zero in this interval: "+Money.format(report.internalNet())+". Investigate before drawing conclusions."));
-            sender.sendMessage(NookUi.heading("Delivered native-shop sales - top 10 by Nooks value"));
+            sender.sendMessage(NookUi.heading("Shop sales — top 10 by Nooks value"));
             int index=0;
             for(var item:report.market())sender.sendMessage(NookUi.text((++index)+". "+itemName(item.item())+": "+item.items()+" items, "+item.sales()+" sales, "+Money.format(item.cents())+", weighted "+item.unitPrice()+"/item."));
             if(report.market().isEmpty())sender.sendMessage(NookUi.text("No delivered Nooks sales in this interval."));
@@ -80,7 +82,7 @@ final class EconomyReports {
         return true;
     }
     private static String itemName(byte[] snapshot){
-        try{return ItemStack.deserializeBytes(snapshot).getType().name().toLowerCase(Locale.ROOT).replace('_',' ');}
+        try{return NativeShops.name(snapshot);}
         catch(RuntimeException e){return "unreadable item variant";}
     }
 }

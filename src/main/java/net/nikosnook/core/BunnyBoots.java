@@ -27,7 +27,7 @@ final class BunnyBoots implements Listener,CommandExecutor,TabCompleter {
     BunnyBoots(JavaPlugin plugin,NookStore store,BooleanSupplier healthy,Consumer<Exception> failure){
         this.plugin=plugin;this.store=store;this.healthy=healthy;this.failure=failure;
         itemKey=new NamespacedKey(plugin,"bunny-boots");boostKey=new NamespacedKey(plugin,"bunny-jump");
-        enabled=plugin.getConfig().getBoolean("bunny-boots.enabled",false);
+        enabled=false; // Owner has retired bunny boots in favour of player attributes.
         price=plugin.getConfig().getLong("bunny-boots.cents-per-minute",0);
         if(price<0 || price>Money.MAX)throw new IllegalArgumentException("Invalid bunny time price.");
         var command=Objects.requireNonNull(plugin.getCommand("bunny"));command.setExecutor(this);command.setTabCompleter(this);

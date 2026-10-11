@@ -80,11 +80,15 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             var nativeShops=new NativeShops(this,store,this::rentalsReady,block->{plotGate.validateConfiguration();return plotGate.regionAt(block.getLocation());},this::fail);
             plots.rentalsOpenAt(RentalOpening.parse(getConfig().getString("plot-rentals-open-at","")));
             new ShopSetup(this,nativeShops,(player,block)->{
-                if(!rentalsReady())throw new IllegalArgumentException("Rentals must be available before previewing a district shop.");
+                if(!rentalsReady())throw new IllegalArgumentException("Shop not working... ping @DrunkeUnicorn.");
                 try{
                     plotGate.validateConfiguration();
                     String plot=plotGate.regionAt(block.getLocation());
-                    if(!plotGate.manages(plot) || !store.role(plot,player.getUniqueId()).equals("OWNER") || !store.canTrade(plot,System.currentTimeMillis()))throw new IllegalArgumentException("Preview setup in your own active rented plot. Co-owner and town setup will follow later.");
+                    if(plot==null || !plotGate.manages(plot))throw new IllegalArgumentException("Shops can only be created inside shops you have access to.");
+                    String role=store.role(plot,player.getUniqueId());
+                    if(role.equals("NONE"))throw new IllegalArgumentException("Shops can only be created inside shops you have access to.");
+                    if(!role.equals("OWNER"))throw new IllegalArgumentException("Only the owner can create a shop.");
+                    if(!store.canTrade(plot,System.currentTimeMillis()))throw new IllegalArgumentException("You need to pay your rent! Find out more with /plots info.");
                     if(block.getState() instanceof org.bukkit.block.Chest chest && chest.getInventory().getHolder() instanceof org.bukkit.block.DoubleChest pair){
                         for(var side:List.of(pair.getLeftSide(),pair.getRightSide()))if(!(side instanceof org.bukkit.block.Chest half) || !plot.equals(plotGate.regionAt(half.getLocation())))throw new IllegalArgumentException("Both halves of the chest must be inside your plot.");
                     }
@@ -102,6 +106,8 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             }),20,20);
             for(Player p:Bukkit.getOnlinePlayers())joinPlayer(p);
             weeklyQuests=new WeeklyQuests(this,store,()->healthy,this::fail);
+            new CommandNavigation(this);
+            new HelperInspection(this);
             Bukkit.getScheduler().runTaskTimer(this,()->{
                 if(!healthy)return;
                 try {
@@ -144,7 +150,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         lines.add(weeklyQuests==null?"Quests: unavailable":weeklyQuests.status(System.currentTimeMillis()));
         lines.add(economyMetrics==null?"Metrics: unavailable":economyMetrics.status());
         if(store==null)lines.add("Inventory reviews: unavailable (store not initialised)");
-        else try{int n=store.nativeReviews().size();lines.add("Shop inventory reviews: "+(n==50?"at least 50":Integer.toString(n))+" · /nookshops review");}
+        else try{int n=store.nativeReviews().size();lines.add("Shop inventory reviews: "+(n==50?"at least 50":Integer.toString(n))+" · /nookadmin shops review");}
         catch(Exception ignored){lines.add("Shop inventory reviews: unavailable; no repair attempted");}
         lines.add("No balances, quest rotations, receipts or settings changed by this command.");return lines;
     }
@@ -209,7 +215,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         if(e.getTo()==null || staffMode!=null && staffMode.returning(e) || adminTeleports.consume(e) || e.getPlayer().hasPermission("nookcore.travel.bypass"))return;
         World.Environment env=e.getTo().getWorld().getEnvironment();
         if((env==World.Environment.NETHER && getConfig().getBoolean("travel.lock-nether",true)) || (env==World.Environment.THE_END && getConfig().getBoolean("travel.lock-end",true))){e.setCancelled(true);e.getPlayer().sendMessage(NookUi.message("NookCore","That dimension has not opened yet."));return;}
-        if(getConfig().getBoolean("travel.block-command-teleports",true) && (e.getCause()==PlayerTeleportEvent.TeleportCause.COMMAND || e.getCause()==PlayerTeleportEvent.TeleportCause.PLUGIN)){
+        if(getConfig().getBoolean("travel.block-command-teleports",true) && !(staffMode!=null && staffMode.moderating(e)) && (e.getCause()==PlayerTeleportEvent.TeleportCause.COMMAND || e.getCause()==PlayerTeleportEvent.TeleportCause.PLUGIN)){
             e.setCancelled(true);e.getPlayer().sendMessage(NookUi.message("NookCore","Use the world's roads, rails and vanilla travel methods to get around."));
         }
     }
@@ -235,17 +241,16 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         if(command.getName().equals("nooks") && FeatureRoutes.moneyAdmin(args))return executeInternal(sender,getCommand("nookadmin"),label,FeatureRoutes.money(args));
         if(command.getName().equals("nookadmin") && (args.length==0 || !Set.of("teleport","return").contains(args[0].toLowerCase(Locale.ROOT)))){
             if(!sender.hasPermission("nookcore.admin")){sender.sendMessage(NookUi.problem("NookAdmin","This command is for admins."));return true;}
-            NookUi.help(sender,"Staff tools","/nookadmin status — read-only build and health summary","/nookadmin teleport <player> [destination] — administrative travel","/return [player] — return after a staff teleport","/plots admin — plot administration","/nooks help — economy commands");return true;
+            NookUi.help(sender,"Staff tools","/nookadmin status — read-only build and health summary","/nookadmin teleport <player> [destination] — administrative travel","/return [player] — return after a staff teleport","/nookadmin plots — plot administration","/nooks help — economy commands");return true;
         }
         return executeInternal(sender,command,label,args);
     }
     private boolean executeInternal(CommandSender sender,Command command,String label,String[] args){
         if(command.getName().equals("nooks") && !(sender instanceof Player) && args.length==1 && args[0].equalsIgnoreCase("help")){
-            if(sender.hasPermission("nookcore.admin"))NookUi.help(sender,"Nooks · Administration","/nooks balance <player> — inspect a balance","/nooks give <player> <amount> <reason> — credit Nooks","/nooks take <player> <amount> <reason> — debit Nooks","/nooks advancements <on|off> — toggle advancement payouts","/nooks backup — save an economy snapshot","/nooks report [days] — private economy and delivered-sales summary");return true;
         }
         if(command.getName().equals("baltop")){return showBaltop(sender,args);}
         if(command.getName().equals("nookadmin")){
-            if(args.length==1 && args[0].equalsIgnoreCase("plot")){NookUi.help(sender,"NookAdmin · Plots","/plots admin clear <address> <note> — record clearance","/plots admin evict <address> <reason|confirm> — preview/confirm eviction","/plots admin membership <player> — inspect membership","/plots admin storage <address> — read storage notes","/plots admin absence <address> <days|off> <reason> — allow a break","/plots admin define <id> <rent> — create a record");return true;}
+            if(args.length==1 && args[0].equalsIgnoreCase("plot")){NookUi.help(sender,"NookAdmin · Plots","/nookadmin plots clear <address> <note> — record clearance","/nookadmin plots evict <address> <reason|confirm> — preview/confirm eviction","/nookadmin plots membership <player> — inspect membership","/nookadmin plots storage <address> — read storage notes","/nookadmin plots absence <address> <days|off> <reason> — allow a break","/nookadmin plots define <id> <rent> — create a record");return true;}
             args=adminArgs(args);
         }
         String section=command.getName().equals("nookadmin")?"NookAdmin":"Nooks";
@@ -273,7 +278,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
                     }else{
                         evictions.remove(key);var quote=store.evictionQuote(args[1],now);evictions.put(key,new PendingEviction(quote,String.join(" ",Arrays.copyOfRange(args,2,args.length)),now+60_000));
                         sender.sendMessage(NookUi.message("NookAdmin","Evict the renter from "+store.plotLabel(args[1])+"? Refund: "+Money.format(quote.refund())+" for complete unused UK calendar days. Today and a partial final day are excluded. All members lose access; belongings require staff clearance."));
-                        sender.sendMessage(NookUi.command("/plots admin evict "+PlotSelector.alias(store.plotAddress(args[1]))+" confirm"));
+                        sender.sendMessage(NookUi.command("/nookadmin plots evict "+PlotSelector.alias(store.plotAddress(args[1]))+" confirm"));
                     }
                     return true;
                 }
@@ -304,7 +309,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
                 }
                 if(args.length>=3 && args[0].equalsIgnoreCase("plotclear")){
                     if(!rentalsReady())throw new IllegalArgumentException("A working configured rental bridge is required.");
-                    store.confirmCleared(args[1],sender.getName(),String.join(" ",Arrays.copyOfRange(args,2,args.length)),now);reconcilePlots();sender.sendMessage(NookUi.message(section,"Plot "+args[1]+(plotGate.manages(args[1])?" is now available to rent. ":" record cleared; it has no current rental mapping. ")+"Storage note saved; view it with ").append(NookUi.command("/plots admin storage "+args[1])).append(NookUi.text(". No blocks or items were moved.")));return true;
+                    store.confirmCleared(args[1],sender.getName(),String.join(" ",Arrays.copyOfRange(args,2,args.length)),now);reconcilePlots();sender.sendMessage(NookUi.message(section,"Plot "+args[1]+(plotGate.manages(args[1])?" is now available to rent. ":" record cleared; it has no current rental mapping. ")+"Storage note saved; view it with ").append(NookUi.command("/nookadmin plots storage "+args[1])).append(NookUi.text(". No blocks or items were moved.")));return true;
                 }
                 if(args.length==1 && args[0].equalsIgnoreCase("backup")){
                     Path folder=getDataFolder().toPath().resolve("backups");Files.createDirectories(folder);Path file=folder.resolve("nooks-"+now+".db");store.backup(file);sender.sendMessage(NookUi.message(section,"Consistent economy backup saved: "+file.getFileName()));return true;
@@ -314,7 +319,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
                 }
                 if(args.length==2 && args[0].equalsIgnoreCase("balance")){var a=resolve(args[1]);sender.sendMessage(NookUi.prefix(section).append(NookUi.name(a.id(),a.name())).append(NookUi.text(": "+Money.format(a.cents()))));return true;}
                 if(args.length>=4 && Set.of("give","take").contains(args[0].toLowerCase(Locale.ROOT))){var a=resolve(args[1]);long value=Money.parse(args[2]);if(args[0].equalsIgnoreCase("take"))value=-value;String reason=String.join(" ",Arrays.copyOfRange(args,3,args.length));store.adjust(a.id(),value,sender.getName(),reason,now);Player affected=Bukkit.getPlayer(a.id());if(affected!=null)affected.sendMessage(NookUi.message("Nooks","Staff "+(value>0?"added ":"removed ")+Money.format(Math.abs(value))+(value>0?" to":" from")+" your balance. Reason: "+reason+". Balance: "+Money.format(store.account(a.id()).orElseThrow().cents())+"."));sender.sendMessage(NookUi.message(section,"Recorded adjustment for ").append(NookUi.name(a.id(),a.name())).append(NookUi.text(": "+Money.format(value))));return true;}
-                NookUi.help(sender,"NookAdmin","/nookadmin teleport <player> [destination-player] — visit a player, or move one player to another","/nookadmin return [player] — return after a staff teleport (30-minute window)","/nooks balance <player> — inspect a balance","/nooks give <player> <amount> <reason> — credit Nooks","/nooks take <player> <amount> <reason> — debit Nooks","/nooks backup — save an economy snapshot","/nooks report [days] — private economy and delivered-sales summary","/nooks advancements <on|off> — toggle advancement payments","/plots admin define <id> <weekly-price> — create a plot record","/plots admin evict <address> <reason|confirm> — preview and confirm an eviction with refund","/plots admin clear <address> <storage-note> — release a cleared plot; record where belongings are stored","/plots admin storage <id> — read the latest 10 clearance storage notes","/plots admin membership <player> — inspect the player's plot allowance","/plots admin absence <id> <days|off> <reason> — record an absence");return true;
+                NookUi.help(sender,"NookAdmin","/nookadmin teleport <player> [destination-player] — visit a player, or move one player to another","/nookadmin return [player] — return after a staff teleport (30-minute window)","/nooks balance <player> — inspect a balance","/nooks give <player> <amount> <reason> — credit Nooks","/nooks take <player> <amount> <reason> — debit Nooks","/nooks backup — save an economy snapshot","/nooks report [days] — private economy and delivered-sales summary","/nooks advancements <on|off> — toggle advancement payments","/nookadmin plots define <id> <weekly-price> — create a plot record","/nookadmin plots evict <address> <reason|confirm> — preview and confirm an eviction with refund","/nookadmin plots clear <address> <storage-note> — release a cleared plot; record where belongings are stored","/nookadmin plots storage <id> — read the latest 10 clearance storage notes","/nookadmin plots membership <player> — inspect the player's plot allowance","/nookadmin plots absence <id> <days|off> <reason> — record an absence");return true;
             }
             if(!(sender instanceof Player p)){sender.sendMessage(NookUi.message(section,"Use /nooks balance <player> from console."));return true;}
             CommandSyntax.check("nooks",args);
@@ -329,7 +334,6 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             if(args.length==3 && args[0].equalsIgnoreCase("pay")){
                 var recipient=resolve(args[1]);long amount=Money.parse(args[2]);store.transfer(p.getUniqueId(),recipient.id(),amount,now);sender.sendMessage(NookUi.message(section,"Paid ").append(NookUi.name(recipient.id(),recipient.name())).append(NookUi.text(" "+Money.format(amount)+".")));Player target=Bukkit.getPlayer(recipient.id());if(target!=null)target.sendMessage(NookUi.prefix("Nooks").append(NookUi.name(p.getUniqueId(),p.getName())).append(NookUi.text(" paid you "+Money.format(amount)+".")));return true;
             }
-            if(sender.hasPermission("nookcore.admin"))NookUi.help(sender,"Nooks · Administration","/nooks balance <player> — inspect a balance","/nooks give <player> <amount> <reason> — credit Nooks","/nooks take <player> <amount> <reason> — debit Nooks","/nooks advancements <on|off> — toggle advancement payouts","/nooks backup — save an economy snapshot","/nooks report [days] — private economy and delivered-sales summary");
             NookUi.help(sender,"Nooks","/nooks — check your balance","/nooks pay <player> <amount> — send Nooks, including offline players","/nooks history — recent transactions");return true;
         }catch(NumberFormatException e){sender.sendMessage(NookUi.problem(section,"Choose a whole number of days from 1 to 365, or off."));return true;}
         catch(IllegalArgumentException e){sender.sendMessage(NookUi.problem(section,e.getMessage()));return true;}

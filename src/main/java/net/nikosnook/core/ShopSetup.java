@@ -46,12 +46,14 @@ final class ShopSetup implements Listener,CommandExecutor,TabCompleter {
             }
             String sub=args[0].toLowerCase(Locale.ROOT);
             if(sub.equals("cancel") && args.length==1){drafts.remove(player.getUniqueId());if(player.getOpenInventory().getTopInventory().getHolder() instanceof Menu)player.closeInventory();sender.sendMessage(NookUi.message("NookShops","Shop draft discarded."));return true;}
-            if(sub.equals("create") && args.length==1){
+            if(sub.equals("create") && (args.length==1 || args.length==3)){
                 Block chest=player.getTargetBlockExact(5);
                 if(chest==null || !stockContainer(chest.getType()))throw new IllegalArgumentException("Look at a chest, barrel or shulker box within five blocks while holding the item you want to sell.");
                 validate.accept(player,chest);ItemStack item=player.getInventory().getItemInMainHand().clone();
-                if(item.getType().isAir())throw new IllegalArgumentException("Hold an example of the item you want to sell.");
-                item.setAmount(1);drafts.put(player.getUniqueId(),new Draft(chest,item,ShopDraft.initial(),System.currentTimeMillis()+600_000));open(player);return true;
+                if(item.getType().isAir())throw new IllegalArgumentException("Hold the item that you want to sell");
+                ShopDraft initial=ShopDraft.initial();
+                if(args.length==3){if(args[1].equalsIgnoreCase("nooks"))initial=initial.nooks(Money.parse(args[2]));else {Material currency=Material.matchMaterial(args[1]);if(currency==null || !currency.isItem() || currency.isAir())throw new IllegalArgumentException("Choose nooks or a payment item, such as diamond.");initial=initial.item(currency.name(),Integer.parseInt(args[2]));}}
+                item.setAmount(1);drafts.put(player.getUniqueId(),new Draft(chest,item,initial,System.currentTimeMillis()+600_000));open(player);return true;
             }
             Draft draft=current(player);ShopDraft terms=draft.terms();
             if(sub.equals("price") && args.length==2)terms=terms.nooks(Money.parse(args[1]));
@@ -91,7 +93,7 @@ final class ShopSetup implements Listener,CommandExecutor,TabCompleter {
         if(d.terms().paymentItem()!=null)payment.setAmount(Math.min(d.terms().paymentQuantity(),payment.getMaxStackSize()));
         menu.inventory.setItem(24,payment);
         menu.inventory.setItem(22,icon(Material.BOOK,live.enabled()?"Publish shop":"Review draft","Customer receives "+d.terms().quantity()+" item(s)","Customer pays "+d.terms().price(),"Plain payment items only; no named/enchanted currency."));
-        menu.inventory.setItem(26,icon(Material.BARRIER,"Close preview","Draft remains available for ten minutes from creation.","/nookshops cancel discards it."));player.openInventory(menu.inventory);
+        menu.inventory.setItem(26,icon(Material.BARRIER,"Cancel","Discard this shop setup."));player.openInventory(menu.inventory);
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=false)
     public void click(InventoryClickEvent event){
@@ -103,7 +105,7 @@ final class ShopSetup implements Listener,CommandExecutor,TabCompleter {
         Bukkit.getScheduler().runTask(plugin,()->{
             if(!player.isOnline() || player.getOpenInventory().getTopInventory()!=menu.inventory)return;
             try{
-                if(slot==26){player.closeInventory();return;}
+                if(slot==26){drafts.remove(player.getUniqueId());player.closeInventory();return;}
                 Draft d=current(player);var terms=d.terms();int step=shift?8:1;
                 if(slot==11 || slot==15)terms=terms.quantity(Math.clamp(terms.quantity()+(slot==11?-step:step),1,64));
                 else if(slot==0 || slot==8){

@@ -19,11 +19,11 @@ final class RentReduction implements CommandExecutor {
             if(args.length==1){
                 var plots=List.copyOf(store.plots());if(plots.isEmpty())throw new IllegalArgumentException("There are no plots to reprice.");
                 for(var plot:plots)sender.sendMessage(NookUi.text(plot.id()+": "+Money.format(plot.weekly())+" -> "+Money.format(NookStore.reducedRent(plot.weekly()))+" / week"));
-                sender.sendMessage(NookUi.message("NookPlots","80% cut for all "+plots.size()+" plots. Ownership, prepaid time and balances stay unchanged. Future payments and automatic setup quotes use reduced rates. Confirm within 60 seconds: /plots admin rent-cut confirm"));
+                sender.sendMessage(NookUi.message("NookPlots","80% cut for all "+plots.size()+" plots. Ownership, prepaid time and balances stay unchanged. Future payments and automatic setup quotes use reduced rates. Confirm within 60 seconds: /nookadmin plots rent-cut confirm"));
                 pending.put(actor,new Preview(plots,now+60000));return true;
             }
-            if(args.length!=2 || !args[1].equalsIgnoreCase("confirm"))throw new IllegalArgumentException("Use /plots admin rent-cut, then /plots admin rent-cut confirm.");
-            var preview=pending.remove(actor);if(preview==null || preview.expires()<now)throw new IllegalArgumentException("Preview expired. Run /plots admin rent-cut again.");
+            if(args.length!=2 || !args[1].equalsIgnoreCase("confirm"))throw new IllegalArgumentException("Use /nookadmin plots rent-cut, then /nookadmin plots rent-cut confirm.");
+            var preview=pending.remove(actor);if(preview==null || preview.expires()<now)throw new IllegalArgumentException("Preview expired. Run /nookadmin plots rent-cut again.");
             var folder=plugin.getDataFolder().toPath().resolve("backups");java.nio.file.Files.createDirectories(folder);
             var file=folder.resolve("before-rent-cut-"+UUID.randomUUID()+".db");store.backup(file);
             store.reducePlotRents(preview.plots(),actor,now);

@@ -31,7 +31,7 @@ public class AfkProbe extends JavaPlugin {
         check(rank.toLowerCase(java.util.Locale.ROOT).contains("#f1dea0") && rank.contains("miss bee"),"active title retains colour");check(value("afk").equals("false"),"active placeholder false");
         idle=Duration.ofMillis(299999);refresh();check(value("rank").equals(rank),"no early greying");
         idle=Duration.ofSeconds(300);refresh();check(value("afk").equals("true"),"five minutes becomes AFK");
-        check(value("rank").equals("&#AAAAAA[miss bee] &r"),"AFK title grey through real PlaceholderAPI");check(value("name").equals("&#AAAAAATestPlayer&r"),"AFK name grey through real PlaceholderAPI");
+        check(value("rank").equals("&#AAAAAA[miss bee] &r"),"AFK title grey through real PlaceholderAPI");check(value("name").equals("&#AAAAAA&o[AFK] TestPlayer&r"),"AFK name grey through real PlaceholderAPI");
         check(value("balance").equals(balance) && value("pronouns").equals(pronouns),"balance and pronouns preserved");check(rendered().equals(activeChat),"public chat keeps normal colours while AFK");
         idle=Duration.ZERO;refresh();check(value("rank").equals(rank) && value("name").equals(name) && value("afk").equals("false"),"activity restores original display");
         // Test our cache cleanup directly: this controlled proxy is not a connected world player.

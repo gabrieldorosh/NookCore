@@ -18,7 +18,7 @@ final class PlotRoutes implements CommandExecutor,TabCompleter {
   }
   if(rest.length>0 && rest[0].equalsIgnoreCase("rent-cut") && rentReduction!=null)return rentReduction.onCommand(sender,command,label,rest);
   if(rest.length==0 || rest[0].equalsIgnoreCase("help")){
-   NookUi.help(sender,"NookPlots · Administration","/plots admin clear <address> <storage-note> — record clearance","/plots admin evict <address> <reason|confirm> — preview/confirm eviction","/plots admin storage <address> — read storage notes","/plots admin membership <player> — inspect membership","/plots admin absence <address> <days|off> <reason> — allow a break","/plots admin rent-cut [confirm] — preview/apply the one-time 80% reduction","/plots admin define <id> <rent> — create a database record","/plots setup help — create district and plot regions");return true;
+   NookUi.help(sender,"NookPlots · Administration","/nookadmin plots clear <address> <storage-note> — record clearance","/nookadmin plots evict <address> <reason|confirm> — preview/confirm eviction","/nookadmin plots storage <address> — read storage notes","/nookadmin plots membership <player> — inspect membership","/nookadmin plots absence <address> <days|off> <reason> — allow a break","/nookadmin plots rent-cut [confirm] — preview/apply the one-time 80% reduction","/nookadmin plots define <id> <rent> — create a database record","/nookadmin plots setup help — create district and plot regions");return true;
   }
   try{return admin.onCommand(sender,command,label,FeatureRoutes.plot(rest));}
   catch(IllegalArgumentException e){sender.sendMessage(NookUi.problem("NookPlots",e.getMessage()));return true;}

@@ -17,21 +17,21 @@ import java.util.function.*;
 /** Opt-in district shops. The block is an interface; stock lives in the receipt-backed store. */
 final class NativeShops implements Listener {
     private static final class Menu implements InventoryHolder {
-        final UUID viewer,offer;final long revision;final boolean owner;Inventory inventory;boolean stock;int amount=1;
+        final UUID viewer,offer;final long revision;final boolean owner;Inventory inventory;boolean stock,closing;int amount=1;
         Menu(UUID viewer,NativeShop.Offer offer,boolean owner){this.viewer=viewer;this.offer=offer.id();this.revision=offer.revision();this.owner=owner;}
         public Inventory getInventory(){return inventory;}
     }
-    private final JavaPlugin plugin;private final NookStore store;private final NativeCustody custody;private final NativeStockRecovery recovery;
+    private final JavaPlugin plugin;private final NookStore store;private final NativeCustody custody;private final NativeStockRecovery recovery;private final SaleNotices notices;
     private final BooleanSupplier ready;private final Function<Block,String> plot;private final Consumer<Exception> failure;
     private final NamespacedKey anchor=new NamespacedKey("nookcore","native-shop");
     NativeShops(JavaPlugin plugin,NookStore store,BooleanSupplier ready,Function<Block,String> plot,Consumer<Exception> failure){
         this.plugin=plugin;this.store=store;this.custody=new NativeCustody(store);this.ready=ready;this.plot=plot;this.failure=failure;
-        this.recovery=new NativeStockRecovery(plugin,store,ready,failure);
+        this.recovery=new NativeStockRecovery(plugin,store,ready,failure);this.notices=new SaleNotices(plugin,store);
         Bukkit.getPluginManager().registerEvents(this,plugin);
     }
     boolean enabled(){return plugin.getConfig().getBoolean("native-shops-enabled",false);}
     private void ready(Player p){
-        if(!enabled() || !ready.getAsBoolean())throw new IllegalArgumentException("Native shops are unavailable right now.");
+        if(!enabled() || !ready.getAsBoolean())throw new IllegalArgumentException("Shop not working... ping @DrunkeUnicorn.");
         if(p.getGameMode()!=GameMode.SURVIVAL)throw new IllegalArgumentException("Use shops in survival mode.");
         if(p.isDead() || !p.isOnline())throw new IllegalArgumentException("Return to the world before using shops.");
     }
@@ -61,7 +61,7 @@ final class NativeShops implements Listener {
             side.getPersistentDataContainer().set(anchor,PersistentDataType.STRING,offer.id().toString());
             if(!side.update())throw new IllegalStateException("Could not save the shop container marker.");
         }
-        player.sendMessage(NookUi.message("NookShops","Shop created. Use Add stock to deposit matching items from your inventory. The container itself stays empty."));open(player,offer,true);
+        player.sendMessage(NookUi.message("NookShops","Shop created! Open it to add stock."));open(player,offer,true);
     }
     private NativeShop.Offer at(Block block)throws Exception {
         Block clicked=block;
@@ -85,14 +85,14 @@ final class NativeShops implements Listener {
         if(!sender.hasPermission("nookcore.admin")){sender.sendMessage(NookUi.problem("NookShops","This command is for admins."));return true;}
         try{
             if(args.length==2){
-                UUID id;try{id=UUID.fromString(args[1]);}catch(IllegalArgumentException e){throw new IllegalArgumentException("Use the full stock receipt UUID shown by /nookshops review.");}
+                UUID id;try{id=UUID.fromString(args[1]);}catch(IllegalArgumentException e){throw new IllegalArgumentException("Use the full stock receipt UUID shown by /nookadmin shops review.");}
                 var detail=store.nativeStockReview(id);
                 for(String line:detail.lines(name(detail.item())))sender.sendMessage(NookUi.message("NookShops",line));
             }else if(args.length==1){
                 var reviews=store.nativeReviews();sender.sendMessage(NookUi.message("NookShops",reviews.isEmpty()?"No shop inventory operations need review.":"Inventory operations needing review (up to 50):"));
                 for(String line:reviews)sender.sendMessage(NookUi.message("NookShops",line));
-                if(!reviews.isEmpty())sender.sendMessage(NookUi.message("NookShops","Inspect a stock receipt: /nookshops review <receipt>. This does not move items or resolve it."));
-            }else throw new IllegalArgumentException("Use /nookshops review [stock-receipt].");
+                if(!reviews.isEmpty())sender.sendMessage(NookUi.message("NookShops","Inspect a stock receipt: /nookadmin shops review <receipt>. This does not move items or resolve it."));
+            }else throw new IllegalArgumentException("Use /nookadmin shops review [stock-receipt].");
         }catch(IllegalArgumentException e){sender.sendMessage(NookUi.problem("NookShops",e.getMessage()));}
         catch(Exception e){failure.accept(e);sender.sendMessage(NookUi.problem("NookShops","Could not read review records. Check the server log."));}return true;
     }
@@ -102,8 +102,8 @@ final class NativeShops implements Listener {
         try{
             ready(player);
             if(sub.equals("mine")){
-                var offers=store.nativeOffers(player.getUniqueId());player.sendMessage(NookUi.message("NookShops","Your shops · "+offers.size()));
-                for(var offer:offers){String code=offer.id().toString().substring(0,8);player.sendMessage(NookUi.message("NookShops",code+" · "+name(offer.item())+" · "+offer.stock()+" in stock"+(offer.closed()?" · closed":"")).clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/nookshops manage "+code)));}
+                var offers=store.nativeOffers(player.getUniqueId()).stream().filter(o->!o.closed() || o.stock()>0).toList();player.sendMessage(NookUi.message("NookShops","Your shops · "+offers.size()));
+                for(var offer:offers){player.sendMessage(NookUi.message("NookShops",store.plotAddress(offer.plot())+" · "+name(offer.item())+" · "+offer.stock()+" in stock"+(offer.closed()?" · collect remaining stock":"")));}
                 if(offers.isEmpty())player.sendMessage(NookUi.message("NookShops","Hold an item, look at an empty container in your plot and run /nookshops create."));
             }else if(sub.equals("manage")){
                 NativeShop.Offer offer;
@@ -125,8 +125,40 @@ final class NativeShops implements Listener {
             }
         }catch(Exception e){problem(player,e);}return true;
     }
+    private void collectAt(Player p,NativeShop.Offer offer)throws Exception {
+        var next=store.nativeDeliveries(p.getUniqueId()).stream().filter(r->r.offer().equals(offer.id())).findFirst();
+        if(next.isPresent()){collect(p,next.get());return;}
+        int amount=Math.min(64,store.nativePaymentBalance(p.getUniqueId(),offer.id()));if(amount<1)throw new IllegalArgumentException("No items are waiting here.");
+        var payment=store.nativePayment(offer.id()).orElseThrow();NativeInventoryPlan.deliver(new NativePlayerInventory(p).capture(),NativePlayerInventory.item(payment.item()),amount);
+        collect(p,store.reserveNativePaymentReturn(UUID.randomUUID(),offer.id(),p.getUniqueId(),amount,System.currentTimeMillis()));
+    }
+    private void clearMarker(NativeShop.Offer offer)throws Exception {
+        // History remains durable; only the empty closed shop's location is retired.
+        if(!store.nativeFullyCollected(offer.id()))return;
+        var locations=store.nativeLocations(offer.id());store.retireEmptyNativeLocation(offer.id());
+        for(String location:locations){String[] bits=location.split(":");if(bits.length!=4)continue;World world=Bukkit.getWorld(UUID.fromString(bits[0]));if(world==null)continue;
+            int x=Integer.parseInt(bits[1]),y=Integer.parseInt(bits[2]),z=Integer.parseInt(bits[3]);if(!world.isChunkLoaded(x>>4,z>>4))continue;
+            Block block=world.getBlockAt(x,y,z);if(!(block.getState() instanceof Container))continue;
+            for(var side:containers(block))if(offer.id().toString().equals(side.getPersistentDataContainer().get(anchor,PersistentDataType.STRING))){side.getPersistentDataContainer().remove(anchor);side.update();}
+        }
+    }
+    private void openClosing(Player p,NativeShop.Offer offer)throws Exception {
+        Menu m=new Menu(p.getUniqueId(),offer,true);m.closing=true;m.inventory=Bukkit.createInventory(m,27,Component.text("Collect stock before closing"));
+        m.inventory.setItem(13,icon(Material.CHEST,"Collect stock",offer.stock()+" "+name(offer.item()),"Collect up to 64 items, then finish closing."));m.inventory.setItem(26,icon(Material.BARRIER,"Done"));p.openInventory(m.inventory);
+    }
+    private void closingClick(Player p,Menu m,int slot){
+        if(slot!=13 && slot!=26)return;Bukkit.getScheduler().runTask(plugin,()->{if(p.getOpenInventory().getTopInventory()!=m.inventory)return;p.closeInventory();try{ready(p);var o=nearby(p,m.offer);if(!o.owner().equals(p.getUniqueId()))throw new IllegalArgumentException("Only the owner can close this shop.");if(slot==26)return;
+            int count=Math.min(64,o.stock());if(count>0){NativeInventoryPlan.deliver(new NativePlayerInventory(p).capture(),NativePlayerInventory.item(o.item()),count);collect(p,store.reserveNativeStockWithdrawal(UUID.randomUUID(),o.id(),p.getUniqueId(),count,System.currentTimeMillis()));}
+            o=store.nativeOffer(o.id());if(o.stock()==0 && store.nativePaymentBalance(p.getUniqueId(),o.id())==0){store.closeNativeOffer(o.id(),p.getUniqueId());clearMarker(o);p.sendMessage(NookUi.message("NookShops","Shop closed."));}else if(o.stock()>0)openClosing(p,o);else open(p,o,true);
+        }catch(Exception e){problem(p,e);}});
+    }
     private void collect(Player p,NativeShop.Receipt receipt)throws Exception {custody.deliver(receipt.id(),p.getUniqueId(),NativePlayerInventory.item(receipt.item()),new NativePlayerInventory(p));}
-    private static String name(byte[] encoded){return org.bukkit.inventory.ItemStack.deserializeBytes(encoded).getType().name().toLowerCase(Locale.ROOT).replace('_',' ');}
+    static String name(byte[] encoded){
+        var item=ItemStack.deserializeBytes(encoded);var meta=item.getItemMeta();String title=meta.hasDisplayName()?net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(meta.displayName()):item.getType().name().toLowerCase(Locale.ROOT).replace('_',' ');
+        var ench=new java.util.TreeMap<String,Integer>();item.getEnchantments().forEach((e,l)->ench.put(e.getKey().getKey().replace('_',' '),l));
+        if(meta instanceof org.bukkit.inventory.meta.EnchantmentStorageMeta book)book.getStoredEnchants().forEach((e,l)->ench.put(e.getKey().getKey().replace('_',' '),l));
+        return title+(ench.isEmpty()?"":" ("+ench.entrySet().stream().map(e->e.getKey()+" "+e.getValue()).collect(java.util.stream.Collectors.joining(", "))+")");
+    }
     private ItemStack icon(Material type,String title,String... lines){
         var item=new ItemStack(type);var meta=item.getItemMeta();meta.displayName(Component.text(title,NookUi.COMMAND).decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC,false));meta.lore(Arrays.stream(lines).map(s->Component.text(s,NookUi.BODY).decoration(net.kyori.adventure.text.format.TextDecoration.ITALIC,false)).toList());item.setItemMeta(meta);return item;
     }
@@ -141,19 +173,20 @@ final class NativeShops implements Listener {
         var item=ItemStack.deserializeBytes(offer.item());item.setAmount(Math.min(offer.bundle(),item.getMaxStackSize()));menu.inventory.setItem(13,item);
         menu.inventory.setItem(4,icon(Material.PAPER,offer.bundle()+" × "+name(offer.item()),"Price: "+price(offer)+" per bundle","Stock: "+offer.stock()+" items",offer.closed()?"Closed":"Plot: "+store.plotAddress(offer.plot())));
         if(owner){
-            if(!offer.closed()){menu.inventory.setItem(11,icon(Material.CHEST,"Manage stock","Deposit or withdraw a chosen quantity.","Shift-click matching inventory stacks to stock now."));menu.inventory.setItem(22,icon(Material.RED_DYE,"Close shop","Stop sales. Stock remains yours to collect.","Create a new draft to change item, price or bundle."));}
-            else menu.inventory.setItem(22,icon(Material.CHEST,"Collect remaining stock","Collect up to 64 items. Make room first.","Works even after your rental has ended."));
-        }else menu.inventory.setItem(22,icon(Material.LIME_DYE,"Buy "+offer.bundle()+" for "+price(offer),"Click once to confirm this purchase.","Payment is credited even when the shop members are offline."));
+            if(!offer.closed()){menu.inventory.setItem(11,icon(Material.CHEST,"Manage stock","Deposit or withdraw a chosen quantity.","Shift-click matching inventory stacks to stock now."));menu.inventory.setItem(22,icon(Material.RED_DYE,"Close shop","Collect remaining stock before closing."));}
+            else if(offer.stock()>0)menu.inventory.setItem(22,icon(Material.CHEST,"Collect remaining stock","Collect up to 64 items. Make room first.","Works even after your rental has ended."));
+        }else if(!offer.closed())menu.inventory.setItem(22,icon(Material.LIME_DYE,"Buy "+offer.bundle()+" for "+price(offer),"Click once to confirm this purchase.","Payment is credited even when the shop members are offline."));
         if(!owner && stockMember(offer,player.getUniqueId()) && !offer.closed()){
             menu.inventory.setItem(11,icon(Material.CHEST,"Manage stock","Deposit or withdraw a chosen quantity.","Shift-click matching inventory stacks to stock now."));
             menu.inventory.setItem(22,icon(Material.PAPER,"You help stock this shop","Plot members cannot purchase from their own plot."));
         }
         var payment=store.nativePayment(offer.id());
         if(payment.isPresent()){
-            var currency=icon(ItemStack.deserializeBytes(payment.get().item()).getType(),"Payment: "+price(offer),"Plain payment items only.","Owner collects item proceeds with /nookshops collect.");
+            var currency=icon(ItemStack.deserializeBytes(payment.get().item()).getType(),"Payment: "+price(offer),"Plain payment items only.","Open this shop to collect item payments.");
             currency.setAmount(Math.min(payment.get().quantity(),currency.getMaxStackSize()));menu.inventory.setItem(15,currency);
         }
-        menu.inventory.setItem(26,icon(Material.BARRIER,"Close"));player.openInventory(menu.inventory);
+        if((!store.nativeDeliveries(player.getUniqueId()).stream().filter(r->r.offer().equals(offer.id())).toList().isEmpty() || store.nativePaymentBalance(player.getUniqueId(),offer.id())>0))menu.inventory.setItem(18,icon(Material.HOPPER,"Collect payments / returns","Collect items waiting at this shop."));
+        menu.inventory.setItem(26,icon(Material.BARRIER,"Done"));player.openInventory(menu.inventory);
     }
     private void openStock(Player player,NativeShop.Offer offer,int amount)throws Exception {
         if(!stockMember(offer,player.getUniqueId()) || offer.closed())throw new IllegalArgumentException("You need stock access to an open shop.");
@@ -202,6 +235,7 @@ final class NativeShops implements Listener {
         if(!enabled() || event.getHand()!=EquipmentSlot.HAND || event.getAction()!=org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK || event.getClickedBlock()==null)return;
         if(event.useInteractedBlock()==Event.Result.DENY)return;
         var block=event.getClickedBlock();if(ShopLabels.target(block)==null)return;
+        try{if(store.nativeAt(location(origin(ShopLabels.target(block)))).isEmpty())return;}catch(Exception e){problem(event.getPlayer(),e);event.setCancelled(true);return;}
         // Sneak-editing and placement still go through normal plot protection.
         if(block.getState() instanceof Sign && event.getPlayer().isSneaking())return;
         // Cancel physical interaction before WorldGuard considers chest/sign access.
@@ -213,28 +247,35 @@ final class NativeShops implements Listener {
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=false) public void click(InventoryClickEvent e){
         if(!(e.getView().getTopInventory().getHolder() instanceof Menu menu))return;e.setCancelled(true);
         if(!(e.getWhoClicked() instanceof Player p) || !menu.viewer.equals(p.getUniqueId()) || e.getRawSlot()<0)return;
+        if(menu.closing){closingClick(p,menu,e.getRawSlot());return;}
         if(menu.stock){stockClick(p,menu,e.getRawSlot(),e.getClick(),e.getCurrentItem()==null?null:e.getCurrentItem().clone());return;}
         if(e.getRawSlot()>=27){
             // All clicks stay cancelled: quick stocking uses the same receipt-backed deposit.
             if(e.isShiftClick())stockClick(p,menu,e.getRawSlot(),e.getClick(),e.getCurrentItem()==null?null:e.getCurrentItem().clone());
             return;
         }
-        int slot=e.getRawSlot();if(slot!=11 && slot!=22 && slot!=26)return;Bukkit.getScheduler().runTask(plugin,()->{
+        int slot=e.getRawSlot();if(slot!=11 && slot!=18 && slot!=22 && slot!=26)return;Bukkit.getScheduler().runTask(plugin,()->{
             if(!p.isOnline() || p.getOpenInventory().getTopInventory()!=menu.inventory)return;
             p.closeInventory(); // A queued duplicate click can no longer spend again.
             try{
                 ready(p);if(slot==26)return;var offer=store.nativeOffer(menu.offer);long now=System.currentTimeMillis();
+                if(slot==18){nearby(p,offer.id());collectAt(p,offer);open(p,store.nativeOffer(offer.id()),offer.owner().equals(p.getUniqueId()));return;}
                 if(menu.owner || slot==11 && stockMember(offer,p.getUniqueId())){
                     if(slot!=11 && !offer.owner().equals(p.getUniqueId()))throw new IllegalArgumentException("Only the original owner can close this shop or collect its stock.");
                     if(slot==11 && !offer.closed()){
                         offer=nearby(p,offer.id());openStock(p,offer,1);return;
-                    }else if(slot==22 && !offer.closed()){store.closeNativeOffer(offer.id(),p.getUniqueId());p.sendMessage(NookUi.message("NookShops","Shop closed. Collect its remaining stock from this menu."));}
+                    }else if(slot==22 && !offer.closed()){
+                        nearby(p,offer.id());
+                        if(offer.stock()>0){p.sendMessage(NookUi.problem("NookShops","Cannot close shop until "+offer.stock()+" "+name(offer.item())+" is collected from stock."));openClosing(p,offer);return;}
+                        if(store.nativePaymentBalance(p.getUniqueId(),offer.id())>0){p.sendMessage(NookUi.problem("NookShops","Collect this shop's item payments first."));open(p,offer,true);return;}
+                        store.closeNativeOffer(offer.id(),p.getUniqueId());clearMarker(offer);p.sendMessage(NookUi.message("NookShops","Shop closed."));return;
+                    }
                     else if(slot==22){
                         int amount=Math.min(64,offer.stock());if(amount==0)throw new IllegalArgumentException("No stock remains.");
                         NativeInventoryPlan.deliver(new NativePlayerInventory(p).capture(),NativePlayerInventory.item(offer.item()),amount);
                         var receipt=store.reserveNativeStockReturn(UUID.randomUUID(),offer.id(),p.getUniqueId(),amount,now);collect(p,receipt);p.sendMessage(NookUi.message("NookShops","Remaining stock collected."));
                     }else return;
-                    open(p,store.nativeOffer(offer.id()),offer.owner().equals(p.getUniqueId()));
+                    var updated=store.nativeOffer(offer.id());if(updated.closed() && updated.stock()==0 && store.nativePaymentBalance(p.getUniqueId(),offer.id())==0){clearMarker(updated);return;}open(p,updated,updated.owner().equals(p.getUniqueId()));
                 }else if(slot==22){
                     offer=nearby(p,offer.id());if(store.nativeNeedsReview(p.getUniqueId()))throw new IllegalArgumentException("An earlier inventory operation needs staff review first.");
                     if(offer.revision()!=menu.revision || offer.closed() || !store.canTrade(offer.plot(),now))throw new IllegalArgumentException("This shop changed or its rent expired. Review it again.");
@@ -248,7 +289,7 @@ final class NativeShops implements Listener {
                         NativeInventoryPlan.deliver(afterPayment,NativePlayerInventory.item(offer.item()),offer.bundle());
                         if(needed>0)custody.payment(offer.id(),p.getUniqueId(),needed,paymentItem.key(),inventory,now);
                     }else NativeInventoryPlan.deliver(inventory.capture(),NativePlayerInventory.item(offer.item()),offer.bundle());
-                    var receipt=store.settleNativePurchase(UUID.randomUUID(),offer.id(),p.getUniqueId(),menu.revision,now);collect(p,receipt);
+                    var receipt=store.settleNativePurchase(UUID.randomUUID(),offer.id(),p.getUniqueId(),menu.revision,now);collect(p,receipt);notices.sale(offer,receipt);
                     p.sendMessage(NookUi.message("NookShops","Bought "+receipt.quantity()+" × "+name(receipt.item())+" for "+price(offer)+"."));
                 }
             }catch(Exception error){problem(p,error);}

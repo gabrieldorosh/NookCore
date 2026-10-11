@@ -7,6 +7,9 @@ author: NikosNook
 softdepend: [DiscordSRV, Vault, WorldGuard, WorldEdit, PlaceholderAPI]
 loadbefore: [ChestShop]
 commands:
+  list:
+    description: List visible online players
+    usage: /list
   staffmode:
     description: Hidden spectator tools and saved return position
     usage: /staffmode [on|off|list|tp <player>|spectate <player>|inspect <player>]

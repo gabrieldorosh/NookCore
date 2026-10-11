@@ -27,14 +27,14 @@ final class CommandSyntax {
             Map.entry("info",new Shape(1,2,"/plots info [address]","View the plot you are standing in, or choose an address.")),
             Map.entry("sharing",new Shape(2,3,"/plots sharing <address> [on|off]","View sharing, or let the renter change it.")),
             Map.entry("rent",exact(2,"/plots rent <plot>","Enter the plot you want to rent.")),
-            Map.entry("invite",exact(4,"/plots invite <plot> <player> <build|stock|both>","Enter a plot, player and the permissions to give them.")),
+            Map.entry("invite",exact(4,"/plots invite send <plot> <player> <build|stock|both>","Enter a plot, player and the permissions to give them.")),
             Map.entry("role",exact(4,"/plots role <plot> <player> <build|stock|both>","Enter a plot, member and their new permissions.")),
             Map.entry("remove",exact(3,"/plots remove <plot> <player>","Enter the plot and the member to remove.")),
-            Map.entry("prepay",exact(3,"/plots prepay <plot> <weeks>","Enter the plot and a whole number of weeks, from 1 to 4.")),
-            Map.entry("reopen",exact(2,"/plots reopen <plot>","Enter the plot you want to reopen.")),
-            Map.entry("invitations",exact(1,"/plots invitations","Invitations does not take any extra words.")),
-            Map.entry("accept",new Shape(1,2,"/plots accept [player]","Choose one inviter, or omit the name when you have one invitation.")),
-            Map.entry("decline",new Shape(1,2,"/plots decline [player]","Choose one inviter, or omit the name when you have one invitation.")),
+            Map.entry("prepay",exact(3,"/plots rent prepay <plot> <weeks>","Enter the plot and a whole number of weeks, from 1 to 4.")),
+            Map.entry("reopen",exact(2,"/plots rent reopen <plot>","Enter the plot you want to reopen.")),
+            Map.entry("invitations",exact(1,"/plots invite list","Invitations does not take any extra words.")),
+            Map.entry("accept",new Shape(1,2,"/plots invite accept [player]","Choose one inviter, or omit the name when you have one invitation.")),
+            Map.entry("decline",new Shape(1,2,"/plots invite decline [player]","Choose one inviter, or omit the name when you have one invitation.")),
             Map.entry("abandon",new Shape(2,3,"/plots abandon <plot>","Enter the plot to review before confirming abandonment."))),
         "nookadmin",Map.ofEntries(
             Map.entry("return",new Shape(1,2,"/nookadmin return [player]","Return yourself, or name one online player.")),
@@ -45,19 +45,19 @@ final class CommandSyntax {
             Map.entry("take",new Shape(4,Integer.MAX_VALUE,"/nooks take <player> <amount> <reason>","Enter a player, amount and an audit reason.")),
             Map.entry("backup",exact(1,"/nooks backup","Backup does not take any extra words.")),
             Map.entry("awards",exact(2,"/nooks advancements <on|off>","Choose on or off.")),
-            Map.entry("plotdefine",exact(3,"/plots admin define <id> <weekly-price>","Enter a plot ID and weekly rent.")),
-            Map.entry("plotstorage",exact(2,"/plots admin storage <plot>","Choose a plot to read its recorded storage notes.")),
-            Map.entry("plotmembership",exact(2,"/plots admin membership <player>","Inspect the membership using that player's plot allowance.")),
-            Map.entry("plotevict",new Shape(3,Integer.MAX_VALUE,"/plots admin evict <address> <reason|confirm>","Preview an eviction and refund, then confirm within 60 seconds.")),
-            Map.entry("plotclear",new Shape(3,Integer.MAX_VALUE,"/plots admin clear <plot> <storage-note>","This makes a cleared plot available to rent again; it does not clear blocks. First store the former renter's belongings, then describe where they are kept (for example: staff storage, chest A3).")),
-            Map.entry("plotabsence",new Shape(4,Integer.MAX_VALUE,"/plots admin absence <plot> <days|off> <reason>","Enter a plot, absence duration and an audit reason.")))
+            Map.entry("plotdefine",exact(3,"/nookadmin plots define <id> <weekly-price>","Enter a plot ID and weekly rent.")),
+            Map.entry("plotstorage",exact(2,"/nookadmin plots storage <plot>","Choose a plot to read its recorded storage notes.")),
+            Map.entry("plotmembership",exact(2,"/nookadmin plots membership <player>","Inspect the membership using that player's plot allowance.")),
+            Map.entry("plotevict",new Shape(3,Integer.MAX_VALUE,"/nookadmin plots evict <address> <reason|confirm>","Preview an eviction and refund, then confirm within 60 seconds.")),
+            Map.entry("plotclear",new Shape(3,Integer.MAX_VALUE,"/nookadmin plots clear <plot> <storage-note>","This makes a cleared plot available to rent again; it does not clear blocks. First store the former renter's belongings, then describe where they are kept (for example: staff storage, chest A3).")),
+            Map.entry("plotabsence",new Shape(4,Integer.MAX_VALUE,"/nookadmin plots absence <plot> <days|off> <reason>","Enter a plot, absence duration and an audit reason.")))
     );
     static void check(String command,String[] args){
         if(args.length==0)return;
         String action=args[0].toLowerCase(Locale.ROOT);
         Shape shape=SHAPES.get(command).get(action);
-        if(shape==null)throw new IllegalArgumentException("Unknown command. Use /"+command+" help to see the available commands.");
-        if(args.length<shape.min() || args.length>shape.max())throw new IllegalArgumentException(shape.explanation()+" Try "+shape.example()+".");
+        if(shape==null)throw new IllegalArgumentException("Not quite right. Try /"+command+" help");
+        if(args.length<shape.min() || args.length>shape.max())throw new IllegalArgumentException(shape.example()+" — "+shape.explanation());
         if(command.equals("plots") && Set.of("invite","role").contains(action)){
             if(!Set.of("build","stock","both","build_stock").contains(args[3].toLowerCase(Locale.ROOT)))throw new IllegalArgumentException("Choose build, stock, or both for their permissions.");
         }

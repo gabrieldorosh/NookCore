@@ -235,12 +235,12 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
                     sender.sendMessage(NookUi.heading("NookQuests · Activate configured goals"));
                     for(var goal:proposed)sender.sendMessage(NookUi.text(goal.title()+" · "+Money.format(goal.reward())));
                     sender.sendMessage(NookUi.message("NookQuests","This replaces this week's goals for everyone with fresh progress. Old progress, rewards, balances and contributed stock are retained. New goals can pay again. Use only for the prelaunch switch; once per week."));
-                    sender.sendMessage(NookUi.command("/quests activate-config confirm"));
+                    sender.sendMessage(NookUi.command("/nookadmin quests activate-config confirm"));
                     activations.put(actor,new Activation(week.id(),now+60000));return true;
                 }
-                if(args.length!=2 || !args[1].equalsIgnoreCase("confirm"))throw new IllegalArgumentException("Use /quests activate-config to preview the change.");
+                if(args.length!=2 || !args[1].equalsIgnoreCase("confirm"))throw new IllegalArgumentException("Use /nookadmin quests activate-config to preview the change.");
                 var pending=activations.remove(actor);
-                if(pending==null || pending.expires()<now || !pending.week().equals(week.id()))throw new IllegalArgumentException("Confirmation expired. Run /quests activate-config again.");
+                if(pending==null || pending.expires()<now || !pending.week().equals(week.id()))throw new IllegalArgumentException("Confirmation expired. Run /nookadmin quests activate-config again.");
                 java.nio.file.Files.createDirectories(backupFolder);
                 var backup=backupFolder.resolve("quests-before-activation-"+UUID.randomUUID()+".db");store.backup(backup);
                 goals=store.activateQuestConfig(week.id(),proposed,now);lastBiome.clear();capacityNotified.clear();notices.clear();
@@ -264,7 +264,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
                 if(!(sender instanceof Player p)){sender.sendMessage(NookUi.message("NookQuests","Use quests inspect <player> from console."));return true;}player=p.getUniqueId();
             }else{
                 NookUi.help(sender,"Weekly quests","/quests — view your progress and rewards");
-                if(sender.hasPermission("nookcore.admin"))NookUi.help(sender,"Staff","/quests inspect <player> — view progress without changing it");return true;
+                if(sender.hasPermission("nookcore.admin"))NookUi.help(sender,"Staff","/nookadmin quests inspect <player> — view progress without changing it");return true;
             }
             rotation(clock.getAsLong());
             sender.sendMessage(Component.empty());sender.sendMessage(Component.text("NookQuests",NookUi.ACCENT).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD));

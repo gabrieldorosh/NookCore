@@ -19,6 +19,7 @@ class AdminTeleportsTest {
     Object message(Object[] args){if(args!=null && args.length>0 && args[0] instanceof Component c)messages.add(PlainTextComponentSerializer.plainText().serialize(c));return null;}
     Player player(String name,Set<String> permissions){
         UUID id=UUID.nameUUIDFromBytes(name.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        if(permissions.containsAll(Set.of("nookcore.admin","nookcore.travel.bypass")))duty(id,true);
         return proxy(Player.class,(o,m,a)->switch(m.getName()){
             case "getUniqueId"->id;case "getName"->name;case "getLocation"->location.clone();case "hasPermission"->permissions.contains(a[0]);
             case "sendMessage"->message(a);
@@ -26,6 +27,9 @@ class AdminTeleportsTest {
             default->null;
         });
     }
+    @SuppressWarnings("unchecked") static void duty(UUID id,boolean active){try{var f=StaffMode.class.getDeclaredField("ACTIVE");f.setAccessible(true);var ids=(Set<UUID>)f.get(null);if(active)ids.add(id);else ids.remove(id);}catch(Exception e){throw new AssertionError(e);}}
+    @AfterEach void clearDuty()throws Exception {var f=StaffMode.class.getDeclaredField("ACTIVE");f.setAccessible(true);((Set<?>)f.get(null)).clear();}
+    @Test void fullyPermissionedOffDutyAdminCannotTeleport(){var admin=player("OffDuty",Set.of("nookcore.admin","nookcore.travel.bypass"));duty(admin.getUniqueId(),false);run(admin);assertEquals(0,calls);assertTrue(messages.stream().anyMatch(m->m.contains("Enter /staffmode")));}
     @BeforeEach void setup(){
         UUID worldId=UUID.randomUUID();World world=proxy(World.class,(o,m,a)->switch(m.getName()){case "equals"->o==a[0];case "hashCode"->1;case "getUID"->worldId;case "getName"->"test_world";default->null;});
         location=new Location(world,12,70,25,90,0);

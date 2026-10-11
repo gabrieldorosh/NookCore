@@ -26,10 +26,10 @@ final class NativeStockRecovery {
         previews.entrySet().removeIf(e->e.getValue().expires()<=now);
         try{
             if(!ready.getAsBoolean())throw new IllegalArgumentException("Shop services are paused. Investigate and restart before resolving a receipt.");
-            if(args.length<3)throw new IllegalArgumentException("Use /nookshops recover-stock <receipt> <credit|no-credit> <reason>, then /nookshops recover-stock <receipt> confirm.");
+            if(args.length<3)throw new IllegalArgumentException("Use /nookadmin shops recover-stock <receipt> <credit|no-credit> <reason>, then /nookadmin shops recover-stock <receipt> confirm.");
             UUID receipt;try{receipt=UUID.fromString(args[1]);}catch(IllegalArgumentException e){throw new IllegalArgumentException("Use the full stock receipt UUID.");}
             if(args[2].equalsIgnoreCase("confirm")){
-                if(args.length!=3)throw new IllegalArgumentException("Use /nookshops recover-stock <receipt> confirm.");
+                if(args.length!=3)throw new IllegalArgumentException("Use /nookadmin shops recover-stock <receipt> confirm.");
                 var preview=previews.get(actor);
                 if(preview==null || !preview.detail().receipt().equals(receipt))throw new IllegalArgumentException("Preview this receipt from the same console or admin first; previews last 60 seconds.");
                 previews.remove(actor);
@@ -40,7 +40,7 @@ final class NativeStockRecovery {
                     "Recovered "+preview.detail().quantity()+" item(s) into the original shop stock. No player inventory was changed.":
                     "Closed the failed deposit without adding stock. No player inventory was changed.";
                 sender.sendMessage(NookUi.message("NookShops",result+" Backup: "+backup.getFileName()));
-                sender.sendMessage(NookUi.message("NookShops","Check /nookshops review "+receipt+". Any other pending receipt still requires its own review."));
+                sender.sendMessage(NookUi.message("NookShops","Check /nookadmin shops review "+receipt+". Any other pending receipt still requires its own review."));
                 return true;
             }
             previews.remove(actor);
@@ -56,7 +56,7 @@ final class NativeStockRecovery {
             sender.sendMessage(NookUi.message("NookShops",action==NativeStockReview.Recovery.CREDIT?
                 "CREDIT: add the recorded items to the original shop, using its exact stored item metadata. Use only if the items disappeared and have not been replaced.":
                 "NO CREDIT: close this failed attempt without adding stock. Use only if the player kept the items or has already been compensated."));
-            sender.sendMessage(NookUi.message("NookShops","Staff statement: "+reason+". No inventory will be changed. Confirm within 60 seconds: /nookshops recover-stock "+receipt+" confirm"));
+            sender.sendMessage(NookUi.message("NookShops","Staff statement: "+reason+". No inventory will be changed. Confirm within 60 seconds: /nookadmin shops recover-stock "+receipt+" confirm"));
         }catch(IllegalArgumentException e){sender.sendMessage(NookUi.problem("NookShops",e.getMessage()));}
         catch(java.io.IOException e){sender.sendMessage(NookUi.problem("NookShops","Backup could not be created; recovery was not applied."));}
         catch(Exception e){failure.accept(e);sender.sendMessage(NookUi.problem("NookShops","Recovery could not be confirmed. Check the receipt and server log before retrying."));}

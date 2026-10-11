@@ -70,7 +70,7 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
     void close(){if(help!=null)help.close();unregister.run();NookUi.preferences=null;}
     String placeholder(UUID id,String key){
         Snapshot s=snapshots.get(id);if(s==null)return Set.of("deaths","balance","balance_whole").contains(key)?"0":"";
-        return switch(key){case "staffmode"->Boolean.toString(s.staff());case "afk"->Boolean.toString(s.afk());case "balance"->java.math.BigDecimal.valueOf(s.cents(),2).setScale(2).toPlainString();case "balance_whole"->Long.toString(s.cents()/100);case "deaths"->Integer.toString(s.deaths());case "name"->"&"+(s.afk()?AfkDisplay.COLOUR:s.preference().textColour().asHexString())+s.name()+"&r";case "pronouns"->s.preference().pronouns().isEmpty()?"":" &7· "+s.preference().pronouns()+"&r";case "rank"->(s.staff()?"&7[on duty] &r":"")+("&"+(s.afk()?AfkDisplay.COLOUR:ChatStyle.rankColour(s.rank()).asHexString()))+"["+ChatStyle.rankLabel(s.rank())+"] &r";default->null;};
+        return switch(key){case "staffmode"->Boolean.toString(s.staff());case "afk"->Boolean.toString(s.afk());case "balance"->java.math.BigDecimal.valueOf(s.cents(),2).setScale(2).toPlainString();case "balance_whole"->Long.toString(s.cents()/100);case "deaths"->Integer.toString(s.deaths());case "name"->"&"+(s.afk()?AfkDisplay.COLOUR:s.preference().textColour().asHexString())+(s.afk()?"&o[AFK] ":"")+s.name()+"&r";case "pronouns"->s.preference().pronouns().isEmpty()?"":" &7· "+s.preference().pronouns()+"&r";case "rank"->(s.staff()?"&7[on duty] &r":"")+("&"+(s.afk()?AfkDisplay.COLOUR:ChatStyle.rankColour(s.rank()).asHexString()))+"["+ChatStyle.rankLabel(s.rank())+"] &r";default->null;};
     }
     static String displayRank(java.util.function.Predicate<String> permission){
         for(String rank:List.of("owner","admin","helper","supporter"))if(permission.test("nookcore.chat.rank."+rank))return rank;
@@ -82,7 +82,10 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
         Snapshot previous=snapshots.get(id);long cents=previous==null?0:previous.cents();
         try{cents=balances.read(id);balanceWarning=false;}
         catch(java.sql.SQLException e){if(!balanceWarning){plugin.getLogger().warning("TAB balance refresh failed; keeping the last displayed balance.");balanceWarning=true;}}
-        snapshots.put(id,new Snapshot(player.getName(),rank,preferences.get(id),player.getStatistic(org.bukkit.Statistic.DEATHS),cents,AfkDisplay.idle(afkEnabled,afkSeconds,player.getIdleDuration()),StaffMode.active(id)));
+        boolean away=AfkDisplay.idle(afkEnabled,afkSeconds,player.getIdleDuration()), staff=StaffMode.active(id);
+        snapshots.put(id,new Snapshot(player.getName(),rank,preferences.get(id),player.getStatistic(org.bukkit.Statistic.DEATHS),cents,away,staff));
+        if(previous!=null && !previous.staff() && !staff && previous.afk()!=away && plugin.getConfig().getBoolean("chat.afk.announcements",true))
+            Bukkit.broadcast(NookUi.message("Nook",player.getName()+(away?" is now AFK.":" is back.")));
     }
     @EventHandler(priority=EventPriority.HIGH)
     public void death(org.bukkit.event.entity.PlayerDeathEvent event){

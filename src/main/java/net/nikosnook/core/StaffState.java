@@ -7,10 +7,11 @@ import java.util.*;
 
 /** Persist the return point before changing mode or visibility. */
 final class StaffState {
-    record Return(UUID world,double x,double y,double z,float yaw,float pitch,String mode,boolean flight,boolean flying,boolean visible){
-        Return {Objects.requireNonNull(world);if(!Double.isFinite(x)||!Double.isFinite(y)||!Double.isFinite(z)||!Float.isFinite(yaw)||!Float.isFinite(pitch)||!Set.of("SURVIVAL","CREATIVE","ADVENTURE","SPECTATOR").contains(mode))throw new IllegalArgumentException("Invalid staff return point");}
-        String encode(){return world+","+x+","+y+","+z+","+yaw+","+pitch+","+mode+","+flight+","+flying+","+visible;}
-        static Return decode(String value){String[] p=value.split(",",-1);if(p.length!=10)throw new IllegalArgumentException("Invalid staff state");for(int i=7;i<10;i++)if(!Set.of("true","false").contains(p[i]))throw new IllegalArgumentException("Invalid staff flag");return new Return(UUID.fromString(p[0]),Double.parseDouble(p[1]),Double.parseDouble(p[2]),Double.parseDouble(p[3]),Float.parseFloat(p[4]),Float.parseFloat(p[5]),p[6],Boolean.parseBoolean(p[7]),Boolean.parseBoolean(p[8]),Boolean.parseBoolean(p[9]));}
+    record Return(UUID world,double x,double y,double z,float yaw,float pitch,String mode,boolean flight,boolean flying,boolean visible,String presence){
+        Return(UUID world,double x,double y,double z,float yaw,float pitch,String mode,boolean flight,boolean flying,boolean visible){this(world,x,y,z,yaw,pitch,mode,flight,flying,visible,"disconnect");}
+        Return {Objects.requireNonNull(world);if(!Set.of("disconnect","legacy").contains(presence))throw new IllegalArgumentException("Invalid staff presence");if(!Double.isFinite(x)||!Double.isFinite(y)||!Double.isFinite(z)||!Float.isFinite(yaw)||!Float.isFinite(pitch)||!Set.of("SURVIVAL","CREATIVE","ADVENTURE","SPECTATOR").contains(mode))throw new IllegalArgumentException("Invalid staff return point");}
+        String encode(){return world+","+x+","+y+","+z+","+yaw+","+pitch+","+mode+","+flight+","+flying+","+visible+","+presence;}
+        static Return decode(String value){String[] p=value.split(",",-1);if(p.length!=10 && p.length!=11)throw new IllegalArgumentException("Invalid staff state");for(int i=7;i<10;i++)if(!Set.of("true","false").contains(p[i]))throw new IllegalArgumentException("Invalid staff flag");return new Return(UUID.fromString(p[0]),Double.parseDouble(p[1]),Double.parseDouble(p[2]),Double.parseDouble(p[3]),Float.parseFloat(p[4]),Float.parseFloat(p[5]),p[6],Boolean.parseBoolean(p[7]),Boolean.parseBoolean(p[8]),Boolean.parseBoolean(p[9]),p.length==11?p[10]:"legacy");}
     }
     private final Path file;private Map<UUID,Return> states=new HashMap<>();
     StaffState(Path file)throws IOException{this.file=file;Properties p=new Properties();if(Files.exists(file))try(var in=Files.newInputStream(file)){p.load(in);}try{for(String key:p.stringPropertyNames())states.put(UUID.fromString(key),Return.decode(p.getProperty(key)));}catch(RuntimeException e){throw new IOException("Invalid staff state; file preserved for repair",e);}}

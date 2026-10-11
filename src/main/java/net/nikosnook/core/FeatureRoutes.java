@@ -6,7 +6,7 @@ final class FeatureRoutes {
  static boolean moneyAdmin(String[] args){return args.length>0 && (MONEY_ADMIN.contains(args[0].toLowerCase(Locale.ROOT)) || args.length>1 && args[0].equalsIgnoreCase("balance"));}
  static String[] money(String[] args){var result=args.clone();if(result[0].equalsIgnoreCase("advancements"))result[0]="awards";return result;}
  static String[] plot(String[] args){
-  if(args.length==0 || !PLOT_ADMIN.contains(args[0].toLowerCase(Locale.ROOT)))throw new IllegalArgumentException("Use /plots admin to see the staff plot commands.");
+  if(args.length==0 || !PLOT_ADMIN.contains(args[0].toLowerCase(Locale.ROOT)))throw new IllegalArgumentException("Use /nookadmin plots to see the staff plot commands.");
   var result=args.clone();result[0]="plot"+args[0].toLowerCase(Locale.ROOT);return result;
  }
 }

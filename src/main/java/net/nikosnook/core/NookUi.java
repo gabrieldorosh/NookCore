@@ -59,7 +59,7 @@ final class NookUi {
         return switch(state){case "AVAILABLE"->Component.text("Available to rent",GOOD);case "ACTIVE"->Component.text("Open",GOOD);case "GRACE"->Component.text("Closed · rent overdue",WARNING);default->Component.text("Closed · awaiting clearance",BAD);};
     }
     static Component overdue(NookStore.Plot plot){
-        String command="/plots reopen "+plot.id();
+        String command="/plots rent reopen "+plot.id();
         return prefix("NookPlots").append(Component.text(plot.id(),COMMAND))
             .append(text(" is overdue; sales are closed. The original renter can run "))
             .append(Component.text(command,COMMAND).clickEvent(ClickEvent.suggestCommand(command)))

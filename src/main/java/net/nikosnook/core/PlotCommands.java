@@ -143,7 +143,7 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
                 return true;
             }
             if(!(sender instanceof Player p)){
-                NookUi.help(sender,"NookPlots · Console","/plots list [page] — view plots, owners and availability","/plots admin clear <plot> <storage-note> — release a plot after saving belongings and clearing it");
+                NookUi.help(sender,"NookPlots · Console","/plots list [page] — view plots, owners and availability","/nookadmin plots clear <plot> <storage-note> — release a plot after saving belongings and clearing it");
                 sender.sendMessage(NookUi.message("NookPlots","Renting and reopening require the renter to run /plots in game."));return true;
             }
 
@@ -253,7 +253,7 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
             }
 
-            NookUi.help(sender,"NookPlots","/plots abandon <plot> — review closure and a prepaid-week refund","/plots leave — leave as a co-owner","/plots list [page] — see prices, owners and availability","/plots find [plot] — locate your plot or a named plot","/plots name <plot> <name|reset> — set your shop display name","/plots info [address] — inspect this plot or another address","/plots rent <plot> — rent an available plot","/plots invite <plot> <player> <build|stock|both> — invite or update a member","/plots invitations — see your invitations","/plots accept [player] — accept; omit player if only one invitation","/plots decline [player] — decline an invitation","/plots role <plot> <player> <build|stock|both> — replace their permissions","/plots remove <plot> <player> — remove a member","/plots sharing <address> [on|off] — view or change Nooks income sharing","/plots prepay <plot> <weeks> — pay ahead, up to four weeks","/plots reopen <plot> — pay remaining rent and resume sales");
+            NookUi.help(sender,"NookPlots","/plots abandon <plot> — review closure and a prepaid-week refund","/plots leave — leave as a co-owner","/plots list [page] — see prices, owners and availability","/plots find [plot] — locate your plot or a named plot","/plots name <plot> <name|reset> — set your shop display name","/plots info [address] — inspect this plot or another address","/plots rent <plot> — rent an available plot","/plots invite <plot> <player> <build|stock|both> — invite or update a member","/plots invite list — see your invitations","/plots invite accept [player] — accept; omit player if only one invitation","/plots invite decline [player] — decline an invitation","/plots role <plot> <player> <build|stock|both> — replace their permissions","/plots remove <plot> <player> — remove a member","/plots sharing <address> [on|off] — view or change Nooks income sharing","/plots rent prepay <plot> <weeks> — pay ahead, up to four weeks","/plots rent reopen <plot> — pay remaining rent and resume sales");
 
         }catch(NumberFormatException ex){sender.sendMessage(NookUi.problem("NookPlots","Choose a whole number of weeks from 1 to 4."));}
         catch(IllegalArgumentException ex){sender.sendMessage(NookUi.problem("NookPlots",ex.getMessage()));}
@@ -272,9 +272,9 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
 
         for(var invite:invitations){String name=store.account(invite.inviter()).orElseThrow().name();if(selector.isEmpty() || name.equalsIgnoreCase(selector) || invite.token().toString().equalsIgnoreCase(selector))matches.add(invite);}
 
-        if(matches.isEmpty())throw new IllegalArgumentException(selector.isEmpty()?"You have no current plot invitations.":"No current invitation from that player. Try /plots invitations.");
+        if(matches.isEmpty())throw new IllegalArgumentException(selector.isEmpty()?"You have no current plot invitations.":"No current invitation from that player. Try /plots invite list.");
 
-        if(matches.size()>1)throw new IllegalArgumentException("You have several invitations. Use /plots accept <player> to choose.");
+        if(matches.size()>1)throw new IllegalArgumentException("You have several invitations. Use /plots invite accept <player> to choose.");
 
         return matches.getFirst();
 
@@ -289,9 +289,9 @@ public final class PlotCommands implements CommandExecutor, TabCompleter {
         sender.sendMessage(notice().append(NookUi.name(store,invite.inviter())).append(NookUi.text(" invited you to "+invite.plot()+".")));
         sender.sendMessage(net.kyori.adventure.text.Component.text("Permissions: "+(invite.role().equals("BUILD_STOCK")?"build and stock":invite.role().toLowerCase(Locale.ROOT))+" · Expires "+NookUi.date(invite.expires()),NookUi.MUTED));
         sender.sendMessage(net.kyori.adventure.text.Component.text("[Accept]",NookUi.COMMAND)
-            .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/plots accept "+invite.token()))
+            .clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/plots invite accept "+invite.token()))
             .append(net.kyori.adventure.text.Component.text("  "))
-            .append(net.kyori.adventure.text.Component.text("[Decline]",NookUi.COMMAND).clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/plots decline "+invite.token()))));
+            .append(net.kyori.adventure.text.Component.text("[Decline]",NookUi.COMMAND).clickEvent(net.kyori.adventure.text.event.ClickEvent.runCommand("/plots invite decline "+invite.token()))));
         sender.sendMessage(NookUi.text("Joining uses your one-plot allowance."));
         sender.sendMessage(net.kyori.adventure.text.Component.text("Or type /plots <accept|decline> "+name,NookUi.MUTED));
     }
