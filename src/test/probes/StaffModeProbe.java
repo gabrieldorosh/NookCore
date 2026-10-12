@@ -55,6 +55,17 @@ public class StaffModeProbe extends JavaPlugin {
   Path discordJar=getDataFolder().toPath().resolve("DiscordSRV.jar.reference");
   try(var cl=new java.net.URLClassLoader(new java.net.URL[]{discordJar.toUri().toURL()},getClassLoader())){var api=cl.loadClass("github.scarsz.discordsrv.hooks.vanish.VanishHook");Object hook=call(type("StaffMode"),"discordHook",api,core);check((boolean)api.getMethod("isVanished",Player.class).invoke(hook,helper.player)&&!(boolean)api.getMethod("isVanished",Player.class).invoke(hook,regular.player),"installed DiscordSRV vanish API identifies hidden staff");}
   check(regular.messages.size()==1 && regular.messages.getFirst().toString().contains("left the game"),"disconnect presence sends one departure message without staff details");
+  check(observer.messages.toString().contains("left the game"),"helpers also receive simulated departure");
+  var formatted=(Component)call(type("StaffMode"),"presenceMessage",helper.player,false);
+  check(formatted.children().getFirst().color()!=null,"departure uses configured player name colour");
+  for(String alias:List.of("/w","/msg","/tell","/minecraft:w","/minecraft:msg","/minecraft:tell")){
+    var whisper=new PlayerCommandPreprocessEvent(regular.player,alias+" Helper test");call(mode,"commands",whisper);check(whisper.isCancelled(),alias+" cannot target hidden staff");
+  }
+  regular.messages.clear();var hiddenWhisper=new PlayerCommandPreprocessEvent(regular.player,"/w Helper test");call(mode,"commands",hiddenWhisper);String hiddenReply=regular.messages.toString();
+  regular.messages.clear();var missingWhisper=new PlayerCommandPreprocessEvent(regular.player,"/w NobodyHere test");call(mode,"commands",missingWhisper);check(hiddenReply.equals(regular.messages.toString()),"hidden and absent whisper targets give identical responses");
+  var visibleWhisper=new PlayerCommandPreprocessEvent(regular.player,"/w StaffViewer test");call(mode,"commands",visibleWhisper);check(!visibleWhisper.isCancelled(),"normal whispers to visible players still pass through");
+  var outgoingWhisper=new PlayerCommandPreprocessEvent(helper.player,"/w Regular test");call(mode,"commands",outgoingWhisper);check(outgoingWhisper.isCancelled(),"hidden staff cannot reveal themselves through outgoing whispers");
+  var legacyChat=new AsyncPlayerChatEvent(false,helper.player,"hidden text",new HashSet<>());call(mode,"legacyChat",legacyChat);check(legacyChat.isCancelled(),"legacy chat relay source blocked while hidden");
   check(call(make(type("StaffState"),new Class[]{Path.class},file),"get",helper.id)!=null,"return state survives reload");check(rejected(mode,"enter",helper.player),"repeat entry preserves original return");
   var gm=new PlayerGameModeChangeEvent(helper.player,GameMode.CREATIVE);call(mode,"gameMode",gm);check(gm.isCancelled(),"active staff cannot change mode outside safe exit");
   var joined=new PlayerJoinEvent(helper.player,Component.text("joined"));call(mode,"join",joined);check(joined.joinMessage()==null&&active(helper),"rejoin preserves invisibility and suppresses public join");

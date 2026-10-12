@@ -19,7 +19,7 @@ final class StaffMode implements Listener,CommandExecutor,TabCompleter {
     private final JavaPlugin plugin;private final StaffState state;
     private final java.util.function.Supplier<Collection<? extends Player>> players;
     private volatile Set<String> hiddenNames=Set.of();private volatile Set<UUID> seeNames=Set.of();
-    private Object discordHook;private Set<Object> discordHooks;
+    private Object discordHook;private Set<Object> discordHooks;private Object discordApi,discordChat;
     private final Set<UUID> changing=new HashSet<>();private final Map<UUID,Location> returns=new HashMap<>();private final Map<UUID,Location> travel=new HashMap<>();
     static boolean active(UUID id){return ACTIVE.contains(id);}
     static boolean allowed(CommandSender s){return s.hasPermission("nookcore.staff.use")||s.hasPermission("nookcore.admin");}
@@ -45,13 +45,19 @@ final class StaffMode implements Listener,CommandExecutor,TabCompleter {
     @SuppressWarnings("unchecked") private void connectDiscord(){
         var discord=Bukkit.getPluginManager().getPlugin("DiscordSRV");if(discord==null||!discord.isEnabled()||discordHook!=null)return;
         try{Class<?> api=Class.forName("github.scarsz.discordsrv.hooks.vanish.VanishHook",true,discord.getClass().getClassLoader());
-            var hooks=(Set<Object>)discord.getClass().getMethod("getPluginHooks").invoke(discord);Object hook=discordHook(api,plugin);hooks.add(hook);discordHooks=hooks;discordHook=hook;
+            var hooks=(Set<Object>)discord.getClass().getMethod("getPluginHooks").invoke(discord);
+            Object relay=Class.forName("net.nikosnook.core.StaffDiscordChat",true,plugin.getClass().getClassLoader()).getConstructor().newInstance();
+            Object manager=discord.getClass().getField("api").get(null);manager.getClass().getMethod("subscribe",Object.class).invoke(manager,relay);
+            discordApi=manager;discordChat=relay;
+            Object hook=discordHook(api,plugin);hooks.add(hook);discordHooks=hooks;discordHook=hook;
             plugin.getLogger().info("Staff mode connected to DiscordSRV vanish filtering.");
         }catch(Exception e){plugin.getLogger().log(java.util.logging.Level.SEVERE,"Staff mode could not connect to DiscordSRV; entry will be blocked",e);}
     }
     private boolean discordReady(){var discord=Bukkit.getPluginManager().getPlugin("DiscordSRV");return discord==null||!discord.isEnabled()||discordHook!=null;}
     @EventHandler public void pluginEnabled(org.bukkit.event.server.PluginEnableEvent e){if(e.getPlugin().getName().equals("DiscordSRV"))connectDiscord();}
-    @EventHandler public void pluginDisabled(org.bukkit.event.server.PluginDisableEvent e){if(e.getPlugin()==plugin||e.getPlugin().getName().equals("DiscordSRV")){if(discordHooks!=null&&discordHook!=null)discordHooks.remove(discordHook);discordHooks=null;discordHook=null;}}
+    @EventHandler public void pluginDisabled(org.bukkit.event.server.PluginDisableEvent e){if(e.getPlugin()==plugin||e.getPlugin().getName().equals("DiscordSRV")){if(discordHooks!=null&&discordHook!=null)discordHooks.remove(discordHook);discordHooks=null;discordHook=null;
+        if(discordApi!=null&&discordChat!=null)try{discordApi.getClass().getMethod("unsubscribe",Object.class).invoke(discordApi,discordChat);}catch(Exception ex){plugin.getLogger().warning("Could not unsubscribe staff Discord chat filter: "+ex.getMessage());}
+        discordApi=null;discordChat=null;}}
     private void mode(Player p,GameMode mode){changing.add(p.getUniqueId());try{p.setGameMode(mode);}finally{changing.remove(p.getUniqueId());}if(p.getGameMode()!=mode)throw new IllegalArgumentException("A plugin prevented the game-mode change; staff mode remains hidden.");}
     private void refreshNames(){
         hiddenNames=players.get().stream().filter(p->active(p.getUniqueId())).map(p->p.getName().toLowerCase(Locale.ROOT)).collect(java.util.stream.Collectors.toUnmodifiableSet());
@@ -88,8 +94,17 @@ final class StaffMode implements Listener,CommandExecutor,TabCompleter {
     private boolean visit(Player p,Location to){travel.put(p.getUniqueId(),to.clone());try{return p.teleport(to,PlayerTeleportEvent.TeleportCause.PLUGIN);}finally{travel.remove(p.getUniqueId());}}
     boolean returning(PlayerTeleportEvent e){return active(e.getPlayer().getUniqueId()) && e.getCause()==PlayerTeleportEvent.TeleportCause.PLUGIN && Objects.equals(returns.get(e.getPlayer().getUniqueId()),e.getTo());}
     private void departure(Player p,boolean joining){
-        Component text=Component.text(p.getName()+(joining?" joined the game":" left the game"),net.kyori.adventure.text.format.NamedTextColor.YELLOW);
-        for(var viewer:players.get())if(!sees(viewer))viewer.sendMessage(text);
+        Component text=presenceMessage(p,joining);
+        for(var viewer:players.get())viewer.sendMessage(text);
+        var discord=Bukkit.getPluginManager().getPlugin("DiscordSRV");
+        if(discord!=null&&discord.isEnabled())try{
+            String rendered=net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer.legacySection().serialize(text);
+            discord.getClass().getMethod(joining?"sendJoinMessage":"sendLeaveMessage",Player.class,String.class).invoke(discord,p,rendered);
+        }catch(Exception ex){plugin.getLogger().log(java.util.logging.Level.SEVERE,"Could not relay staff presence to DiscordSRV",ex);p.sendMessage(NookUi.problem("Staff","Discord presence message failed; check the server log."));}
+    }
+    static Component presenceMessage(Player p,boolean joining){
+        return Component.empty().color(net.kyori.adventure.text.format.NamedTextColor.YELLOW)
+            .append(NookUi.name(p.getUniqueId(),p.getName())).append(Component.text(joining?" joined the game":" left the game"));
     }
     private void notice(Player p,String action){plugin.getLogger().info("Staff mode: "+p.getName()+" "+action);for(var staff:players.get())if(sees(staff))staff.sendMessage(NookUi.message("Staff",p.getName()+" "+action+" staff mode."));}
     @EventHandler(priority=EventPriority.LOWEST) public void login(PlayerLoginEvent e){if(active(e.getPlayer().getUniqueId())){e.getPlayer().setVisibleByDefault(false);e.getPlayer().setMetadata("vanished",new FixedMetadataValue(plugin,true));}}
@@ -98,13 +113,43 @@ final class StaffMode implements Listener,CommandExecutor,TabCompleter {
     @EventHandler(priority=EventPriority.LOWEST) public void quit(PlayerQuitEvent e){if(active(e.getPlayer().getUniqueId()))e.quitMessage(null);}
     @EventHandler(priority=EventPriority.HIGHEST) public void quitMessage(PlayerQuitEvent e){quit(e);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true) public void gameMode(PlayerGameModeChangeEvent e){if(active(e.getPlayer().getUniqueId())&&!changing.contains(e.getPlayer().getUniqueId())&&e.getNewGameMode()!=GameMode.SPECTATOR){e.setCancelled(true);e.getPlayer().sendMessage(NookUi.problem("Staff","Use /staffmode off to restore your saved mode and position."));}}
+    @SuppressWarnings("deprecation")
+    @EventHandler(priority=EventPriority.LOWEST,ignoreCancelled=true) public void legacyChat(AsyncPlayerChatEvent e){if(active(e.getPlayer().getUniqueId())){e.setCancelled(true);e.getPlayer().sendMessage(NookUi.problem("Staff","Chat is disabled whilst in staff mode."));}}
     @EventHandler(priority=EventPriority.LOWEST,ignoreCancelled=true) public void chat(io.papermc.paper.event.player.AsyncChatEvent e){if(active(e.getPlayer().getUniqueId())){e.setCancelled(true);e.getPlayer().sendMessage(NookUi.problem("Staff","Chat is disabled whilst in staff mode."));}}
     @EventHandler(priority=EventPriority.HIGHEST) public void ping(com.destroystokyo.paper.event.server.PaperServerListPingEvent e){int before=e.getNumPlayers(),removed=0;for(var it=e.iterator();it.hasNext();)if(active(it.next().getUniqueId())){it.remove();removed++;}e.setNumPlayers(Math.max(0,before-removed));e.getPlayerSample().removeIf(p->active(p.getId()));}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true) public void commands(PlayerCommandPreprocessEvent e){
         String root=e.getMessage().split("\\s+",2)[0].toLowerCase(Locale.ROOT);
         if(active(e.getPlayer().getUniqueId())&&Set.of("/me","/minecraft:me","/say","/minecraft:say").contains(root)){e.setCancelled(true);e.getPlayer().sendMessage(NookUi.problem("Staff","Chat is disabled whilst in staff mode."));return;}
+        if(whisper(e,root))return;
         if(Set.of("/list","/minecraft:list","/bukkit:list","/online","/who").contains(root)){e.setCancelled(true);if(e.getMessage().trim().split("\\s+").length>1){e.getPlayer().sendMessage(NookUi.text("/list"));return;}var names=players.get().stream().filter(p->!active(p.getUniqueId())||sees(e.getPlayer())).map(Player::getName).sorted().toList();e.getPlayer().sendMessage(NookUi.message("Players",String.join(", ",names)));}
     }
+    private boolean whisper(PlayerCommandPreprocessEvent e,String root){
+        String base=root.substring(root.lastIndexOf(':')+1).replaceFirst("^/","");
+        if(!Set.of("w","whisper","msg","tell","message","pm","m","reply","r").contains(base))return false;
+        if(active(e.getPlayer().getUniqueId())){e.setCancelled(true);e.getPlayer().sendMessage(NookUi.problem("Staff","Use /sc <message> whilst in staff mode."));return true;}
+        if(sees(e.getPlayer()))return false;
+        String[] parts=e.getMessage().trim().split("\\s+",3);
+        if(parts.length<2 || Set.of("reply","r").contains(base))return false;
+        String target=parts[1];
+        if(target.startsWith("@")){
+            // Resolve selectors ourselves so @a/@p cannot reveal hidden targets or choose them over visible ones.
+            e.setCancelled(true);
+            if(parts.length<3){e.getPlayer().sendMessage(NookUi.text("/"+base+" <player> <message>"));return true;}
+            try{
+                var visible=Bukkit.selectEntities(e.getPlayer(),target).stream().filter(x->x instanceof Player).map(x->(Player)x).filter(x->!active(x.getUniqueId())).toList();
+                if(visible.isEmpty())missingWhisperTarget(e.getPlayer());
+                for(var recipient:visible){
+                    e.getPlayer().sendMessage(Component.translatable("commands.message.display.outgoing",Component.text(recipient.getName()),Component.text(parts[2])));
+                    recipient.sendMessage(Component.translatable("commands.message.display.incoming",Component.text(e.getPlayer().getName()),Component.text(parts[2])));
+                }
+            }catch(IllegalArgumentException ex){missingWhisperTarget(e.getPlayer());}
+            return true;
+        }
+        var found=players.get().stream().filter(p->p.getName().equalsIgnoreCase(target)||p.getUniqueId().toString().equalsIgnoreCase(target)).findFirst();
+        if(found.isEmpty()||active(found.get().getUniqueId())){e.setCancelled(true);missingWhisperTarget(e.getPlayer());return true;}
+        return false;
+    }
+    private static void missingWhisperTarget(Player p){p.sendMessage(Component.translatable("argument.entity.notfound.player").color(net.kyori.adventure.text.format.NamedTextColor.RED));}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true) public void completion(PlayerChatTabCompleteEvent e){if(!sees(e.getPlayer()))e.getTabCompletions().removeIf(name->players.get().stream().anyMatch(p->active(p.getUniqueId())&&p.getName().equalsIgnoreCase(name)));}
     @EventHandler(priority=EventPriority.HIGHEST) public void tab(org.bukkit.event.server.TabCompleteEvent e){if(e.getSender() instanceof Player p&&!sees(p))e.getCompletions().removeIf(name->hiddenNames.contains(name.toLowerCase(Locale.ROOT)));}
     @EventHandler(priority=EventPriority.HIGHEST) public void asyncTab(com.destroystokyo.paper.event.server.AsyncTabCompleteEvent e){if(e.getSender() instanceof Player p&&!seeNames.contains(p.getUniqueId()))e.completions().removeIf(c->hiddenNames.contains(c.suggestion().toLowerCase(Locale.ROOT)));}

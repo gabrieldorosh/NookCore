@@ -17,3 +17,10 @@ Approved command and copy changes, based on tested staff mode plus the tested re
 Not part of this candidate: retained AFK/normal TAB presence, fake stationary bodies/map markers, full chest cursor/drag stock editing, shopkeeper NPCs, website dashboard. Existing safe shift-click stock transfers remain. Departure simulation currently targets Minecraft chat, not synthetic Discord join/quit events. Do not claim this hides all evidence of online presence.
 
 Client acceptance: test grouped help/completion; off-duty teleport denial; one departure/return message with no spectator leaks; /invsee read-only helper clicks/drags; AFK tag/announcements; create/payment/price; stock then close/collect with full inventory; owner/co-owner sale messages after 15 seconds quiet; item-payment collection at the chest; normal restart while on duty. T08 BlueMap remains separate.
+
+## Staff presence hotfix — 12 October
+
+- Block hidden public chat at both Bukkit chat APIs and DiscordSRV pre/post relay events. Staff chat remains available.
+- Simulated join/leave messages now use the player name colour and reach helpers too. DiscordSRV receives explicit join/leave calls using its existing configured formats/channels; no fake Bukkit lifecycle events are fired.
+- /w, /msg and /tell (including namespaced forms) cannot target hidden staff from ordinary players; missing and hidden direct targets return the same response. Selector recipients are filtered. Hidden staff cannot send private messages that would reveal them; use /sc.
+- Live Discord delivery still needs owner verification. No bot was connected during isolated tests. Other plugins' custom private-message/reply mechanisms are not universally covered by Bukkit command interception.
