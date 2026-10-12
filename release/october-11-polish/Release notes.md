@@ -2,6 +2,7 @@
 
 Approved command and copy changes, based on tested staff mode plus the tested read-only status branch. No automatic production deployment.
 
+- Private `/staff <message>` and `/sc <message>` reach online helpers/admins, including hidden staff, without requiring staff mode. Uses nookcore.staff.chat, inherited through nookcore.staff.use and nookcore.admin. No public chat event or Discord broadcast. Console may send; normal server command logging still applies.
 - Grouped admin help: /nookadmin economy, plots, quests, shops, status. Plot invitations under /plots invite and prepayment under /plots rent. Legacy plot/admin routes still resolve for compatibility, but new help/completion favours the groups.
 - /nookshops create [payment price], e.g. nooks 2.50 or diamond 3. Setup GUI cancels using Cancel. Remote cancel/preview/manage/collect commands no longer operate; open the shop instead. /mine shows addresses and exact enchantments without raw shop IDs; closed empty shops are omitted.
 - Shop close collects stock first, then retires its location and marker. Receipts are retained; pending payments/deliveries keep collection access and block replacement. Old closed stock remains recoverable.

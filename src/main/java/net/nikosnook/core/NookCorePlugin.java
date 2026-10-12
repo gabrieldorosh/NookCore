@@ -108,6 +108,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             weeklyQuests=new WeeklyQuests(this,store,()->healthy,this::fail);
             new CommandNavigation(this);
             new HelperInspection(this);
+            new StaffChat(this);
             Bukkit.getScheduler().runTaskTimer(this,()->{
                 if(!healthy)return;
                 try {

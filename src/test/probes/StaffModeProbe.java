@@ -70,6 +70,19 @@ public class StaffModeProbe extends JavaPlugin {
   helper.staff=false;call(mode,"leave",helper.player);check(!active(helper)&&helper.location.equals(original)&&helper.game==GameMode.SURVIVAL,"revoked staff permission still permits safe return and exit");check(helper.visible&&!regular.hidden.contains(helper.id)&&!helper.meta.containsKey("vanished"),"exit restores visibility and removes owned vanish metadata");check(call(make(type("StaffState"),new Class[]{Path.class},file),"get",helper.id)==null,"completed exit clears durable state");
   check(!helper.player.hasPermission("nookcore.admin")&&!helper.player.hasPermission("nookcore.travel.bypass"),"helper mode does not require broad admin or dimension bypass");
   User blocked=new User("BlockedHelper",true);blocked.cancelMode=true;check(rejected(mode,"enter",blocked.player)&&blocked.kicked&&active(blocked)&&call(state,"get",blocked.id)!=null,"cancelled spectator entry disconnects staff and preserves return state");
+  check(core.getCommand("staff")!=null && core.getCommand("staff").getAliases().contains("sc") && core.getCommand("staff").getExecutor().getClass().getSimpleName().equals("StaffChat"),"staff chat and sc alias registered with executor");
+  check(Boolean.TRUE.equals(Bukkit.getPluginManager().getPermission("nookcore.staff.use").getChildren().get("nookcore.staff.chat")) && Boolean.TRUE.equals(Bukkit.getPluginManager().getPermission("nookcore.admin").getChildren().get("nookcore.staff.chat")),"existing helper and admin permissions inherit staff chat");
+  helper.staff=true;helper.messages.clear();observer.messages.clear();regular.messages.clear();
+  Object staffChat=make(type("StaffChat"),new Class[]{Supplier.class},(Supplier<Collection<? extends Player>>)()->online);
+  call(staffChat,"onCommand",helper.player,core.getCommand("staff"),"sc",new String[]{"Private","check"});
+  check(helper.messages.size()==1 && observer.messages.size()==1 && regular.messages.isEmpty(),"off-duty staff chat reaches only staff once");
+  call(mode,"enter",helper.player);helper.messages.clear();observer.messages.clear();regular.messages.clear();
+  call(staffChat,"onCommand",helper.player,core.getCommand("staff"),"staff",new String[]{"Hidden","check"});
+  check(active(helper) && helper.messages.size()==1 && observer.messages.size()==1 && regular.messages.isEmpty(),"hidden staff can use private chat without public delivery");
+  helper.messages.clear();observer.messages.clear();
+  call(staffChat,"onCommand",regular.player,core.getCommand("staff"),"sc",new String[]{"Denied"});
+  check(helper.messages.isEmpty() && observer.messages.isEmpty(),"ordinary player cannot send staff messages");
+  call(mode,"leave",helper.player);
   getLogger().info("STAFF_COMPLETE checks="+checks);
  }
  public void onEnable(){Bukkit.getScheduler().runTask(this,()->{try{run();}catch(Throwable e){getLogger().log(java.util.logging.Level.SEVERE,"STAFF_FAILED",e);}finally{Bukkit.shutdown();}});}

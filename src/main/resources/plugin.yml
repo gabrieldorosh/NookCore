@@ -7,6 +7,11 @@ author: NikosNook
 softdepend: [DiscordSRV, Vault, WorldGuard, WorldEdit, PlaceholderAPI]
 loadbefore: [ChestShop]
 commands:
+  staff:
+    description: Message online helpers and admins privately
+    aliases: [sc]
+    permission: nookcore.staff.chat
+    usage: /staff <message>
   list:
     description: List visible online players
     usage: /list
@@ -55,8 +60,13 @@ permissions:
       nookcore.staff.teleport: true
       nookcore.staff.inspect: true
       tab.seevanished: true
+  nookcore.staff.chat:
+    description: Send and receive private staff chat
+    default: op
   nookcore.staff.use:
     default: op
+    children:
+      nookcore.staff.chat: true
   nookcore.staff.see:
     default: op
   nookcore.staff.teleport:
@@ -74,6 +84,8 @@ permissions:
     default: false
   nookcore.admin:
     default: op
+    children:
+      nookcore.staff.chat: true
   nookcore.travel.bypass:
     description: Owner/admin moderation travel only; never grant to helpers
     default: op
