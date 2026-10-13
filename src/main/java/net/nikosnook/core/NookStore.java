@@ -100,6 +100,12 @@ public final class NookStore implements AutoCloseable {
             s.execute("CREATE TABLE IF NOT EXISTS quest_rotations (week TEXT PRIMARY KEY, definitions TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS quest_progress (uuid TEXT NOT NULL REFERENCES accounts(uuid), week TEXT NOT NULL REFERENCES quest_rotations(week), goal TEXT NOT NULL, progress INTEGER NOT NULL, PRIMARY KEY(uuid,week,goal))");
             s.execute("CREATE TABLE IF NOT EXISTS quest_visits (uuid TEXT NOT NULL REFERENCES accounts(uuid), week TEXT NOT NULL REFERENCES quest_rotations(week), goal TEXT NOT NULL, biome TEXT NOT NULL, PRIMARY KEY(uuid,week,goal,biome))");
+            s.execute("CREATE TABLE IF NOT EXISTS niko_acceptance(uuid TEXT NOT NULL REFERENCES accounts(uuid),week TEXT NOT NULL REFERENCES quest_rotations(week),time INTEGER NOT NULL,actor TEXT NOT NULL,PRIMARY KEY(uuid,week))");
+            s.execute("CREATE TABLE IF NOT EXISTS pip_visits(id TEXT PRIMARY KEY,arrival INTEGER NOT NULL,restock INTEGER NOT NULL,departure INTEGER NOT NULL,season TEXT NOT NULL,restocked INTEGER NOT NULL DEFAULT 0)");
+            s.execute("CREATE TABLE IF NOT EXISTS pip_offers(visit TEXT NOT NULL REFERENCES pip_visits(id),design TEXT NOT NULL,name TEXT NOT NULL,item BLOB NOT NULL,price INTEGER NOT NULL CHECK(price>0),allocation INTEGER NOT NULL CHECK(allocation>0),stock INTEGER NOT NULL CHECK(stock>=0),cap INTEGER NOT NULL CHECK(cap>=0),PRIMARY KEY(visit,design))");
+            s.execute("CREATE TABLE IF NOT EXISTS pip_receipts(id TEXT PRIMARY KEY,buyer TEXT NOT NULL REFERENCES accounts(uuid),visit TEXT NOT NULL,design TEXT NOT NULL,quantity INTEGER NOT NULL CHECK(quantity>0),cents INTEGER NOT NULL CHECK(cents>0),before_hash BLOB NOT NULL,after_hash BLOB NOT NULL,time INTEGER NOT NULL,state TEXT NOT NULL DEFAULT 'REVIEW' CHECK(state IN ('REVIEW','DELIVERED','REFUNDED')),resolution TEXT NOT NULL DEFAULT '',FOREIGN KEY(visit,design) REFERENCES pip_offers(visit,design))");
+            s.execute("CREATE UNIQUE INDEX IF NOT EXISTS pip_one_pending_per_buyer ON pip_receipts(buyer) WHERE state='REVIEW'");
+
             // Give existing leases an identity once; a new rental always replaces it.
             for(Plot plot:plots())if(plot.owner()!=null)
                 update("INSERT OR IGNORE INTO plot_leases(plot,lease) VALUES(?,?)",plot.id(),UUID.randomUUID());
@@ -163,6 +169,7 @@ public final class NookStore implements AutoCloseable {
                 bind(p,week);try(var rows=p.executeQuery()){if(!rows.next())throw new IllegalArgumentException("Unknown quest rotation");goals=QuestPlan.decode(rows.getString(1));}
             }
             if(!QuestPlan.week(now).id().equals(week))throw new IllegalArgumentException("Quest week has changed");
+            if(!questAccepted(player,week))return List.of();
             var updates=new ArrayList<QuestUpdate>();
             for(var g:goals){
                 if(!g.kind().equals(kind) || !(g.target().equals(target) || g.target().equals("ANY")))continue;
@@ -184,6 +191,7 @@ public final class NookStore implements AutoCloseable {
         try(var p=db.prepareStatement("SELECT 1 FROM quest_changed_blocks WHERE position=?")){bind(p,position);try(var r=p.executeQuery()){return r.next();}}
     }
     public synchronized void beginQuestDeposit(UUID receipt,UUID player,String week,String target,int amount,String before,String after,long now)throws SQLException {
+        if(!questAccepted(player,week))throw new IllegalArgumentException("Speak to Niko at spawn before contributing this week.");
         if(amount<1 || amount>100000)throw new IllegalArgumentException("Invalid contribution amount.");
         if(!QuestPlan.week(now).id().equals(week))throw new IllegalArgumentException("Quest week has changed.");
         try(var query=db.prepareStatement("SELECT definitions FROM quest_rotations WHERE week=?")){
@@ -1289,6 +1297,112 @@ public final class NookStore implements AutoCloseable {
 
         try(PreparedStatement p=db.prepareStatement("VACUUM INTO ?")){p.setString(1,destination.toAbsolutePath().toString());p.execute();}
 
+    }
+
+    private boolean nikoGateEnabled;
+    private String nikoGateWeek;
+    synchronized void configureNikoGate(boolean enabled,boolean testImmediately,long now)throws SQLException {
+        nikoGateEnabled=enabled;
+        if(!enabled)return;
+        tx(()->{
+            String start=QuestPlan.week(testImmediately?now:QuestPlan.week(now).nextReset()).id();
+            update("INSERT OR IGNORE INTO metadata VALUES('niko-gate-start',?)",start);
+            try(var s=db.createStatement();var r=s.executeQuery("SELECT value FROM metadata WHERE key='niko-gate-start'")){r.next();nikoGateWeek=r.getString(1);}
+            return null;
+        });
+    }
+    synchronized boolean questAccepted(UUID player,String week)throws SQLException {
+        if(!nikoGateEnabled || week.compareTo(nikoGateWeek)<0)return true;
+        try(var p=db.prepareStatement("SELECT 1 FROM niko_acceptance WHERE uuid=? AND week=?")){
+            bind(p,player,week);try(var r=p.executeQuery()){return r.next();}
+        }
+    }
+    boolean acceptNiko(UUID player,String week,String actor,long now)throws SQLException {
+        return tx(()->{
+            if(!QuestPlan.week(now).id().equals(week))throw new IllegalArgumentException("The quests have refreshed. Speak to Niko again.");
+            return update("INSERT OR IGNORE INTO niko_acceptance(uuid,week,time,actor) VALUES(?,?,?,?)",player,week,now,actor)==1;
+        });
+    }
+    record VendorOffer(String visit,String design,String name,byte[] item,long price,int allocation,int stock,int cap) {}
+    record VendorReceipt(UUID id,UUID buyer,String visit,String design,int quantity,long cents,String state,long time,String resolution) {}
+    void openVendorVisit(VendorSchedule.Visit visit,List<VendorOffer> offers,String season)throws SQLException {
+        if(offers.size()!=6 || offers.stream().map(VendorOffer::design).distinct().count()!=6)throw new IllegalArgumentException("Expected six unique products.");
+        tx(()->{
+            if(update("INSERT OR IGNORE INTO pip_visits(id,arrival,restock,departure,season) VALUES(?,?,?,?,?)",visit.id(),visit.arrival(),visit.restock(),visit.departure(),season)==0)return null;
+            for(var o:offers){
+                if(!o.visit().equals(visit.id()) || o.price()<1 || o.price()>Money.MAX || o.allocation()<1 || o.cap()<0 || o.item().length==0)throw new IllegalArgumentException("Invalid vendor offer.");
+                update("INSERT INTO pip_offers(visit,design,name,item,price,allocation,stock,cap) VALUES(?,?,?,?,?,?,?,?)",visit.id(),o.design(),o.name(),o.item(),o.price(),o.allocation(),o.allocation(),o.cap());
+            }
+            return null;
+        });
+    }
+    synchronized List<VendorOffer> vendorOffers(String visit)throws SQLException {
+        var list=new ArrayList<VendorOffer>();
+        try(var p=db.prepareStatement("SELECT * FROM pip_offers WHERE visit=? ORDER BY rowid")){
+            bind(p,visit);try(var r=p.executeQuery()){while(r.next())list.add(new VendorOffer(visit,r.getString("design"),r.getString("name"),r.getBytes("item"),r.getLong("price"),r.getInt("allocation"),r.getInt("stock"),r.getInt("cap")));}
+        }return List.copyOf(list);
+    }
+    synchronized Set<String> previousVendorDesigns(String visit)throws SQLException {
+        var ids=new HashSet<String>();
+        try(var p=db.prepareStatement("SELECT design FROM pip_offers WHERE visit=(SELECT MAX(id) FROM pip_visits WHERE id<?)")){
+            bind(p,visit);try(var r=p.executeQuery()){while(r.next())ids.add(r.getString(1));}
+        }return ids;
+    }
+    void restockVendor(String visit,long now)throws SQLException {
+        tx(()->{
+            if(update("UPDATE pip_visits SET restocked=1 WHERE id=? AND restocked=0 AND restock<=? AND departure>?",visit,now,now)==1)
+                update("UPDATE pip_offers SET stock=stock+allocation WHERE visit=?",visit);
+            return null;
+        });
+    }
+    synchronized int vendorBought(UUID player,String visit,String design)throws SQLException {
+        try(var p=db.prepareStatement("SELECT COALESCE(SUM(quantity),0) FROM pip_receipts WHERE buyer=? AND visit=? AND design=? AND state!='REFUNDED'")){
+            bind(p,player,visit,design);try(var r=p.executeQuery()){r.next();return r.getInt(1);}
+        }
+    }
+    UUID beginVendorPurchase(UUID buyer,String visit,String design,int quantity,byte[] before,byte[] after,long now)throws SQLException {
+        if(quantity<1 || quantity>64 || before.length!=32 || after.length!=32)throw new IllegalArgumentException("Invalid purchase plan.");
+        return tx(()->{
+            try(var p=db.prepareStatement("SELECT 1 FROM pip_visits WHERE id=? AND arrival<=? AND departure>?")){
+                bind(p,visit,now,now);try(var r=p.executeQuery()){if(!r.next())throw new IllegalArgumentException("Pip has left. Come back for her next visit.");}
+            }
+            restockVendorInternal(visit,now);
+            try(var p=db.prepareStatement("SELECT 1 FROM pip_receipts WHERE buyer=? AND state='REVIEW'")){
+                bind(p,buyer);try(var r=p.executeQuery()){if(r.next())throw new IllegalArgumentException("An earlier purchase needs staff review before you buy again.");}
+            }
+            var offer=vendorOffers(visit).stream().filter(o->o.design().equals(design)).findFirst().orElseThrow(()->new IllegalArgumentException("That product is no longer available."));
+            if(quantity>offer.stock())throw new IllegalArgumentException("There aren't that many left. Reopen Pip's shop.");
+            if(offer.cap()>0 && vendorBought(buyer,visit,design)+quantity>offer.cap())throw new IllegalArgumentException("That exceeds your allowance for this visit.");
+            long total=Math.multiplyExact(offer.price(),quantity);UUID id=UUID.randomUUID();
+            mutate(buyer,-total,"vendor",id.toString(),now);
+            update("UPDATE pip_offers SET stock=stock-? WHERE visit=? AND design=?",quantity,visit,design);
+            update("INSERT INTO pip_receipts(id,buyer,visit,design,quantity,cents,before_hash,after_hash,time) VALUES(?,?,?,?,?,?,?,?,?)",id,buyer,visit,design,quantity,total,before,after,now);
+            return id;
+        });
+    }
+    private void restockVendorInternal(String visit,long now)throws SQLException {
+        if(update("UPDATE pip_visits SET restocked=1 WHERE id=? AND restocked=0 AND restock<=? AND departure>?",visit,now,now)==1)
+            update("UPDATE pip_offers SET stock=stock+allocation WHERE visit=?",visit);
+    }
+    void finishVendorPurchase(UUID receipt)throws SQLException {
+        tx(()->{if(update("UPDATE pip_receipts SET state='DELIVERED' WHERE id=? AND state='REVIEW'",receipt)!=1)throw new IllegalArgumentException("Purchase is not awaiting delivery.");return null;});
+    }
+    synchronized List<VendorReceipt> vendorReviews()throws SQLException {
+        var list=new ArrayList<VendorReceipt>();
+        try(var s=db.createStatement();var r=s.executeQuery("SELECT * FROM pip_receipts WHERE state='REVIEW' ORDER BY time LIMIT 50")){
+            while(r.next())list.add(new VendorReceipt(UUID.fromString(r.getString("id")),UUID.fromString(r.getString("buyer")),r.getString("visit"),r.getString("design"),r.getInt("quantity"),r.getLong("cents"),r.getString("state"),r.getLong("time"),r.getString("resolution")));
+        }return list;
+    }
+    void resolveVendor(UUID receipt,boolean delivered,String actor,String reason,long now)throws SQLException {
+        if(reason.isBlank())throw new IllegalArgumentException("Record why delivery or non-delivery is certain.");
+        tx(()->{
+            var r=vendorReviews().stream().filter(x->x.id().equals(receipt)).findFirst().orElseThrow(()->new IllegalArgumentException("Receipt is not awaiting review."));
+            if(!delivered){
+                mutate(r.buyer(),r.cents(),"vendor-refund",receipt.toString(),now);
+                update("UPDATE pip_offers SET stock=stock+? WHERE visit=? AND design=?",r.quantity(),r.visit(),r.design());
+            }
+            update("UPDATE pip_receipts SET state=?,resolution=? WHERE id=?",delivered?"DELIVERED":"REFUNDED",actor+": "+reason+" @ "+now,receipt);return null;
+        });
     }
 
     @Override public synchronized void close()throws SQLException { db.close(); }

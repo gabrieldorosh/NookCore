@@ -26,7 +26,7 @@ final class CommandNavigation implements CommandExecutor,TabCompleter {
         String root=c.getName(),sub=args.length==0?"":args[0].toLowerCase(Locale.ROOT);
         if(root.equals("nookadmin")){
             if(!s.hasPermission("nookcore.admin")){s.sendMessage(NookUi.problem("NookAdmin","This command is for admins."));return true;}
-            if(sub.isEmpty() || sub.equals("help"))return help(s,"Administration","/nookadmin economy — balances, reports and adjustments","/nookadmin plots — setup and rental administration","/nookadmin quests — quest administration and contributions","/nookadmin shops — review and recovery","/nookadmin status — build and health","/staffmode — staff presence and travel","/invsee <player> — inventory inspection");
+            if(sub.isEmpty() || sub.equals("help"))return help(s,"Administration","/nookadmin economy — balances, reports and adjustments","/nookadmin plots — setup and rental administration","/nookadmin quests — quest administration and contributions","/nookadmin shops — review and recovery","/nookadmin npc — Niko and Pip placement","/nookadmin vendor — catalogue and recovery","/nookadmin status — build and health","/staffmode — staff presence and travel","/invsee <player> — inventory inspection");
             String[] rest=tail(args,1);
             if(sub.equals("economy")){
                 if(rest.length==0 || rest[0].equalsIgnoreCase("help"))return help(s,"Economy administration","/nookadmin economy balance <player>","/nookadmin economy give <player> <amount> <reason>","/nookadmin economy take <player> <amount> <reason>","/nookadmin economy report [days]","/nookadmin economy metrics [days]","/nookadmin economy metrics export [days]","/nookadmin economy backup","/nookadmin economy advancements <on|off>");
@@ -49,7 +49,7 @@ final class CommandNavigation implements CommandExecutor,TabCompleter {
                 if(!Set.of("review","recover-stock").contains(rest[0].toLowerCase(Locale.ROOT)))return help(s,"Shop administration","/nookadmin shops review [receipt]","/nookadmin shops recover-stock <receipt> <credit|no-credit> <reason>");
                 return run("nookshops",s,rest);
             }
-            if(!Set.of("status","teleport","return").contains(sub)){s.sendMessage(NookUi.text("Not quite right. Try /nookadmin help"));return true;}
+            if(!Set.of("npc","vendor","status","teleport","return").contains(sub)){s.sendMessage(NookUi.text("Not quite right. Try /nookadmin help"));return true;}
             return run(root,s,args);
         }
         if(root.equals("plots")){
@@ -75,8 +75,9 @@ final class CommandNavigation implements CommandExecutor,TabCompleter {
         String root=c.getName();List<String> choices=null;
         if(root.equals("nookadmin")){
             if(!s.hasPermission("nookcore.admin"))return List.of();
-            if(a.length==1)choices=List.of("economy","plots","quests","shops","status","help");
-            else if(a.length==2)choices=switch(a[0].toLowerCase(Locale.ROOT)){case "economy"->List.of("balance","give","take","report","metrics","backup","advancements");case "plots"->List.of("setup","clear","evict","storage","membership","absence","define","rent-cut");case "quests"->List.of("inspect","contributions","activate-config");case "shops"->List.of("review","recover-stock");default->List.of();};
+            if(a.length==1)choices=List.of("economy","plots","quests","shops","npc","vendor","status","help");
+            else if(a.length==2)choices=switch(a[0].toLowerCase(Locale.ROOT)){case "economy"->List.of("balance","give","take","report","metrics","backup","advancements");case "plots"->List.of("setup","clear","evict","storage","membership","absence","define","rent-cut");case "quests"->List.of("inspect","contributions","activate-config");case "shops"->List.of("review","recover-stock");case "npc"->List.of("place","accept","status");case "vendor"->List.of("catalogue","preview","status","review","recover");default->List.of();};
+            else if(a.length==3 && a[0].equalsIgnoreCase("npc") && a[1].equalsIgnoreCase("place"))choices=List.of("niko","pip");
             else if(a[0].equalsIgnoreCase("plots"))return complete("plots",s,a[1].equalsIgnoreCase("setup")?tail(a,1):prepend("admin",tail(a,1)));
             else if(a[0].equalsIgnoreCase("economy"))return complete("nooks",s,tail(a,1));
             else if(a[0].equalsIgnoreCase("quests")){if(a[1].equalsIgnoreCase("contributions") && a.length==3)choices=List.of("collect");else return complete("quests",s,tail(a,1));}

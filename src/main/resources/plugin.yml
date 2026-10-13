@@ -4,7 +4,7 @@ main: net.nikosnook.core.NookCorePlugin
 api-version: '26.2'
 description: Niko's Nook season-two economy foundation
 author: NikosNook
-softdepend: [DiscordSRV, Vault, WorldGuard, WorldEdit, PlaceholderAPI]
+softdepend: [FancyNpcs, DiscordSRV, Vault, WorldGuard, WorldEdit, PlaceholderAPI]
 loadbefore: [ChestShop]
 commands:
   staff:

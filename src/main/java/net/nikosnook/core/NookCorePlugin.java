@@ -28,6 +28,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     private GroundedTravel groundedTravel;
     private AdminTeleports adminTeleports;
     private StaffMode staffMode;
+    private SpawnNpcs spawnNpcs;
     @Override public void onEnable(){
         buildIdentity=BuildIdentity.read(getResource("build-info.properties"));
         getLogger().info("NookCore source: "+buildIdentity.commit()+" ("+buildIdentity.state()+")");
@@ -106,6 +107,12 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             }),20,20);
             for(Player p:Bukkit.getOnlinePlayers())joinPlayer(p);
             weeklyQuests=new WeeklyQuests(this,store,()->healthy,this::fail);
+            try{
+                if(!Files.exists(getDataFolder().toPath().resolve("spawn-npcs.yml")))saveResource("spawn-npcs.yml",false);
+                var npcConfig=new org.bukkit.configuration.file.YamlConfiguration();npcConfig.load(getDataFolder().toPath().resolve("spawn-npcs.yml").toFile());
+                if(npcConfig.getBoolean("enabled",false))spawnNpcs=new SpawnNpcs(this,store,weeklyQuests,()->healthy);
+            }catch(Exception | LinkageError ex){getLogger().log(Level.SEVERE,"Spawn NPCs could not start; existing economy remains available",ex);}
+            getServer().getPluginManager().registerEvents(new PipHeads(),this);
             new CommandNavigation(this);
             new HelperInspection(this);
             new StaffChat(this);
@@ -146,6 +153,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         lines.add("Economy/plots: "+(healthy?"available":"PAUSED")+" · "+healthDetail);
         lines.add(chat==null?"Chat: not initialised (disabled, conflict or startup failure)":chat.status());
         lines.add(groundedTravel==null?"Travel: unavailable":groundedTravel.status());
+        lines.add(spawnNpcs==null?"NPCs: disabled or unavailable":spawnNpcs.status());
         lines.add(bunnyBoots==null?"Bunny boots: unavailable":bunnyBoots.status());
         lines.add("Protection bridge initialised: "+(plotGate!=null)+"; staff-mode command present: "+(getCommand("staffmode")!=null));
         lines.add(weeklyQuests==null?"Quests: unavailable":weeklyQuests.status(System.currentTimeMillis()));
@@ -230,6 +238,11 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         }return args;
     }
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
+        if(command.getName().equals("nookadmin") && args.length>0 && Set.of("npc","vendor").contains(args[0].toLowerCase(Locale.ROOT))){
+            if(!sender.hasPermission("nookcore.admin")){sender.sendMessage(NookUi.problem("NookAdmin","This command is for admins."));return true;}
+            if(spawnNpcs==null){sender.sendMessage(NookUi.problem("NPCs","NPCs are disabled or unavailable. Check spawn-npcs.yml and the startup log."));return true;}
+            return spawnNpcs.command(sender,args);
+        }
         if(command.getName().equals("nookadmin") && args.length>0 && args[0].equalsIgnoreCase("status"))return AdminStatus.execute(sender,args,this::statusSnapshot);
         if(command.getName().equals("nooks") && args.length>0 && args[0].equalsIgnoreCase("metrics")){
             if(economyMetrics==null){sender.sendMessage(NookUi.problem("Nooks","Activity metrics unavailable."));return true;}
@@ -387,6 +400,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         return NookUi.complete(args[args.length-1],values);
     }
     @Override public void onDisable(){
+        if(spawnNpcs!=null)spawnNpcs.close();
         if(economyMetrics!=null)try{economyMetrics.close();}catch(Exception ex){getLogger().log(Level.WARNING,"Metrics close failed",ex);}
         if(groundedTravel!=null)groundedTravel.close();if(bunnyBoots!=null)bunnyBoots.close();healthy=false;if(chat!=null)chat.close();getServer().getServicesManager().unregisterAll(this);if(store!=null)try{store.close();}catch(SQLException e){getLogger().log(Level.SEVERE,"Database close failed",e);}}
 }

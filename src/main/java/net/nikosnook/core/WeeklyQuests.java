@@ -15,6 +15,11 @@ import java.util.function.*;
 import net.kyori.adventure.text.Component;
 
 final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
+    private Supplier<String> nikoDirections=()->"Speak to Niko at spawn to start this week's quests.";
+    void nikoDirections(Supplier<String> directions){nikoDirections=directions;}
+    String nikoWeek()throws Exception{if(!enabled || !healthy.getAsBoolean())throw new IllegalArgumentException("Quests are unavailable.");rotation(clock.getAsLong());return week.id();}
+    List<QuestPlan.Goal> nikoGoals()throws Exception{nikoWeek();return goals;}
+    void nikoAccept(Player player,String shownWeek)throws Exception{if(!eligible(player))throw new IllegalArgumentException("Speak to Niko while playing survival in the overworld.");nikoWeek();store.acceptNiko(player.getUniqueId(),shownWeek,"niko",clock.getAsLong());}
     private final NookStore store;
     private final BooleanSupplier healthy;
     private final Consumer<Exception> failure;
@@ -98,6 +103,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         if(!eligible(p))return false;
         try{
             long now=clock.getAsLong();rotation(now);
+            if(!store.questAccepted(p.getUniqueId(),week.id()))return false;
             var updates=store.advanceQuests(p.getUniqueId(),week.id(),kind,target,unique,now);
             if(updates.stream().anyMatch(NookStore.QuestUpdate::paid))capacityNotified.remove(p.getUniqueId());
             for(var update:updates){
@@ -182,6 +188,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
     private void contribute(Player player,String requested)throws Exception {
         if(!eligible(player))throw new IllegalArgumentException("Contribute while playing survival in the overworld.");
         long now=clock.getAsLong();rotation(now);
+        if(!store.questAccepted(player.getUniqueId(),week.id()))throw new IllegalArgumentException(nikoDirections.get());
         var deposits=goals.stream().filter(g->g.kind().equals("DEPOSIT")).toList();
         if(requested==null && deposits.size()>1){
             player.sendMessage(NookUi.heading("NookQuests · Choose a contribution"));
@@ -267,6 +274,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
                 if(sender.hasPermission("nookcore.admin"))NookUi.help(sender,"Staff","/nookadmin quests inspect <player> — view progress without changing it");return true;
             }
             rotation(clock.getAsLong());
+            if(sender instanceof Player p && player.equals(p.getUniqueId()) && !store.questAccepted(player,week.id())){sender.sendMessage(NookUi.message("Niko",nikoDirections.get()));return true;}
             sender.sendMessage(Component.empty());sender.sendMessage(Component.text("NookQuests",NookUi.ACCENT).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD));
             for(var g:goals)if(g.reward()!=3000)sender.sendMessage(QuestUi.row(g,store.questProgress(player,week.id(),g.id())));
             for(var g:goals)if(g.reward()==3000)sender.sendMessage(QuestUi.row(g,store.questProgress(player,week.id(),g.id())));

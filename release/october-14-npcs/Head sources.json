@@ -1,0 +1,170 @@
+[
+  {
+    "id": "chick",
+    "name": "Chick",
+    "texture": "a4d816a475b3f313b620d65bf9358931b46af9c8f4e7c9ae64708880bea6be",
+    "source": "https://mcheads.ru/en/animals/zcen",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "command-block",
+    "name": "Command Block",
+    "texture": "5f4c21d17ad636387ea3c736bff6ade897317e1374cd5d9b1c15e6e8953432",
+    "source": "https://mcheads.ru/en/blocks/skkc",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "burger",
+    "name": "Burger",
+    "texture": "a6ef1c25f516f2e7d6f7667420e33adcf3cdf938cb37f9a41a8b35869f569b",
+    "source": "https://mcheads.ru/en/food/uvvm",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "money-bag",
+    "name": "Money Bag",
+    "texture": "e36e94f6c34a35465fce4a90f2e25976389eb9709a12273574ff70fd4daa6852",
+    "source": "https://mcheads.ru/en/decoration/fogx",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "spiffo-plushie",
+    "name": "Spiffo Plushie",
+    "texture": "9e928faefbf0c475a4a24fdb673b717bbc6a347472df8ec0d5879a92002201b1",
+    "source": "https://mcheads.ru/en/decoration/qabg",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "monitor",
+    "name": "Monitor",
+    "texture": "51fad5d2b822fce8d59bce08414b9f87f27aa9d77a73823a58dd517ea80b2a5",
+    "source": "https://mcheads.ru/en/decoration/ndef",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "nutella",
+    "name": "Nutella",
+    "texture": "515dcb2da02cf734829e1e273e3025617d8071516f953251b52545da8d3e8db8",
+    "source": "https://mcheads.ru/en/food/gjlw",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "pepsi",
+    "name": "Pepsi",
+    "texture": "2bbae6df99dc82beaf49d064df74a1bbc15e8e376533276912c8c8fe59cb4f4",
+    "source": "https://mcheads.ru/en/food/jhcu",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "coke",
+    "name": "Coke",
+    "texture": "93b01fb2f6ba47c9d7638491f37cd8582a937731186df4d1eccd59b65bf37",
+    "source": "https://mcheads.ru/en/food/cijx",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "skull",
+    "name": "Skull",
+    "texture": "a240f2b1a681366456bf9892d1c0f473399b96ba90bcab68e77b6848469eb57",
+    "source": "https://mcheads.ru/en/humans/vtys",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "pancakes",
+    "name": "Pancakes",
+    "texture": "bbaa7f8e437112b3b6569471596d5b61daa7a3b408391d1ed432f5317796a2",
+    "source": "https://mcheads.ru/en/food/slte",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "sprite",
+    "name": "Sprite",
+    "texture": "b8a34d86a7bb13d45afdc50d3dce5eed95e1844fbdee0cca753c6d3346e339e",
+    "source": "https://mcheads.ru/en/food/fgyv",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "globe",
+    "name": "Globe",
+    "texture": "2e2cc42015e6678f8fd49ccc01fbf787f1ba2c32bcf559a015332fc5db50",
+    "source": "https://mcheads.ru/en/decoration/paoz",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "santa-hat-snowman",
+    "name": "Santa Hat Snowman",
+    "texture": "e27695bee2babf9baef11ae19fe5f817fa088cd52c4c473cc7b441d5c3f50fe",
+    "source": "https://mcheads.ru/en/decoration/tqmx",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "cake",
+    "name": "Cake",
+    "texture": "121d8d9ae5278e26bc4399923d25ccb9173e83748e9bad6df76314ba94369e",
+    "source": "https://mcheads.ru/en/food/xsxd",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "beer",
+    "name": "Beer",
+    "texture": "4053e26867bb57538e9789137dbbb53774e18eda6fef51cb2edf426b37264",
+    "source": "https://mcheads.ru/en/food/fsoz",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "bread",
+    "name": "Bread",
+    "texture": "51997da64043b284822115643a654fdc4e8a7226664b48a4e1dbb557b5c0fe14",
+    "source": "https://mcheads.ru/en/food/wzva",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "fan",
+    "name": "Fan",
+    "texture": "172771fc11737063c81eb75973e9b82590951e3674f31acce8cddd1aad1b",
+    "source": "https://mcheads.ru/en/decoration/fytw",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "apple",
+    "name": "Apple",
+    "texture": "e2b35bda5ebdf135f4e71ce49726fbec5739f0adedf01c519e2aea7f51951ea2",
+    "source": "https://mcheads.ru/en/plants/iaqm",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "fries",
+    "name": "Fries",
+    "texture": "a0eacac41a9eaf051376ef2f959701e1bbe1bf4aa6715adc34b6dc29a13ea9",
+    "source": "https://mcheads.ru/en/food/cype",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "popcorn",
+    "name": "Popcorn",
+    "texture": "1497b147cfae52205597f72e3c4ef52512e9677020e4b4fa7512c3c6acdd8c1",
+    "source": "https://mcheads.ru/en/food/pulq",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "ghost",
+    "name": "Ghost",
+    "texture": "d02d2db4b055ca5f189096b3cdf6d496e0f5a57861e25dde7e4746820ab3e475",
+    "source": "https://mcheads.ru/en/humanoid/mgda",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "cctv-camera",
+    "name": "CCTV Camera",
+    "texture": "d6d15e72acf219bc1da8ae7686f4f83c773adcb4f8facc87cbbd43ee79057f3",
+    "source": "https://mcheads.ru/en/decoration/mznd",
+    "visual_status": "Pending in-game approval"
+  },
+  {
+    "id": "carved-pumpkin",
+    "name": "Carved Pumpkin",
+    "texture": "ee28a03ed2eb90eaff1a119a5b554452701b97af47bff73ce710849c6b0",
+    "source": "https://mcheads.ru/en/plants/ofnd",
+    "visual_status": "Pending in-game approval"
+  }
+]
