@@ -71,7 +71,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         String name=config.getString("skins."+role,role+".png");
         Bukkit.getScheduler().runTaskAsynchronously(plugin,()->{
             try{
-                var skin=FancyNpcsPlugin.get().getSkinManager().getByFile(name,SkinData.SkinVariant.AUTO);
+                var skin=FancyNpcsPlugin.get().getSkinManager().getByFile(name,SkinData.SkinVariant.valueOf(config.getString("skin-models."+role,"SLIM")));
                 Bukkit.getScheduler().runTask(plugin,()->applySkin(role,skin));
             }catch(Exception e){plugin.getLogger().warning("Could not load "+role+" skin; check FancyNpcs/skins/"+name+". "+e.getMessage());}
         });
@@ -164,10 +164,10 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     }
     private void cataloguePreview(Player p){
         var m=new Menu(p.getUniqueId(),"catalogue","","",0,true);
-        m.inventory=Bukkit.createInventory(m,54,Component.text("Pip · All test designs"));int slot=0;
+        m.inventory=Bukkit.createInventory(m,54,Component.text("Pip ï¿½ All test designs"));int slot=0;
         for(var d:catalogue.stream().limit(54).toList()){
             var item=PipHeads.make(d);var meta=item.getItemMeta();var lore=new ArrayList<Component>(meta.lore());
-            lore.add(NookUi.text("Trial price: "+Money.format(d.price())));lore.add(NookUi.text("Preview only · "+d.id()));meta.lore(lore);item.setItemMeta(meta);m.inventory.setItem(slot++,item);
+            lore.add(NookUi.text("Trial price: "+Money.format(d.price())));lore.add(NookUi.text("Preview only ï¿½ "+d.id()));meta.lore(lore);item.setItemMeta(meta);m.inventory.setItem(slot++,item);
         }
         p.openInventory(m.inventory);
     }

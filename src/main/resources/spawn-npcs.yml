@@ -6,6 +6,10 @@ test-start: 0
 skins:
   niko: niko.png
   pip: vendor-aviator.png
+# Both supplied skins were detected as slim; match the signed cache model.
+skin-models:
+  niko: SLIM
+  pip: SLIM
 locations: {}
 first-visit-pins: [cctv-camera]
 seasons:
