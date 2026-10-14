@@ -31,7 +31,14 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     private final Map<String,Location> locations=new HashMap<>();
     private final Map<String,SkinData> skins=new HashMap<>();
     private final Map<UUID,Recovery> recoveries=new HashMap<>();
-    private boolean closed, vendorPaused;
+    private boolean closed, vendorPaused, initializing;
+    private final NpcConfigWriter configWriter=new NpcConfigWriter();
+    private java.util.concurrent.CompletableFuture<Void> pendingSave;
+    private Runnable afterSave;
+    private CommandSender saveRequester;
+    private long saveStarted;
+    private boolean saveWarning;
+    private int tickCounter;
     private org.bukkit.scheduler.BukkitTask ticker;
     private String problem="",lastCatalogueError="";
     private record Recovery(UUID receipt,boolean delivered,String reason,long expiry) {}
@@ -53,19 +60,45 @@ final class SpawnNpcs implements Listener,AutoCloseable {
             var c=products.getConfigurationSection(id);if(!c.getBoolean("enabled",true))continue;
             catalogue.add(new VendorCatalogue.Design(id,c.getString("name"),c.getString("texture"),VendorCatalogue.Rarity.valueOf(c.getString("rarity")),c.getString("category"),new HashSet<>(c.getStringList("seasons")),c.getBoolean("year-round",true),c.getBoolean("modern",false),c.getLong("price-cents"),c.getInt("stock-per-allocation"),c.getInt("cap-per-visit",0),c.getString("source","")));
         }
-        if(config.getBoolean("test-mode") && config.getLong("test-start",0)==0){config.set("test-start",System.currentTimeMillis());save();}
+        if(config.getBoolean("test-mode") && config.getLong("test-start",0)==0){config.set("test-start",System.currentTimeMillis());initializing=true;save(config.saveToString(),()->initializing=false,null);}
         for(String role:List.of("niko","pip")){Location loc=config.getLocation("locations."+role);if(loc!=null)locations.put(role,loc);}
         store.configureNikoGate(true,config.getBoolean("test-mode"),System.currentTimeMillis());
         quests.nikoDirections(()->directions("niko"));
         Bukkit.getPluginManager().registerEvents(this,plugin);
         for(String role:List.of("niko","pip"))loadSkin(role);
-        ticker=Bukkit.getScheduler().runTaskTimer(plugin,()->{if(closed)return;try{tick();}catch(Exception ex){problem=ex.getMessage();plugin.getLogger().log(Level.SEVERE,"NPC update failed; Pip purchases paused",ex);vendorPaused=true;}},20,100);
+        ticker=Bukkit.getScheduler().runTaskTimer(plugin,()->{
+            if(closed)return;
+            pollSave();
+            if(tickCounter++ % 100 != 0)return;
+            try{tick();}catch(Exception ex){problem=ex.getMessage();plugin.getLogger().log(Level.SEVERE,"NPC update failed; Pip purchases paused",ex);vendorPaused=true;}
+        },1,1);
     }
-    private boolean enabled(){return config.getBoolean("enabled",false) && !closed;}
-    private void save()throws Exception {
-        Path temp=file.resolveSibling("spawn-npcs.yml.tmp");Files.writeString(temp,config.saveToString());
-        try{Files.move(temp,file,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);}
-        catch(AtomicMoveNotSupportedException e){Files.move(temp,file,StandardCopyOption.REPLACE_EXISTING);}
+    private boolean enabled(){return config.getBoolean("enabled",false) && !closed && !initializing;}
+    private void save(String snapshot,Runnable success,CommandSender requester){
+        if(pendingSave!=null)throw new IllegalArgumentException("An NPC position is still being saved. Please wait.");
+        afterSave=success;saveRequester=requester;saveStarted=System.nanoTime();saveWarning=false;
+        pendingSave=configWriter.save(file,snapshot);
+    }
+    // Only immutable text crosses threads; all Bukkit state and messages stay on the server thread.
+    private void pollSave(){
+        if(pendingSave==null)return;
+        if(!pendingSave.isDone()){
+            if(!saveWarning && System.nanoTime()-saveStarted>java.util.concurrent.TimeUnit.SECONDS.toNanos(10)){
+                saveWarning=true;plugin.getLogger().warning("NPC settings save is taking longer than expected. Check storage; placement is pending.");
+                if(saveRequester!=null)saveRequester.sendMessage(NookUi.problem("NPCs","Saving is taking longer than expected. The new position has not been applied yet."));
+            }
+            return;
+        }
+        var completed=pendingSave;var success=afterSave;var requester=saveRequester;
+        pendingSave=null;afterSave=null;saveRequester=null;
+        try{completed.join();}
+        catch(java.util.concurrent.CompletionException ex){
+            problem="NPC settings could not be saved";
+            plugin.getLogger().log(Level.SEVERE,problem+"; previous positions retained",ex.getCause());
+            if(requester!=null)requester.sendMessage(NookUi.problem("NPCs","Could not save the NPC position. The previous position is unchanged; check the server log."));
+            return;
+        }
+        try{success.run();}catch(Exception ex){plugin.getLogger().log(Level.SEVERE,"NPC position saved but could not be applied",ex);if(requester!=null)requester.sendMessage(NookUi.problem("NPCs","Position saved, but the NPC could not be placed. Check the server log."));}
     }
     private void loadSkin(String role){
         String name=config.getString("skins."+role,role+".png");
@@ -222,7 +255,14 @@ final class SpawnNpcs implements Listener,AutoCloseable {
             if(!enabled())throw new IllegalArgumentException("Enable spawn-npcs.yml and restart the test server first.");
             if(a[0].equals("npc")){
                 if(a.length==3 && a[1].equals("place") && Set.of("niko","pip").contains(a[2]) && s instanceof Player p){
-                    locations.put(a[2],p.getLocation().clone());config.set("locations."+a[2],p.getLocation().clone());save();remove(a[2]);tick();s.sendMessage(NookUi.message("NPCs","Placed "+a[2]+" at your position."));return true;
+                    String role=a[2];Location position=p.getLocation().clone();
+                    var snapshot=new YamlConfiguration();snapshot.loadFromString(config.saveToString());snapshot.set("locations."+role,position);
+                    save(snapshot.saveToString(),()->{
+                        config.set("locations."+role,position);locations.put(role,position);remove(role);
+                        try{tick();}catch(Exception ex){throw new IllegalStateException(ex);}
+                        s.sendMessage(NookUi.message("NPCs","Placed "+role+" at your position."));
+                    },s);
+                    s.sendMessage(NookUi.message("NPCs","Saving "+role+"'s position…"));return true;
                 }
                 if(a.length==3 && a[1].equals("accept")){
                     var player=store.byName(a[2]).orElseThrow(()->new IllegalArgumentException("Unknown player."));String week=quests.nikoWeek();
@@ -249,5 +289,5 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         return true;
     }
     private static UUID actor(CommandSender s){return s instanceof Player p?p.getUniqueId():new UUID(0,0);}
-    @Override public void close(){closed=true;if(ticker!=null)ticker.cancel();HandlerList.unregisterAll(this);for(var role:List.copyOf(npcs.keySet()))remove(role);for(Player p:Bukkit.getOnlinePlayers())if(p.getOpenInventory().getTopInventory().getHolder() instanceof Menu)p.closeInventory();}
+    @Override public void close(){closed=true;configWriter.close();if(ticker!=null)ticker.cancel();HandlerList.unregisterAll(this);for(var role:List.copyOf(npcs.keySet()))remove(role);for(Player p:Bukkit.getOnlinePlayers())if(p.getOpenInventory().getTopInventory().getHolder() instanceof Menu)p.closeInventory();}
 }

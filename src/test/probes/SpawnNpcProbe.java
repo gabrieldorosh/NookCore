@@ -17,6 +17,7 @@ import java.util.*;
 
 public class SpawnNpcProbe extends JavaPlugin {
  ClassLoader loader;JavaPlugin core;Object npcs,store,quests;Player player;Inventory top;PlayerInventory inventory;InventoryView view;World world;UUID uuid;Location location;
+ java.util.concurrent.CountDownLatch diskRelease=new java.util.concurrent.CountDownLatch(1);
  int stage,checks,skinWaits;boolean admin=true;List<Object> messages=new ArrayList<>();String visit,design,week;long balance;ItemStack purchased;
  Class<?> type(String name)throws Exception{return Class.forName("net.nikosnook.core."+name,true,loader);}
  Object field(Object o,String n)throws Exception{var f=o.getClass().getDeclaredField(n);f.setAccessible(true);return f.get(o);}
@@ -38,7 +39,13 @@ public class SpawnNpcProbe extends JavaPlugin {
    case "getTopInventory"->top;case "getBottomInventory"->inventory;case "getPlayer"->player;case "getType"->InventoryType.CHEST;case "convertSlot"->(int)a[0]<27?(int)a[0]:(int)a[0]-27;case "getItem"->(int)a[0]<27?top.getItem((int)a[0]):inventory.getItem((int)a[0]-27);case "getInventory"->(int)a[0]<27?top:inventory;default->null;
   });
   call(store,"join",uuid,"NpcTester",System.currentTimeMillis(),6000L);
-  call(npcs,"command",player,new String[]{"npc","place","niko"});call(npcs,"command",player,new String[]{"npc","place","pip"});call(npcs,"tick");
+  call(npcs,"command",player,new String[]{"npc","place","niko"});
+  check(!((Map<?,?>)field(npcs,"locations")).containsKey("niko"),"placement is not applied before save acknowledgement");
+  call(npcs,"command",player,new String[]{"npc","place","pip"});
+  check(messages.toString().contains("still being saved"),"overlapping placement waits rather than losing an earlier position");
+ }
+ void placed()throws Exception {
+  call(npcs,"tick");
   visit=(String)call(call(npcs,"visit",System.currentTimeMillis()),"id");week=(String)call(quests,"nikoWeek");
   check(((Map<?,?>)field(npcs,"npcs")).size()==2,"both stationary NPCs register");call(npcs,"tick");check(((Map<?,?>)field(npcs,"npcs")).size()==2,"repeated tick does not duplicate NPCs");
   check(offers().size()==6,"six persisted products");check(offers().stream().anyMatch(x->{try{return call(x,"design").equals("cctv-camera");}catch(Exception e){throw new RuntimeException(e);}}),"CCTV appears in first collection");
@@ -64,7 +71,23 @@ public class SpawnNpcProbe extends JavaPlugin {
  }
  void tick(){try{
   switch(stage++){
-   case 0->{setup();}
+   case 0->{setup();stage=-2;}
+   case -2->{
+       if(field(npcs,"pendingSave")!=null){stage--;break;}
+       check(((Map<?,?>)field(npcs,"locations")).containsKey("niko"),"Niko appears after acknowledged save");
+       call(field(npcs,"configWriter"),"close");
+       var writeType=type("NpcConfigWriter$Write");
+       Object delayed=Proxy.newProxyInstance(loader,new Class[]{writeType},(o,m,a)->{diskRelease.await();call(type("NpcConfigWriter"),"atomicWrite",a);return null;});
+       var ctor=type("NpcConfigWriter").getDeclaredConstructor(writeType);ctor.setAccessible(true);
+       var f=npcs.getClass().getDeclaredField("configWriter");f.setAccessible(true);f.set(npcs,ctor.newInstance(delayed));
+       call(npcs,"command",player,new String[]{"npc","place","pip"});
+   }
+   case -1->{
+       check(!((java.util.concurrent.CompletableFuture<?>)field(npcs,"pendingSave")).isDone(),"server ticks continue while Pip disk save is deliberately stalled");
+       check(!((Map<?,?>)field(npcs,"locations")).containsKey("pip"),"stalled save cannot prematurely publish Pip location");
+       diskRelease.countDown();stage=-3;
+   }
+   case -3->{if(field(npcs,"pendingSave")!=null){stage=-3;break;}placed();stage=1;}
    case 1->{check((boolean)call(store,"questAccepted",uuid,week),"confirmation accepts current week");call(npcs,"openNiko",player);check(top.getItem(22).getType()==Material.MAP,"accepted menu shows progress");call(npcs,"openPip",player,true);check(top.getSize()==27,"read-only preview opens");click(10,ClickType.LEFT);}
    case 2->{check(field(top.getHolder(),"kind").equals("pip"),"preview cannot buy");call(npcs,"openPip",player,false);balance=money();design=(String)call(offers().getFirst(),"design");click(10,ClickType.SHIFT_LEFT);}
    case 3->{check(money()==balance && field(top.getHolder(),"kind").equals("pip"),"shift-click cannot extract display or charge");click(10,ClickType.LEFT);}
@@ -85,6 +108,6 @@ public class SpawnNpcProbe extends JavaPlugin {
        var config=(org.bukkit.configuration.file.YamlConfiguration)field(npcs,"config");config.set("test-start",System.currentTimeMillis()-8*86400000L);call(npcs,"tick");check(((Map<?,?>)field(npcs,"npcs")).size()==1,"Pip departs while Niko remains");check(money()==balance,"departure does not charge or change balance");getLogger().info("NPC_COMPLETE checks="+checks);Bukkit.shutdown();return;}
   }
   Bukkit.getScheduler().runTaskLater(this,this::tick,3L);
- }catch(Throwable e){getLogger().log(java.util.logging.Level.SEVERE,"NPC_FAILED",e);Bukkit.shutdown();}}
+ }catch(Throwable e){getLogger().log(java.util.logging.Level.SEVERE,"NPC_FAILED",e);diskRelease.countDown();Bukkit.shutdown();}}
  public void onEnable(){Bukkit.getScheduler().runTaskLater(this,this::tick,140L);}
 }
