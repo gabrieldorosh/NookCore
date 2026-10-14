@@ -51,7 +51,7 @@ public class SpawnNpcProbe extends JavaPlugin {
   check(offers().size()==7,"seven persisted products");check(offers().stream().anyMatch(x->{try{return call(x,"design").equals("cctv-camera");}catch(Exception e){throw new RuntimeException(e);}}),"CCTV appears in first collection");
   check(!(boolean)call(store,"questAccepted",uuid,week),"local test begins before weekly acceptance");
   call(quests,"onCommand",player,core.getCommand("quests"),"quests",new String[0]);check(messages.toString().contains("Speak to Niko"),"remote quests provides Niko directions before acceptance");
-  call(npcs,"openNiko",player);check(top.getItem(22).getType()==Material.LIME_DYE,"Niko offers explicit acceptance");
+  call(npcs,"openNiko",player);check(top.getItem(22).getType()==Material.LIME_DYE,"Niko offers explicit acceptance");check(top.getItem(4).getType()==Material.YELLOW_DYE,"Niko prominently shows quests not yet accepted");
   check(!(boolean)call(store,"questAccepted",uuid,week),"opening menu alone does not accept");click(22,ClickType.LEFT);
  }
  void heads()throws Exception{
@@ -88,7 +88,7 @@ public class SpawnNpcProbe extends JavaPlugin {
        diskRelease.countDown();stage=-3;
    }
    case -3->{if(field(npcs,"pendingSave")!=null){stage=-3;break;}placed();stage=1;}
-   case 1->{check((boolean)call(store,"questAccepted",uuid,week),"confirmation accepts current week");call(npcs,"openNiko",player);check(top.getItem(22).getType()==Material.MAP,"accepted menu shows progress");call(npcs,"openPip",player,true);check(top.getSize()==27,"read-only preview opens");check(top.getItem(16)!=null,"seventh product occupies centred row");check(top.getItem(10).getItemMeta().displayName().toString().contains("in stock"),"stock visible in product name");click(10,ClickType.LEFT);}
+   case 1->{check((boolean)call(store,"questAccepted",uuid,week),"confirmation accepts current week");call(npcs,"openNiko",player);check(top.getItem(22).getType()==Material.MAP,"accepted menu shows progress");check(top.getItem(4).getType()==Material.LIME_DYE,"Niko prominently shows accepted quests");check(messages.toString().contains("already active for this week"),"Niko acknowledges returning players in chat");call(npcs,"openPip",player,true);check(top.getSize()==27,"read-only preview opens");check(top.getItem(16)!=null,"seventh product occupies centred row");check(top.getItem(10).getItemMeta().displayName().toString().contains("in stock"),"stock visible in product name");click(10,ClickType.LEFT);}
    case 2->{check(field(top.getHolder(),"kind").equals("pip"),"preview cannot buy");call(npcs,"openPip",player,false);balance=money();design=(String)call(offers().getFirst(),"design");click(10,ClickType.SHIFT_LEFT);}
    case 3->{check(money()==balance && field(top.getHolder(),"kind").equals("pip"),"shift-click cannot extract display or charge");click(10,ClickType.LEFT);stage=39;}
    case 39->{click(15,ClickType.LEFT);stage=40;}

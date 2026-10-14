@@ -181,10 +181,11 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     private Menu menu(Player p,String kind,String rotation,String design,int quantity,boolean preview,String title){var m=new Menu(p.getUniqueId(),kind,rotation,design,quantity,preview);m.inventory=Bukkit.createInventory(m,27,Component.text(title));return m;}
     void openNiko(Player p)throws Exception {
         if(!near(p,"niko"))throw new IllegalArgumentException(directions("niko"));
-        var week=quests.nikoWeek();var m=menu(p,"niko",week,"",0,false,"Niko · Weekly quests");int slot=10;
+        var week=quests.nikoWeek();boolean accepted=store.questAccepted(p.getUniqueId(),week);var m=menu(p,"niko",week,"",0,false,accepted?"Niko · Quests accepted":"Niko · Accept your quests");int slot=10;
         for(var goal:quests.nikoGoals())m.inventory.setItem(slot++,icon(goal.reward()==3000?Material.NETHER_STAR:Material.BOOK,goal.title(),store.questProgress(p.getUniqueId(),week,goal.id())+" / "+goal.amount(),"Reward: "+Money.format(goal.reward())));
-        boolean accepted=store.questAccepted(p.getUniqueId(),week);
+        m.inventory.setItem(4,icon(accepted?Material.LIME_DYE:Material.YELLOW_DYE,accepted?"Quests accepted":"Quests not accepted",accepted?"Your weekly quests are active.":"Accept below to start this week's quests.",accepted?"Use /quests to check your progress anywhere.":"All six quests and the challenge."));
         m.inventory.setItem(22,icon(accepted?Material.MAP:Material.LIME_DYE,accepted?"View my progress":"Accept this week's quests",accepted?"Use /quests anywhere.":"All six quests and the challenge.","Rewards arrive automatically."));p.openInventory(m.inventory);
+        p.sendMessage(NookUi.message("Niko",accepted?"Your quests are already active for this week. You can check your progress here or with /quests.":"Ready for this week's quests? Click Accept this week's quests below to get started."));
     }
     void openPip(Player p,boolean preview)throws Exception {
         if(!preview && !near(p,"pip"))throw new IllegalArgumentException("Visit Pip at her stall to shop.");
