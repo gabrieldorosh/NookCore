@@ -15,5 +15,6 @@ class VaultBridgeTest{
  @Test void noBonusFromAccountCreation(){assertFalse(v.createPlayerAccount("NeverJoined"));assertTrue(v.createPlayerAccount(".BedrockPlayer"));assertEquals(60,v.getBalance(".BedrockPlayer"));}
  @Test void depositAndWithdrawalPersist(){assertTrue(v.withdrawPlayer(".BedrockPlayer",12.50).transactionSuccess());assertTrue(v.depositPlayer(".BedrockPlayer",1).transactionSuccess());assertEquals(48.50,v.getBalance(".BedrockPlayer"));}
  @Test void noBanksOrNegativeBalances(){assertFalse(v.hasBankSupport());assertFalse(v.bankDeposit("shop",1).transactionSuccess());assertFalse(v.withdrawPlayer(".BedrockPlayer",61).transactionSuccess());assertEquals(60,v.getBalance(".BedrockPlayer"));}
+ @Test void recoveryBridgeNeedsNoDatabase(){VaultBridge paused=new VaultBridge(null,()->false,e->{throw new AssertionError(e);});assertFalse(paused.depositPlayer("Player",1).transactionSuccess());assertFalse(paused.withdrawPlayer("Player",1).transactionSuccess());assertFalse(paused.createPlayerAccount("Player"));assertFalse(paused.has("Player",0));assertEquals(0,paused.getBalance("Player"));}
  @Test void closedEconomyDeniesMutations(){VaultBridge paused=new VaultBridge(s,()->false,e->{});assertFalse(paused.depositPlayer(".BedrockPlayer",1).transactionSuccess());assertEquals(60,v.getBalance(".BedrockPlayer"));}
 }

@@ -33,7 +33,8 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         buildIdentity=BuildIdentity.read(getResource("build-info.properties"));
         getLogger().info("NookCore source: "+buildIdentity.commit()+" ("+buildIdentity.state()+")");
         saveDefaultConfig();
-        if(Files.exists(getDataFolder().toPath().resolve("plot-setup-pending.yml"))){blockStartup("Unfinished plot setup: recover plot-setup-pending.yml before enabling trades.");return;}
+        boolean recovery=Files.exists(getDataFolder().toPath().resolve("recovery-mode.flag"));
+        if(!recovery && Files.exists(getDataFolder().toPath().resolve("plot-setup-pending.yml"))){blockStartup("Unfinished plot setup: recover plot-setup-pending.yml before enabling trades.");return;}
         try{new org.bukkit.configuration.file.YamlConfiguration().load(getDataFolder().toPath().resolve("config.yml").toFile());}
         catch(Exception e){getLogger().log(Level.SEVERE,"NookCore could not initialise: invalid config.yml",e);blockStartup("Invalid config.yml; restore a valid configuration before restarting.");return;}
         new SmitePrank(this);
@@ -49,6 +50,17 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         getCommand("return").setTabCompleter((sender,command,label,args)->AdminTeleports.authorised(sender) && args.length==1?NookUi.complete(args[0],Bukkit.getOnlinePlayers().stream().map(Player::getName).toList()):List.of());
         try {
             Files.createDirectories(getDataFolder().toPath());
+            if(recovery){
+                healthy=false;healthDetail="Temporarily disabled for data recovery; staff tools remain available";
+                new RecoveryMode(this,adminTeleports,()->statusSnapshot());
+                staffMode=new StaffMode(this);
+                groundedTravel=new GroundedTravel(this);
+                if(getConfig().getBoolean("chat.enabled",true) && getServer().getPluginManager().getPlugin("ChatControl")==null){chat=new NookChat(this,id->0L);chat.recoveryMode=true;}
+                new HelperInspection(this);new StaffChat(this);
+                getServer().getPluginManager().registerEvents(new PipHeads(),this);
+                getLogger().warning(healthDetail+". Economy database has NOT been opened. Remove recovery-mode.flag only after recovery and a restart.");
+                return;
+            }
             store=new NookStore(getDataFolder().toPath().resolve("nooks.db"));
             staffMode=new StaffMode(this);
             var section=getConfig().getConfigurationSection("advancement-rewards");

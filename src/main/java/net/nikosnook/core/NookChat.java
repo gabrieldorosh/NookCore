@@ -27,6 +27,7 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
     @FunctionalInterface interface BalanceReader {long read(UUID id)throws java.sql.SQLException;}
     private final BalanceReader balances;
     private boolean balanceWarning;
+    boolean recoveryMode;
     private final Map<UUID,Snapshot> snapshots=new ConcurrentHashMap<>();
     private final Set<UUID> rankPackLoaded=ConcurrentHashMap.newKeySet();
     private final Map<String,Component> images=new HashMap<>();
@@ -69,6 +70,7 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
     String status(){return "Chat: enabled; TAB AFK greying="+afkEnabled+"; threshold="+afkSeconds+" seconds";}
     void close(){if(help!=null)help.close();unregister.run();NookUi.preferences=null;}
     String placeholder(UUID id,String key){
+        if(recoveryMode && key.equals("balance_whole"))return "Paused";
         Snapshot s=snapshots.get(id);if(s==null)return Set.of("deaths","balance","balance_whole").contains(key)?"0":"";
         return switch(key){case "staffmode"->Boolean.toString(s.staff());case "afk"->Boolean.toString(s.afk());case "balance"->java.math.BigDecimal.valueOf(s.cents(),2).setScale(2).toPlainString();case "balance_whole"->Long.toString(s.cents()/100);case "deaths"->Integer.toString(s.deaths());case "name"->"&"+(s.afk()?AfkDisplay.COLOUR:s.preference().textColour().asHexString())+(s.afk()?"&o[AFK] ":"")+s.name()+"&r";case "pronouns"->s.preference().pronouns().isEmpty()?"":" &7· "+s.preference().pronouns()+"&r";case "rank"->(s.staff()?"&7[on duty] &r":"")+("&"+(s.afk()?AfkDisplay.COLOUR:ChatStyle.rankColour(s.rank()).asHexString()))+"["+ChatStyle.rankLabel(s.rank())+"] &r";default->null;};
     }

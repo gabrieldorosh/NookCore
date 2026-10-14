@@ -20,7 +20,7 @@ public final class VaultBridge implements Economy {
         catch(ArithmeticException e){throw new IllegalArgumentException("Only two decimal places are supported.");}
     }
     public String format(double value){try{return Money.format(cents(value));}catch(IllegalArgumentException e){return "Invalid amount";}}
-    private UUID id(String name){try{return store.byName(name).map(NookStore.Account::id).orElse(null);}catch(SQLException e){failure.accept(e);return null;}catch(IllegalArgumentException e){return null;}}
+    private UUID id(String name){if(!isEnabled())return null;try{return store.byName(name).map(NookStore.Account::id).orElse(null);}catch(SQLException e){failure.accept(e);return null;}catch(IllegalArgumentException e){return null;}}
     private boolean exists(UUID id){if(id==null||!isEnabled())return false;try{return store.account(id).isPresent();}catch(SQLException e){failure.accept(e);return false;}}
     private double balance(UUID id){if(id==null||!isEnabled())return 0;try{return store.account(id).map(a->a.cents()/100.0).orElse(0.0);}catch(SQLException e){failure.accept(e);return 0;}}
     private boolean enough(UUID id,double value){try{return exists(id)&&BigDecimal.valueOf(balance(id)).compareTo(BigDecimal.valueOf(cents(value),2))>=0;}catch(IllegalArgumentException e){return false;}}
