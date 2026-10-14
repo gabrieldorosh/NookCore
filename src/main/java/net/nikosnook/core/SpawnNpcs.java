@@ -185,7 +185,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         for(var goal:quests.nikoGoals())m.inventory.setItem(slot++,icon(goal.reward()==3000?Material.NETHER_STAR:Material.BOOK,goal.title(),store.questProgress(p.getUniqueId(),week,goal.id())+" / "+goal.amount(),"Reward: "+Money.format(goal.reward())));
         m.inventory.setItem(4,icon(accepted?Material.LIME_DYE:Material.YELLOW_DYE,accepted?"Quests accepted":"Quests not accepted",accepted?"Your weekly quests are active.":"Accept below to start this week's quests.",accepted?"Use /quests to check your progress anywhere.":"All six quests and the challenge."));
         m.inventory.setItem(22,icon(accepted?Material.MAP:Material.LIME_DYE,accepted?"View my progress":"Accept this week's quests",accepted?"Use /quests anywhere.":"All six quests and the challenge.","Rewards arrive automatically."));p.openInventory(m.inventory);
-        p.sendMessage(NookUi.message("Niko",accepted?"Your quests are already active for this week. You can check your progress here or with /quests.":"Ready for this week's quests? Click Accept this week's quests below to get started."));
+        p.sendMessage(NookUi.message("Niko",store.nikoIntroWeek(week)?"Hi! Come and speak to me next week for new quests!":accepted?"Your quests are already active for this week. You can check your progress here or with /quests.":"Ready for this week's quests? Click Accept this week's quests below to get started."));
     }
     void openPip(Player p,boolean preview)throws Exception {
         if(!preview && !near(p,"pip"))throw new IllegalArgumentException("Visit Pip at her stall to shop.");

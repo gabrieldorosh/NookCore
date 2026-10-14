@@ -6,7 +6,7 @@ NPCs enabled; test mode off; no local NPC coordinates or test database. Seven pr
 
 Pip arrives Wednesdays at 02:00, restocks Fridays at 19:00, leaves Mondays at 02:00, Europe/London time with daylight-saving handled automatically. Installing during a visit opens that visit; installing after Friday's restock includes both allocations. She appears once her position is set. Additional seasonal stock must be configured before the 4 November visit; the supplied Halloween pool covers October arrivals only.
 
-Niko clearly labels accepted and unaccepted quests and acknowledges returning players in chat. Current weekly quest progress remains active when first installed in production. Visiting Niko becomes required from the next Wednesday 02:00 reset (21 October if first enabled on 14 October). This package does not replace or select weekly quests. Quests already active through this transition are displayed as accepted.
+During the transition week Niko says exactly: "Hi! Come and speak to me next week for new quests!" His progress menu stays available. Once acceptance becomes required, he uses the normal quest greeting and labels accepted and unaccepted quests. Current weekly quest progress remains active when first installed in production. Visiting Niko becomes required from the next Wednesday 02:00 reset (21 October if first enabled on 14 October). This package does not replace or select weekly quests. Quests already active through this transition are displayed as accepted.
 
 ## Upload and restart
 

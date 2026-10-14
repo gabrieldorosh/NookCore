@@ -1311,6 +1311,7 @@ public final class NookStore implements AutoCloseable {
             return null;
         });
     }
+    synchronized boolean nikoIntroWeek(String week){return nikoGateEnabled && week.compareTo(nikoGateWeek)<0;}
     synchronized boolean questAccepted(UUID player,String week)throws SQLException {
         if(!nikoGateEnabled || week.compareTo(nikoGateWeek)<0)return true;
         try(var p=db.prepareStatement("SELECT 1 FROM niko_acceptance WHERE uuid=? AND week=?")){

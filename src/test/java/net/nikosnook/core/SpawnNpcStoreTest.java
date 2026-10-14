@@ -39,8 +39,8 @@ class SpawnNpcStoreTest {
     }
     @Test void midweekMigrationPreservesProgressAndGatesNextWeek()throws Exception{
         store.questRotation(visit.id(),List.of(goal));store.advanceQuests(player,visit.id(),"KILL","WITCH",null,now);
-        store.configureNikoGate(true,false,now);assertTrue(store.questAccepted(player,visit.id()));assertEquals(1,store.questProgress(player,visit.id(),goal.id()));
-        long next=visit.nextArrival();String week=QuestPlan.week(next).id();store.questRotation(week,List.of(goal));assertFalse(store.questAccepted(player,week));
+        store.configureNikoGate(true,false,now);assertTrue(store.nikoIntroWeek(visit.id()));assertTrue(store.questAccepted(player,visit.id()));assertEquals(1,store.questProgress(player,visit.id(),goal.id()));
+        long next=visit.nextArrival();String week=QuestPlan.week(next).id();store.questRotation(week,List.of(goal));assertFalse(store.nikoIntroWeek(week));assertFalse(store.questAccepted(player,week));
         store.close();store=new NookStore(dir.resolve("nooks.db"));store.configureNikoGate(true,false,next);assertFalse(store.questAccepted(player,week));
         assertThrows(IllegalArgumentException.class,()->store.acceptNiko(player,visit.id(),"niko",next));
     }
