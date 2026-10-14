@@ -141,6 +141,12 @@ final class SpawnNpcs implements Listener,AutoCloseable {
             var items=chosen.stream().map(d->new NookStore.VendorOffer(v.id(),d.id(),d.name(),PipHeads.make(d).serializeAsBytes(),d.price(),d.allocation(),d.allocation(),d.cap())).toList();
             store.openVendorVisit(v,items,season);
         }
+        if(saved.size()==6){
+            var pins=new HashSet<>(saved.stream().map(NookStore.VendorOffer::design).toList());
+            var chosen=VendorCatalogue.select(catalogue,season(v.arrival()),pins,Set.of(),v.id().hashCode());
+            var d=chosen.stream().filter(x->!pins.contains(x.id())).findFirst().orElseThrow();
+            store.expandVendorVisit(new NookStore.VendorOffer(v.id(),d.id(),d.name(),PipHeads.make(d).serializeAsBytes(),d.price(),d.allocation(),d.allocation(),d.cap()));
+        }
         store.restockVendor(v.id(),now);return store.vendorOffers(v.id());
     }
     private void tick()throws Exception {
@@ -189,9 +195,11 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         var m=menu(p,"pip",v.id(),"",0,preview,preview?"Pip · Catalogue preview":"Pip's Pop-up");int slot=10;
         for(var o:preview?store.vendorOffers(v.id()):offers(v,System.currentTimeMillis())){
             var item=ItemStack.deserializeBytes(o.item());var meta=item.getItemMeta();var lore=new ArrayList<Component>(meta.lore()==null?List.of():meta.lore());
-            lore.add(NookUi.text(Money.format(o.price())+" each · "+o.stock()+" in stock"));
+            lore.add(NookUi.text(Money.format(o.price())+" each"));
+            lore.add(NookUi.text(o.stock()==0?"Sold out":"Available stock: "+o.stock()));
+            meta.displayName(NookUi.text(o.name()+" · "+(o.stock()==0?"Sold out":o.stock()+" in stock")).decoration(TextDecoration.ITALIC,false));
             if(o.cap()>0)lore.add(NookUi.text("Your remaining allowance: "+Math.max(0,o.cap()-store.vendorBought(p.getUniqueId(),v.id(),o.design()))));
-            lore.add(NookUi.text(preview?"Preview only":"Click to choose a quantity"));meta.lore(lore);item.setItemMeta(meta);m.inventory.setItem(slot++,item);
+            lore.add(NookUi.text(preview?"Preview only":o.stock()==0?"Check back after the next restock":"Click to choose a quantity"));meta.lore(lore);item.setItemMeta(meta);m.inventory.setItem(slot++,item);
         }
         m.inventory.setItem(22,icon(Material.CLOCK,"Pip's visit",(System.currentTimeMillis()<v.restock()?"Restock: "+NookUi.date(v.restock()):"This visit's final stock is out."),"Leaves: "+NookUi.date(v.departure()),config.getBoolean("test-mode")?"LOCAL TEST · trial prices and stock":"Prices stay fixed for this visit."));p.openInventory(m.inventory);
     }
@@ -207,7 +215,11 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     private void checkout(Player p,Menu from,String design,int quantity)throws Exception {
         var o=store.vendorOffers(from.rotation).stream().filter(x->x.design().equals(design)).findFirst().orElseThrow();
         var m=menu(p,"checkout",from.rotation,design,quantity,false,"Pip · Confirm purchase");
-        m.inventory.setItem(13,ItemStack.deserializeBytes(o.item()));
+        if(o.stock()==0)throw new IllegalArgumentException(NookStore.vendorStockMessage(0));
+        var head=ItemStack.deserializeBytes(o.item());head.setAmount(quantity);
+        var meta=head.getItemMeta();meta.displayName(NookUi.text(o.name()+" × "+quantity).decoration(TextDecoration.ITALIC,false));
+        var lore=new ArrayList<Component>(meta.lore()==null?List.of():meta.lore());lore.add(NookUi.text("Available stock: "+o.stock()));meta.lore(lore);head.setItemMeta(meta);
+        m.inventory.setItem(13,head);
         m.inventory.setItem(11,icon(Material.RED_DYE,"Buy fewer"));m.inventory.setItem(15,icon(Material.LIME_DYE,"Buy more"));
         m.inventory.setItem(22,icon(Material.EMERALD,"Buy "+quantity+" for "+Money.format(Math.multiplyExact(o.price(),quantity)),"From your Nooks balance","You will receive "+quantity+" × "+o.name()));
         m.inventory.setItem(18,icon(Material.ARROW,"Back"));p.openInventory(m.inventory);
@@ -232,7 +244,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
                 if(m.kind.equals("niko") && slot==22){
                     if(!near(p,"niko"))throw new IllegalArgumentException(directions("niko"));
                     quests.nikoAccept(p,m.rotation);p.closeInventory();quests.onCommand(p,plugin.getCommand("quests"),"quests",new String[0]);
-                }else if(m.kind.equals("pip") && !m.preview && slot>=10 && slot<16){
+                }else if(m.kind.equals("pip") && !m.preview && slot>=10 && slot<17){
                     if(!near(p,"pip"))throw new IllegalArgumentException("Visit Pip at her stall to shop.");
                     var offers=store.vendorOffers(m.rotation);checkout(p,m,offers.get(slot-10).design(),1);
                 }else if(m.kind.equals("checkout")){

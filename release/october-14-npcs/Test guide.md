@@ -25,7 +25,7 @@ The local configuration opens a fixed seven-day test visit immediately, with a s
 | N01 — Acceptance | Before speaking to Niko, `/quests` gives his coordinates. Opening then closing his menu does not accept. Accept all six quests and the challenge once; `/quests` then shows progress anywhere. Existing progress is retained. |
 | N02 — Progress | Complete part of a quest after acceptance. Check that rewards and completion notices work as before. Restart: acceptance and progress remain. At the next Wednesday reset, a new visit is required. |
 | N03 — NPC appearance | Inspect both supplied skins, arm models, nameplates and facing. Right-click each from nearby. Neither should be pushable, damageable, lootable or a permanent entry in TAB. Check a second account if available. |
-| P01 — Browse | Pip shows exactly six designs, at least two seasonal, and CCTV in her first collection. Products show the exact price and stock. `/nookadmin vendor catalogue` previews all 24 test designs without giving them out. Report any wrong texture or rarity. |
+| P01 — Browse | Pip shows exactly seven designs, at least two seasonal, and CCTV in her first collection. Products show the exact price and stock. `/nookadmin vendor catalogue` previews all 24 test designs without giving them out. Report any wrong texture or rarity. |
 | P02 — Buy | Buy one item, then several. Check the precise Nooks debit, item count and remaining global stock. Double-click, shift-click, number keys, off-hand swap and dragging must not extract display items or charge unexpectedly. |
 | P03 — Failed checkout | Try buying with a full inventory or insufficient Nooks. No money or stock should be lost. Open confirmation, walk away, then confirm: no purchase. Two players trying for the last item must not oversell it. |
 | P04 — Place and recover | Place a purchased head on the ground and wall. Break and pick it up. Name, texture, rarity and lore should remain, and it should stack with an unplaced copy of the same design. Rename one at an anvil and repeat. |
@@ -50,3 +50,10 @@ If you need local spending money, use `/nookadmin economy give <your-name> 100 N
 Use `/nookadmin vendor review` for an uncertain purchase. Check whether the item was delivered before choosing `/nookadmin vendor recover <receipt> delivered <reason>` or `refund <reason>`, then the displayed confirmation command. A refund restores money and stock but does not remove a delivered item. Never refund blindly or give a replacement automatically. Niko has a logged admin fallback: `/nookadmin npc accept <player>`.
 
 The local installation backs up the previous JAR and NookCore folder before replacement. For a live rollout, back up the matching world/player data and plugin database together. Do not downgrade while collectible heads are placed without a plan to preserve their metadata; older builds do not restore the custom item on breaking. Keep NPC features disabled in production until these tests and the launch choices are accepted. Do not `/reload`.
+
+
+## Owner results — 14 October
+
+Owner reported N01–N03, P01–P07 and S01 PASS on the preceding build. Requested polish: visible quantity stacks, an odd-sized selection and clearer stock availability.
+
+Focused retest for this build: seven centred products; increase quantity to two and check stack count and name; inspect each product's stock label; request more than available and check the exact remaining count; sell out a design and check both its label and message say Sold out. Existing purchases and balances must remain unchanged after upgrading.

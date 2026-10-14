@@ -18,6 +18,17 @@ class SpawnNpcStoreTest {
     List<NookStore.VendorOffer> offers(){var all=new ArrayList<NookStore.VendorOffer>();for(int i=0;i<6;i++)all.add(new NookStore.VendorOffer(visit.id(),"head"+i,"Head "+i,new byte[]{1,2,3},400,2,2,0));return all;}
     void open()throws Exception{store.openVendorVisit(visit,offers(),"halloween");}
     UUID purchase(int quantity,long time)throws Exception{return store.beginVendorPurchase(player,visit.id(),"head0",quantity,new byte[32],new byte[32],time);}
+    @Test void stockErrorsDistinguishSoldOutFromAvailable()throws Exception{
+        open();assertEquals("Only 2 left in stock.",assertThrows(IllegalArgumentException.class,()->purchase(3,now)).getMessage());
+        store.finishVendorPurchase(purchase(2,now));assertEquals("Sold out.",assertThrows(IllegalArgumentException.class,()->purchase(1,now)).getMessage());
+    }
+    @Test void seventhDesignPreservesPurchasesAndAccountsForPriorRestock()throws Exception{
+        open();store.finishVendorPurchase(purchase(1,now));store.restockVendor(visit.id(),visit.restock());
+        var extra=new NookStore.VendorOffer(visit.id(),"extra","Extra",new byte[]{1},400,3,3,0);
+        store.expandVendorVisit(extra);store.expandVendorVisit(extra);
+        assertEquals(7,store.vendorOffers(visit.id()).size());assertEquals(3,store.vendorOffers(visit.id()).getFirst().stock());assertEquals(6,store.vendorOffers(visit.id()).getLast().stock());assertEquals(5600,store.account(player).orElseThrow().cents());
+        store.restockVendor(visit.id(),visit.restock()+1);assertEquals(6,store.vendorOffers(visit.id()).getLast().stock());
+    }
     @Test void questProgressStartsOnlyAfterConfirmationAndRewardsOnce()throws Exception{
         store.questRotation(visit.id(),List.of(goal));store.configureNikoGate(true,true,now);
         assertTrue(store.advanceQuests(player,visit.id(),"KILL","WITCH",null,now).isEmpty());

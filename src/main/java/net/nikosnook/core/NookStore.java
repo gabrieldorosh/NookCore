@@ -1326,13 +1326,24 @@ public final class NookStore implements AutoCloseable {
     record VendorOffer(String visit,String design,String name,byte[] item,long price,int allocation,int stock,int cap) {}
     record VendorReceipt(UUID id,UUID buyer,String visit,String design,int quantity,long cents,String state,long time,String resolution) {}
     void openVendorVisit(VendorSchedule.Visit visit,List<VendorOffer> offers,String season)throws SQLException {
-        if(offers.size()!=6 || offers.stream().map(VendorOffer::design).distinct().count()!=6)throw new IllegalArgumentException("Expected six unique products.");
+        if((offers.size()!=6 && offers.size()!=7) || offers.stream().map(VendorOffer::design).distinct().count()!=offers.size())throw new IllegalArgumentException("Expected seven unique products (or six for a legacy visit).");
         tx(()->{
             if(update("INSERT OR IGNORE INTO pip_visits(id,arrival,restock,departure,season) VALUES(?,?,?,?,?)",visit.id(),visit.arrival(),visit.restock(),visit.departure(),season)==0)return null;
             for(var o:offers){
                 if(!o.visit().equals(visit.id()) || o.price()<1 || o.price()>Money.MAX || o.allocation()<1 || o.cap()<0 || o.item().length==0)throw new IllegalArgumentException("Invalid vendor offer.");
                 update("INSERT INTO pip_offers(visit,design,name,item,price,allocation,stock,cap) VALUES(?,?,?,?,?,?,?,?)",visit.id(),o.design(),o.name(),o.item(),o.price(),o.allocation(),o.allocation(),o.cap());
             }
+            return null;
+        });
+    }
+    static String vendorStockMessage(int stock){return stock==0?"Sold out.":"Only "+stock+" left in stock.";}
+    void expandVendorVisit(VendorOffer extra)throws SQLException {
+        tx(()->{
+            var current=vendorOffers(extra.visit());
+            if(current.size()!=6)return null;
+            if(current.stream().anyMatch(o->o.design().equals(extra.design())))throw new IllegalArgumentException("Duplicate vendor design.");
+            if(extra.price()<1 || extra.price()>Money.MAX || extra.allocation()<1 || extra.cap()<0 || extra.item().length==0)throw new IllegalArgumentException("Invalid vendor offer.");
+            update("INSERT INTO pip_offers(visit,design,name,item,price,allocation,stock,cap) SELECT id,?,?,?,?,?,?*(1+restocked),? FROM pip_visits WHERE id=?",extra.design(),extra.name(),extra.item(),extra.price(),extra.allocation(),extra.allocation(),extra.cap(),extra.visit());
             return null;
         });
     }
@@ -1371,7 +1382,7 @@ public final class NookStore implements AutoCloseable {
                 bind(p,buyer);try(var r=p.executeQuery()){if(r.next())throw new IllegalArgumentException("An earlier purchase needs staff review before you buy again.");}
             }
             var offer=vendorOffers(visit).stream().filter(o->o.design().equals(design)).findFirst().orElseThrow(()->new IllegalArgumentException("That product is no longer available."));
-            if(quantity>offer.stock())throw new IllegalArgumentException("There aren't that many left. Reopen Pip's shop.");
+            if(quantity>offer.stock())throw new IllegalArgumentException(vendorStockMessage(offer.stock()));
             if(offer.cap()>0 && vendorBought(buyer,visit,design)+quantity>offer.cap())throw new IllegalArgumentException("That exceeds your allowance for this visit.");
             long total=Math.multiplyExact(offer.price(),quantity);UUID id=UUID.randomUUID();
             mutate(buyer,-total,"vendor",id.toString(),now);

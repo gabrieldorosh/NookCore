@@ -48,7 +48,7 @@ public class SpawnNpcProbe extends JavaPlugin {
   call(npcs,"tick");
   visit=(String)call(call(npcs,"visit",System.currentTimeMillis()),"id");week=(String)call(quests,"nikoWeek");
   check(((Map<?,?>)field(npcs,"npcs")).size()==2,"both stationary NPCs register");call(npcs,"tick");check(((Map<?,?>)field(npcs,"npcs")).size()==2,"repeated tick does not duplicate NPCs");
-  check(offers().size()==6,"six persisted products");check(offers().stream().anyMatch(x->{try{return call(x,"design").equals("cctv-camera");}catch(Exception e){throw new RuntimeException(e);}}),"CCTV appears in first collection");
+  check(offers().size()==7,"seven persisted products");check(offers().stream().anyMatch(x->{try{return call(x,"design").equals("cctv-camera");}catch(Exception e){throw new RuntimeException(e);}}),"CCTV appears in first collection");
   check(!(boolean)call(store,"questAccepted",uuid,week),"local test begins before weekly acceptance");
   call(quests,"onCommand",player,core.getCommand("quests"),"quests",new String[0]);check(messages.toString().contains("Speak to Niko"),"remote quests provides Niko directions before acceptance");
   call(npcs,"openNiko",player);check(top.getItem(22).getType()==Material.LIME_DYE,"Niko offers explicit acceptance");
@@ -88,9 +88,11 @@ public class SpawnNpcProbe extends JavaPlugin {
        diskRelease.countDown();stage=-3;
    }
    case -3->{if(field(npcs,"pendingSave")!=null){stage=-3;break;}placed();stage=1;}
-   case 1->{check((boolean)call(store,"questAccepted",uuid,week),"confirmation accepts current week");call(npcs,"openNiko",player);check(top.getItem(22).getType()==Material.MAP,"accepted menu shows progress");call(npcs,"openPip",player,true);check(top.getSize()==27,"read-only preview opens");click(10,ClickType.LEFT);}
+   case 1->{check((boolean)call(store,"questAccepted",uuid,week),"confirmation accepts current week");call(npcs,"openNiko",player);check(top.getItem(22).getType()==Material.MAP,"accepted menu shows progress");call(npcs,"openPip",player,true);check(top.getSize()==27,"read-only preview opens");check(top.getItem(16)!=null,"seventh product occupies centred row");check(top.getItem(10).getItemMeta().displayName().toString().contains("in stock"),"stock visible in product name");click(10,ClickType.LEFT);}
    case 2->{check(field(top.getHolder(),"kind").equals("pip"),"preview cannot buy");call(npcs,"openPip",player,false);balance=money();design=(String)call(offers().getFirst(),"design");click(10,ClickType.SHIFT_LEFT);}
-   case 3->{check(money()==balance && field(top.getHolder(),"kind").equals("pip"),"shift-click cannot extract display or charge");click(10,ClickType.LEFT);}
+   case 3->{check(money()==balance && field(top.getHolder(),"kind").equals("pip"),"shift-click cannot extract display or charge");click(10,ClickType.LEFT);stage=39;}
+   case 39->{click(15,ClickType.LEFT);stage=40;}
+   case 40->{check(top.getItem(13).getAmount()==2,"quantity selector shows a stack of two");check(top.getItem(13).getItemMeta().displayName().toString().contains("2"),"quantity appears in head name");click(11,ClickType.LEFT);stage=4;}
    case 4->{check(field(top.getHolder(),"kind").equals("checkout"),"selecting product opens exact-price confirmation");check(money()==balance,"opening confirmation has no charge");click(22,ClickType.LEFT);click(22,ClickType.LEFT);}
    case 5->{long price=(long)call(offers().getFirst(),"price");check(money()==balance-price,"double click charges once");check(((List<?>)call(store,"vendorReviews")).isEmpty(),"actual player-data save completes delivery receipt");purchased=inventory.getItem(0).clone();check(purchased.getType()==Material.PLAYER_HEAD && purchased.getAmount()==1,"purchase gives one actual decorative head");heads();call(npcs,"openPip",player,false);click(10,ClickType.LEFT);}
    case 6->{balance=money();for(int i=0;i<36;i++)inventory.setItem(i,new ItemStack(Material.STONE,64));click(22,ClickType.LEFT);}
