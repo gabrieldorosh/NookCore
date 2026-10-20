@@ -1,17 +1,17 @@
-# New faces at spawn
-There are a couple of new faces to meet this week.
+# New Nooklings!
+A couple of new faces have moved into spawn!
 
 **NIKO**
-Starting this week, speak to Niko at spawn to accept your weekly quests. One visit picks up the whole set; `/quests` lets you check your progress wherever you are. Speak to him before getting started — progress counts after accepting!
+Starting this week, you can speak to Niko at spawn to accept your weekly quests. Speak to him before you get started — progress only counts after accepting!
 
 **PIP'S POP-UP**
-Pip brings a rotating selection of decorative heads to buy with Nooks, including seasonal finds. Stock is shared and limited, and your finds are yours to place, collect and trade with other players.
+Pip is on her way with a rotating stock of decorative heads to trade for your Nooks! Her stock is limited, but you can always trade with other players.
 
-She arrives Wednesdays at 09:00, gets more stock on Fridays at 19:00, and leaves Mondays at 19:00. Friday's delivery tops up the same selection; each Wednesday brings a fresh selection.
+She sets up shop on Wednesdays at 09:00, restocks on Fridays at 19:00, and packs up on Mondays at 19:00. She returns the next Wednesday with new stock!
 
 **THE END IS NEAR**
-The End opens this Friday at 19:00. This week's quests include a couple of reasons to explore it, and quest progress now counts in the Overworld, Nether and End.
+The End opens <t:1792778400:F> (Formatted to your local time). This week's quests will need you to venture into the end!
 
-Weekly quests refresh Wednesdays at 02:00. All times are UK time. Come and meet the new neighbours!
+Weekly quests refresh Wednesdays at 02:00. **Shop and quest times are UK time!** Come and meet the new nooklings!
 
 <@&1444142089272299580>
