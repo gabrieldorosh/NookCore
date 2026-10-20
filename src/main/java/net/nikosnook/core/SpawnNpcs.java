@@ -260,7 +260,11 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         p.sendMessage(NookUi.problem("Niko's Nook",e instanceof IllegalArgumentException?e.getMessage():"This action needs staff attention. Nothing will be retried automatically."));
         if(!(e instanceof IllegalArgumentException))plugin.getLogger().log(Level.SEVERE,"NPC action failed",e);
     }
-    String status(){return !enabled()?"NPCs: disabled":"NPCs: "+npcs.keySet()+"; skins ready "+skins.values().stream().filter(SkinData::hasTexture).count()+"/2; Pip "+(vendorPaused?"PAUSED":visit(System.currentTimeMillis()).open(System.currentTimeMillis())?"visiting":"away")+(problem.isBlank()?"":"; "+problem);}
+    String status(){
+        if(!enabled())return "NPCs: disabled";
+        var v=visit(System.currentTimeMillis());
+        return "NPCs: "+npcs.keySet()+"; skins ready "+skins.values().stream().filter(SkinData::hasTexture).count()+"/2; Niko acceptance from "+store.nikoGateStart()+"; Pip "+(vendorPaused?"PAUSED":v.open(System.currentTimeMillis())?"visiting":"away")+"; arrival "+NookUi.date(v.arrival())+"; restock "+NookUi.date(v.restock())+"; departure "+NookUi.date(v.departure())+"; next arrival "+NookUi.date(v.nextArrival())+(problem.isBlank()?"":"; "+problem);
+    }
     boolean command(CommandSender s,String[] a){
         if(!s.hasPermission("nookcore.admin")){s.sendMessage(NookUi.problem("NookAdmin","This command is for admins."));return true;}
         try{

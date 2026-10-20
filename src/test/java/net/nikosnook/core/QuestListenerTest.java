@@ -65,9 +65,29 @@ class QuestListenerTest {
         var q=quests(goal("hunt","KILL","SKELETON"),goal("challenge","KILL","HOSTILE"));q.death(death(player));
         assertEquals(9000,store.account(id).orElseThrow().cents());assertEquals(2,messages.size());assertEquals(0,failures.get());
     }
-    @Test void actualDeathListenerRejectsCreativeNetherAndUnattributedKills()throws Exception{
-        var q=quests(goal("hunt","KILL","SKELETON"));mode=GameMode.CREATIVE;q.death(death(player));mode=GameMode.SURVIVAL;environment=World.Environment.NETHER;q.death(death(player));
-        environment=World.Environment.NORMAL;q.death(death(null));assertEquals(6000,store.account(id).orElseThrow().cents());assertTrue(messages.isEmpty());
+    @Test void actualDeathListenerRejectsCreativeSpectatorAndUnattributedKills()throws Exception{
+        var q=quests(goal("hunt","KILL","SKELETON"));mode=GameMode.CREATIVE;q.death(death(player));mode=GameMode.SPECTATOR;q.death(death(player));
+        mode=GameMode.SURVIVAL;q.death(death(null));assertEquals(6000,store.account(id).orElseThrow().cents());assertTrue(messages.isEmpty());
+    }
+    @Test void survivalKillsCountInEveryDimensionAndPayOnlyOnce()throws Exception{
+        var q=quests(new QuestPlan.Goal("hunt","Hunt","KILL","SKELETON",3,1500));
+        for(var dimension:List.of(World.Environment.NORMAL,World.Environment.NETHER,World.Environment.THE_END)){environment=dimension;q.death(death(player));}
+        q.death(death(player));assertEquals(3,store.questProgress(id,QuestPlan.week(now.get()).id(),"hunt"));assertEquals(7500,store.account(id).orElseThrow().cents());assertEquals(0,failures.get());
+    }
+    @Test void endShulkersAndNetherBlazesAlsoAdvanceHostileChallenges()throws Exception{
+        var q=quests(goal("shulkers","KILL","SHULKER"),new QuestPlan.Goal("challenge","Challenge","KILL","HOSTILE",2,3000));
+        for(var type:List.of(EntityType.SHULKER,EntityType.BLAZE)){
+            environment=type==EntityType.SHULKER?World.Environment.THE_END:World.Environment.NETHER;
+            LivingEntity entity=proxy(LivingEntity.class,(o,m,a)->switch(m.getName()){case "getKiller"->player;case "getType"->type;default->null;});
+            q.death(new EntityDeathEvent(entity,proxy(DamageSource.class,(o,m,a)->null),new ArrayList<>()));
+        }
+        assertEquals(10500,store.account(id).orElseThrow().cents());assertEquals(1,store.questProgress(id,QuestPlan.week(now.get()).id(),"shulkers"));assertEquals(2,store.questProgress(id,QuestPlan.week(now.get()).id(),"challenge"));
+    }
+    @Test void nikoAcceptanceIsRequiredInNetherAndEnd()throws Exception{
+        store.configureNikoGate(true,true,now.get());var q=quests(goal("hunt","KILL","SKELETON"));
+        for(var dimension:List.of(World.Environment.NETHER,World.Environment.THE_END)){environment=dimension;q.death(death(player));}
+        assertEquals(6000,store.account(id).orElseThrow().cents());store.acceptNiko(id,QuestPlan.week(now.get()).id(),"niko",now.get());
+        q.death(death(player));assertEquals(7500,store.account(id).orElseThrow().cents());
     }
 
     @Test void cosmeticFailureCannotPauseEconomyOrRepeatReward()throws Exception{

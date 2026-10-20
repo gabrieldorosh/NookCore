@@ -57,4 +57,21 @@ class SelectedQuestTest {
             store.questRotation(previous,old);assertEquals(old,store.questRotation(previous,goals));assertEquals(goals,store.questRotation(next,goals));assertEquals(goals,store.questRotation(next,old));
         }
     }
+    @Test void october21FileLoadsExactSelectedGoalsAndWaitsForRollover()throws Exception{
+        var config=YamlConfiguration.loadConfiguration(Path.of("release/october-21-refresh/quests.yml").toFile());
+        assertTrue(config.getBoolean("enabled"));var section=config.getConfigurationSection("goals");assertNotNull(section);
+        var goals=new ArrayList<QuestPlan.Goal>();for(String id:section.getKeys(false)){var c=section.getConfigurationSection(id);goals.add(new QuestPlan.Goal(id,c.getString("title"),c.getString("kind"),c.getString("target"),c.getInt("amount"),c.getLong("reward-cents")));}
+        assertEquals(List.of("IRON","PHANTOM","CARVED_PUMPKIN","SHULKER","END_ROD","HONEY_BOTTLE","DIAMOND"),goals.stream().map(QuestPlan.Goal::target).toList());
+        assertEquals(List.of(48,6,64,8,16,16,24),goals.stream().map(QuestPlan.Goal::amount).toList());
+        assertEquals(6,goals.stream().filter(g->g.reward()==1500).count());assertEquals(1,goals.stream().filter(g->g.reward()==3000).count());WeeklyQuests.validateContributions(goals);
+        for(var g:goals)if(g.kind().equals("DEPOSIT"))assertNotNull(Material.valueOf(g.target()));
+        long before=Instant.parse("2026-10-21T00:59:59Z").toEpochMilli();
+        try(var store=new NookStore(dir.resolve("october21.db"))){
+            var old=List.of(new QuestPlan.Goal("old","Old quest","MINE","COAL",1,1500));
+            assertEquals(old,store.questRotation(QuestPlan.week(before).id(),old));
+            assertEquals(old,store.questRotation(QuestPlan.week(before).id(),goals));
+            assertEquals(goals,store.questRotation(QuestPlan.week(before+1000).id(),goals));
+            assertEquals(goals,store.questRotation(QuestPlan.week(before+1000).id(),old));
+        }
+    }
 }

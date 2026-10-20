@@ -10,8 +10,8 @@ final class VendorSchedule {
     }
     static Visit at(long now){
         var start=WeekSchedule.start(Instant.ofEpochMilli(now)).atZone(WeekSchedule.ZONE);
-        return new Visit(start.toLocalDate().toString(),start.toInstant().toEpochMilli(),
+        return new Visit(start.toLocalDate().toString(),start.withHour(9).toInstant().toEpochMilli(),
             start.plusDays(2).withHour(19).toInstant().toEpochMilli(),
-            start.plusDays(5).toInstant().toEpochMilli(),start.plusWeeks(1).toInstant().toEpochMilli());
+            start.plusDays(5).withHour(19).toInstant().toEpochMilli(),start.plusWeeks(1).withHour(9).toInstant().toEpochMilli());
     }
 }

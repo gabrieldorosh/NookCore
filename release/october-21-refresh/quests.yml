@@ -1,0 +1,46 @@
+# Owner-selected rotation for Wednesday 21 October, 02:00 UK.
+enabled: true
+celebrations-enabled: true
+goals:
+  iron:
+    title: "Mine 48 natural iron ore"
+    kind: MINE
+    target: IRON
+    amount: 48
+    reward-cents: 1500
+  phantoms:
+    title: "Defeat 6 phantoms"
+    kind: KILL
+    target: PHANTOM
+    amount: 6
+    reward-cents: 1500
+  pumpkins:
+    title: "Contribute 64 carved pumpkins"
+    kind: DEPOSIT
+    target: CARVED_PUMPKIN
+    amount: 64
+    reward-cents: 1500
+  shulkers:
+    title: "Defeat 8 shulkers"
+    kind: KILL
+    target: SHULKER
+    amount: 8
+    reward-cents: 1500
+  end_rods:
+    title: "Contribute 16 end rods"
+    kind: DEPOSIT
+    target: END_ROD
+    amount: 16
+    reward-cents: 1500
+  honey:
+    title: "Contribute 16 honey bottles"
+    kind: DEPOSIT
+    target: HONEY_BOTTLE
+    amount: 16
+    reward-cents: 1500
+  diamonds:
+    title: "Mine 24 natural diamond ore"
+    kind: MINE
+    target: DIAMOND
+    amount: 24
+    reward-cents: 3000

@@ -19,7 +19,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
     void nikoDirections(Supplier<String> directions){nikoDirections=directions;}
     String nikoWeek()throws Exception{if(!enabled || !healthy.getAsBoolean())throw new IllegalArgumentException("Quests are unavailable.");rotation(clock.getAsLong());return week.id();}
     List<QuestPlan.Goal> nikoGoals()throws Exception{nikoWeek();return goals;}
-    void nikoAccept(Player player,String shownWeek)throws Exception{if(!eligible(player))throw new IllegalArgumentException("Speak to Niko while playing survival in the overworld.");nikoWeek();store.acceptNiko(player.getUniqueId(),shownWeek,"niko",clock.getAsLong());}
+    void nikoAccept(Player player,String shownWeek)throws Exception{if(!eligible(player))throw new IllegalArgumentException("Speak to Niko while playing Survival.");nikoWeek();store.acceptNiko(player.getUniqueId(),shownWeek,"niko",clock.getAsLong());}
     private final NookStore store;
     private final BooleanSupplier healthy;
     private final Consumer<Exception> failure;
@@ -36,7 +36,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
     private final Map<String,Activation> activations=new HashMap<>();
     private List<QuestPlan.Goal> goals=List.of();
     private final Map<UUID,String> lastBiome=new HashMap<>();
-    private static final Set<EntityType> HOSTILES=Set.of(EntityType.ZOMBIE,EntityType.SKELETON,EntityType.SPIDER,EntityType.CAVE_SPIDER,EntityType.CREEPER,EntityType.HUSK,EntityType.STRAY,EntityType.DROWNED,EntityType.WITCH,EntityType.PHANTOM,EntityType.PILLAGER);
+    private static final Set<EntityType> HOSTILES=Set.of(EntityType.ZOMBIE,EntityType.SKELETON,EntityType.SPIDER,EntityType.CAVE_SPIDER,EntityType.CREEPER,EntityType.HUSK,EntityType.STRAY,EntityType.DROWNED,EntityType.WITCH,EntityType.PHANTOM,EntityType.PILLAGER,EntityType.BLAZE,EntityType.GHAST,EntityType.MAGMA_CUBE,EntityType.WITHER_SKELETON,EntityType.PIGLIN_BRUTE,EntityType.HOGLIN,EntityType.ZOGLIN,EntityType.SHULKER,EntityType.ENDERMITE,EntityType.SILVERFISH,EntityType.WITHER,EntityType.ENDER_DRAGON,EntityType.WARDEN,EntityType.BOGGED,EntityType.BREEZE,EntityType.CREAKING);
     WeeklyQuests(JavaPlugin plugin,NookStore store,BooleanSupplier healthy,Consumer<Exception> failure)throws Exception {
         this.store=store;this.healthy=healthy;this.failure=failure;this.clock=System::currentTimeMillis;backupFolder=plugin.getDataFolder().toPath().resolve("backups");
         var file=new java.io.File(plugin.getDataFolder(),"quests.yml");if(!file.exists())plugin.saveResource("quests.yml",false);
@@ -98,7 +98,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
             goals=store.questRotation(current.id(),proposed);week=current;lastBiome.clear();capacityNotified.clear();notices.clear();
         }
     }
-    private boolean eligible(Player p){return enabled && healthy.getAsBoolean() && p.getGameMode()==GameMode.SURVIVAL && p.getWorld().getEnvironment()==World.Environment.NORMAL;}
+    private boolean eligible(Player p){return enabled && healthy.getAsBoolean() && p.getGameMode()==GameMode.SURVIVAL;}
     boolean record(Player p,String kind,String target,String unique){
         if(!eligible(p))return false;
         try{
@@ -186,7 +186,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         return deposits.stream().filter(g->g.target().equalsIgnoreCase(requested)).findFirst().orElseThrow(()->new IllegalArgumentException("That material is not requested this week. Use /quests contribute to see the choices."));
     }
     private void contribute(Player player,String requested)throws Exception {
-        if(!eligible(player))throw new IllegalArgumentException("Contribute while playing survival in the overworld.");
+        if(!eligible(player))throw new IllegalArgumentException("Contribute while playing Survival.");
         long now=clock.getAsLong();rotation(now);
         if(!store.questAccepted(player.getUniqueId(),week.id()))throw new IllegalArgumentException(nikoDirections.get());
         var deposits=goals.stream().filter(g->g.kind().equals("DEPOSIT")).toList();

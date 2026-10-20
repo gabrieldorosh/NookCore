@@ -52,7 +52,30 @@ public class SpawnNpcProbe extends JavaPlugin {
   check(!(boolean)call(store,"questAccepted",uuid,week),"local test begins before weekly acceptance");
   call(quests,"onCommand",player,core.getCommand("quests"),"quests",new String[0]);check(messages.toString().contains("Speak to Niko"),"remote quests provides Niko directions before acceptance");
   call(npcs,"openNiko",player);check(top.getItem(22).getType()==Material.LIME_DYE,"Niko offers explicit acceptance");check(top.getItem(4).getType()==Material.YELLOW_DYE,"Niko prominently shows quests not yet accepted");
-  check(!(boolean)call(store,"questAccepted",uuid,week),"opening menu alone does not accept");click(22,ClickType.LEFT);
+  check(!(boolean)call(store,"questAccepted",uuid,week),"opening menu alone does not accept");
+  if(weeklyRefresh()){
+      shulker(World.Environment.NETHER);shulker(World.Environment.THE_END);
+      check((int)call(store,"questProgress",uuid,week,"shulkers")==0,"Nether and End kills cannot bypass Niko acceptance");
+  }
+  click(22,ClickType.LEFT);
+ }
+ boolean weeklyRefresh()throws Exception{return ((List<?>)field(quests,"goals")).stream().anyMatch(g->{try{return call(g,"id").equals("shulkers");}catch(Exception e){throw new RuntimeException(e);}});}
+ void shulker(World.Environment dimension)throws Exception{
+  World original=world;
+  world=(World)Proxy.newProxyInstance(getClassLoader(),new Class[]{World.class},(o,m,a)->{if(m.getName().equals("getEnvironment"))return dimension;try{return m.invoke(original,a);}catch(InvocationTargetException e){throw e.getCause();}});
+  try{
+   var entity=(LivingEntity)Proxy.newProxyInstance(getClassLoader(),new Class[]{LivingEntity.class},(o,m,a)->switch(m.getName()){case "getKiller"->player;case "getType"->EntityType.SHULKER;default->null;});
+   var damage=(org.bukkit.damage.DamageSource)Proxy.newProxyInstance(getClassLoader(),new Class[]{org.bukkit.damage.DamageSource.class},(o,m,a)->null);
+   call(quests,"death",new org.bukkit.event.entity.EntityDeathEvent(entity,damage,new ArrayList<>()));
+  }finally{world=original;}
+ }
+ void weeklyRefreshChecks()throws Exception{
+  if(!weeklyRefresh())return;
+  shulker(World.Environment.NETHER);shulker(World.Environment.THE_END);
+  check((int)call(store,"questProgress",uuid,week,"shulkers")==2,"accepted Shulker kills progress in Nether and End through actual death listener");
+  var loaded=(List<?>)field(quests,"goals");
+  check(loaded.size()==7 && call(loaded.get(5),"target").equals("HONEY_BOTTLE"),"owner-selected seven quests including honey bottles load on Paper");
+  String status=(String)call(npcs,"status");check(status.contains("Niko acceptance from") && status.contains("restock") && status.contains("departure"),"NPC status exposes acceptance gate and vendor schedule");
  }
  void heads()throws Exception{
   var item=purchased.clone();item.setAmount(1);var second=ItemStack.deserializeBytes(item.serializeAsBytes());check(item.isSimilar(second),"collectible serialisation preserves exact item");
@@ -88,7 +111,7 @@ public class SpawnNpcProbe extends JavaPlugin {
        diskRelease.countDown();stage=-3;
    }
    case -3->{if(field(npcs,"pendingSave")!=null){stage=-3;break;}placed();stage=1;}
-   case 1->{check((boolean)call(store,"questAccepted",uuid,week),"confirmation accepts current week");call(npcs,"openNiko",player);check(top.getItem(22).getType()==Material.MAP,"accepted menu shows progress");check(top.getItem(4).getType()==Material.LIME_DYE,"Niko prominently shows accepted quests");check(messages.toString().contains("already active for this week"),"Niko acknowledges returning players in chat");var gate=store.getClass().getDeclaredField("nikoGateWeek");gate.setAccessible(true);var originalGate=gate.get(store);gate.set(store,"9999-12-31");try{call(npcs,"openNiko",player);check(messages.toString().contains("Hi! Come and speak to me next week for new quests!"),"transition week uses owner exact greeting");}finally{gate.set(store,originalGate);}call(npcs,"openPip",player,true);check(top.getSize()==27,"read-only preview opens");check(top.getItem(16)!=null,"seventh product occupies centred row");check(top.getItem(10).getItemMeta().displayName().toString().contains("in stock"),"stock visible in product name");click(10,ClickType.LEFT);}
+   case 1->{check((boolean)call(store,"questAccepted",uuid,week),"confirmation accepts current week");weeklyRefreshChecks();call(npcs,"openNiko",player);check(top.getItem(22).getType()==Material.MAP,"accepted menu shows progress");check(top.getItem(4).getType()==Material.LIME_DYE,"Niko prominently shows accepted quests");check(messages.toString().contains("already active for this week"),"Niko acknowledges returning players in chat");var gate=store.getClass().getDeclaredField("nikoGateWeek");gate.setAccessible(true);var originalGate=gate.get(store);gate.set(store,"9999-12-31");try{call(npcs,"openNiko",player);check(messages.toString().contains("Hi! Come and speak to me next week for new quests!"),"transition week uses owner exact greeting");}finally{gate.set(store,originalGate);}call(npcs,"openPip",player,true);check(top.getSize()==27,"read-only preview opens");check(top.getItem(16)!=null,"seventh product occupies centred row");check(top.getItem(10).getItemMeta().displayName().toString().contains("in stock"),"stock visible in product name");click(10,ClickType.LEFT);}
    case 2->{check(field(top.getHolder(),"kind").equals("pip"),"preview cannot buy");call(npcs,"openPip",player,false);balance=money();design=(String)call(offers().getFirst(),"design");click(10,ClickType.SHIFT_LEFT);}
    case 3->{check(money()==balance && field(top.getHolder(),"kind").equals("pip"),"shift-click cannot extract display or charge");click(10,ClickType.LEFT);stage=39;}
    case 39->{click(15,ClickType.LEFT);stage=40;}

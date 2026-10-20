@@ -48,10 +48,14 @@ class FarmingTradeQuestTest {
         for(Material m:List.of(Material.WHEAT,Material.CARROTS,Material.POTATOES,Material.BEETROOTS))q.harvest(crop(m,7,7));
         assertEquals(4,progress("crops"));
     }
-    @Test void cancelledCreativeAndNetherHarvestsDoNotCount()throws Exception{
+    @Test void cancelledCreativeAndSpectatorHarvestsDoNotCount()throws Exception{
         var e=crop(Material.WHEAT,7,7);e.setCancelled(true);q.harvest(e);
-        mode=GameMode.CREATIVE;q.harvest(crop(Material.WHEAT,7,7));mode=GameMode.SURVIVAL;environment=World.Environment.NETHER;q.harvest(crop(Material.WHEAT,7,7));
+        mode=GameMode.CREATIVE;q.harvest(crop(Material.WHEAT,7,7));mode=GameMode.SPECTATOR;q.harvest(crop(Material.WHEAT,7,7));
         assertEquals(0,progress("crops"));
+    }
+    @Test void cropsAndTradesCountAcrossNetherAndEnd()throws Exception{
+        for(var dimension:List.of(World.Environment.NETHER,World.Environment.THE_END)){environment=dimension;q.harvest(crop(Material.WHEAT,7,7));q.trade(trade());}
+        assertEquals(2,progress("crops"));assertEquals(2,progress("trades"));
     }
     @Test void cropDropsDoNotMultiplyProgressAndRepeatedGrowingAtSamePositionCounts()throws Exception{
         for(int n=0;n<64;n++){var e=crop(Material.CARROTS,7,7);for(int i=0;i<5;i++)e.getItems().add(proxy(Item.class,(o,m,a)->null));q.harvest(e);}
@@ -64,8 +68,8 @@ class FarmingTradeQuestTest {
         merchant=proxy(WanderingTrader.class,(o,m,a)->null);q.trade(trade());
         merchant=proxy(Villager.class,(o,m,a)->null);q.trade(trade());assertEquals(1,progress("trades"));
     }
-    @Test void tradeSurvivalAndOverworldRestrictionsRemain()throws Exception{
-        mode=GameMode.CREATIVE;q.trade(trade());mode=GameMode.SURVIVAL;environment=World.Environment.NETHER;q.trade(trade());assertEquals(0,progress("trades"));
+    @Test void tradesStillRejectCreativeAndSpectator()throws Exception{
+        mode=GameMode.CREATIVE;q.trade(trade());mode=GameMode.SPECTATOR;q.trade(trade());assertEquals(0,progress("trades"));
     }
     @Test void batchOfEightPaysOnceAndQuietProgressPersists()throws Exception{
         for(int n=0;n<12;n++)q.trade(trade());assertEquals(8,progress("trades"));assertEquals(7500,store.account(id).orElseThrow().cents());assertEquals(2,messages.size());

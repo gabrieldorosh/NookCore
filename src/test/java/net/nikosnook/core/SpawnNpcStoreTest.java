@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class SpawnNpcStoreTest {
     @TempDir Path dir;
     NookStore store;UUID player=UUID.randomUUID();
-    long now=Instant.parse("2026-10-14T02:00:00Z").toEpochMilli();
+    long now=Instant.parse("2026-10-14T08:00:00Z").toEpochMilli();
     VendorSchedule.Visit visit=VendorSchedule.at(now);
     QuestPlan.Goal goal=new QuestPlan.Goal("hunt","Defeat two witches","KILL","WITCH",2,1500);
     @BeforeEach void start()throws Exception{store=new NookStore(dir.resolve("nooks.db"));store.join(player,"Player",now,6000);}
