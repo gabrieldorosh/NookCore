@@ -43,6 +43,9 @@ shop-gate:
 travel:
   lock-nether: true
   lock-end: true
+  # Optional automatic opening; keep lock-end true while using this timestamp.
+  # Example: "2026-10-23T19:00:00+01:00". Blank preserves the manual lock.
+  end-opens-at: ""
   block-command-teleports: true
   # Local Travel Update candidate. Enable only after route tests and tuning.
   grounded:

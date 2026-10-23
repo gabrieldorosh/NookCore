@@ -29,14 +29,19 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     private AdminTeleports adminTeleports;
     private StaffMode staffMode;
     private SpawnNpcs spawnNpcs;
+    private EndOpening endOpening=new EndOpening(true,null);
     @Override public void onEnable(){
         buildIdentity=BuildIdentity.read(getResource("build-info.properties"));
         getLogger().info("NookCore source: "+buildIdentity.commit()+" ("+buildIdentity.state()+")");
         saveDefaultConfig();
         boolean recovery=Files.exists(getDataFolder().toPath().resolve("recovery-mode.flag"));
         if(!recovery && Files.exists(getDataFolder().toPath().resolve("plot-setup-pending.yml"))){blockStartup("Unfinished plot setup: recover plot-setup-pending.yml before enabling trades.");return;}
-        try{new org.bukkit.configuration.file.YamlConfiguration().load(getDataFolder().toPath().resolve("config.yml").toFile());}
+        try{
+            new org.bukkit.configuration.file.YamlConfiguration().load(getDataFolder().toPath().resolve("config.yml").toFile());
+            endOpening=EndOpening.parse(getConfig().getBoolean("travel.lock-end",true),getConfig().getString("travel.end-opens-at",""));
+        }
         catch(Exception e){getLogger().log(Level.SEVERE,"NookCore could not initialise: invalid config.yml",e);blockStartup("Invalid config.yml; restore a valid configuration before restarting.");return;}
+        getLogger().info(endOpening.status(System.currentTimeMillis()));
         new SmitePrank(this);
         getServer().getPluginManager().registerEvents(new SelectiveMobGriefing(
             getConfig().getBoolean("mob-protection.prevent-creeper-block-damage",true),
@@ -165,6 +170,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         lines.add("Economy/plots: "+(healthy?"available":"PAUSED")+" · "+healthDetail);
         lines.add(chat==null?"Chat: not initialised (disabled, conflict or startup failure)":chat.status());
         lines.add(groundedTravel==null?"Travel: unavailable":groundedTravel.status());
+        lines.add(endOpening.status(System.currentTimeMillis()));
         lines.add(spawnNpcs==null?"NPCs: disabled or unavailable":spawnNpcs.status());
         lines.add(bunnyBoots==null?"Bunny boots: unavailable":bunnyBoots.status());
         lines.add("Protection bridge initialised: "+(plotGate!=null)+"; staff-mode command present: "+(getCommand("staffmode")!=null));
@@ -235,7 +241,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     public void teleport(PlayerTeleportEvent e){
         if(e.getTo()==null || staffMode!=null && staffMode.returning(e) || adminTeleports.consume(e) || e.getPlayer().hasPermission("nookcore.travel.bypass"))return;
         World.Environment env=e.getTo().getWorld().getEnvironment();
-        if((env==World.Environment.NETHER && getConfig().getBoolean("travel.lock-nether",true)) || (env==World.Environment.THE_END && getConfig().getBoolean("travel.lock-end",true))){e.setCancelled(true);e.getPlayer().sendMessage(NookUi.message("NookCore","That dimension has not opened yet."));return;}
+        if((env==World.Environment.NETHER && getConfig().getBoolean("travel.lock-nether",true)) || (env==World.Environment.THE_END && endOpening.locked(System.currentTimeMillis()))){e.setCancelled(true);e.getPlayer().sendMessage(NookUi.message("NookCore","That dimension has not opened yet."));return;}
         if(getConfig().getBoolean("travel.block-command-teleports",true) && !(staffMode!=null && staffMode.moderating(e)) && (e.getCause()==PlayerTeleportEvent.TeleportCause.COMMAND || e.getCause()==PlayerTeleportEvent.TeleportCause.PLUGIN)){
             e.setCancelled(true);e.getPlayer().sendMessage(NookUi.message("NookCore","Use the world's roads, rails and vanilla travel methods to get around."));
         }
