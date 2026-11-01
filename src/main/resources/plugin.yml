@@ -17,7 +17,7 @@ commands:
     usage: /list
   staffmode:
     description: Hidden spectator tools and saved return position
-    usage: /staffmode [on|off|list|tp <player>|spectate <player>|inspect <player>]
+    usage: /staffmode [on [disconnect]|off [confirm]|list|tp <player>|spectate <player>]
   bunny:
     description: Bunny boots time and charging
     usage: /bunny

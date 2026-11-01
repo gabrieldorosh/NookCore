@@ -94,6 +94,27 @@ public class StaffModeProbe extends JavaPlugin {
   call(staffChat,"onCommand",regular.player,core.getCommand("staff"),"sc",new String[]{"Denied"});
   check(helper.messages.isEmpty() && observer.messages.isEmpty(),"ordinary player cannot send staff messages");
   call(mode,"leave",helper.player);
+  User unsafe=new User("UnsafeHelper",true);Location unsafeOriginal=unsafe.location.clone();call(mode,"enter",unsafe.player);unsafe.location=new Location(world,14,130,14);world.getBlockAt(0,120,0).setType(Material.AIR,false);
+  unsafe.messages.clear();call(mode,"onCommand",unsafe.player,core.getCommand("staffmode"),"staffmode",new String[]{"off"});
+  check(active(unsafe)&&unsafe.game==GameMode.SPECTATOR&&!unsafe.visible&&unsafe.location.getX()==14&&call(state,"get",unsafe.id)!=null,"ordinary unsafe exit keeps hidden staff, current position and saved return");
+  check(unsafe.messages.toString().contains("/staffmode off confirm")&&unsafe.messages.toString().contains("suffocation"),"unsafe return explains explicit confirmation and risk");
+  for(String[] bad:List.of(new String[]{"off","force"},new String[]{"off","confirm","extra"})){
+    unsafe.messages.clear();call(mode,"onCommand",unsafe.player,core.getCommand("staffmode"),"staffmode",bad);
+    check(active(unsafe)&&unsafe.location.getX()==14&&unsafe.messages.toString().contains("/staffmode off [confirm]"),"invalid off arguments cannot bypass return checks: "+Arrays.toString(bad));
+  }
+  check(call(mode,"onTabComplete",unsafe.player,core.getCommand("staffmode"),"staffmode",new String[]{"off","c"}).equals(List.of("confirm")),"off completion offers confirm instead of player names");
+  check(call(mode,"onTabComplete",regular.player,core.getCommand("staffmode"),"staffmode",new String[]{"off",""}).equals(List.of()),"ordinary players are not offered a staff recovery confirmation");
+  unsafe.denyTeleport=true;call(mode,"onCommand",unsafe.player,core.getCommand("staffmode"),"staffmode",new String[]{"off","confirm"});
+  check(active(unsafe)&&unsafe.game==GameMode.SPECTATOR&&!unsafe.visible&&call(state,"get",unsafe.id)!=null,"confirmed exit still respects a cancelled teleport and keeps return data");unsafe.denyTeleport=false;
+  unsafe.cancelMode=true;call(mode,"onCommand",unsafe.player,core.getCommand("staffmode"),"staffmode",new String[]{"off","confirm"});
+  check(active(unsafe)&&unsafe.game==GameMode.SPECTATOR&&!unsafe.visible&&call(state,"get",unsafe.id)!=null,"confirmed exit keeps staff hidden and durable state if original mode cannot be restored");unsafe.cancelMode=false;
+  unsafe.staff=false;call(mode,"onCommand",unsafe.player,core.getCommand("staffmode"),"staffmode",new String[]{"OFF","CONFIRM"});
+  check(!active(unsafe)&&unsafe.location.equals(unsafeOriginal)&&unsafe.game==GameMode.SURVIVAL,"confirmed exit bypasses missing footing and restores saved position and mode even after permission revocation");
+  check(unsafe.visible&&!regular.hidden.contains(unsafe.id)&&!unsafe.meta.containsKey("vanished")&&call(make(type("StaffState"),new Class[]{Path.class},file),"get",unsafe.id)==null,"confirmed exit restores visibility and clears durable state after success");
+  check(unsafe.messages.toString().contains("safety check bypassed"),"confirmed exit reports that landing safety was bypassed");
+  unsafe.messages.clear();call(mode,"onCommand",unsafe.player,core.getCommand("staffmode"),"staffmode",new String[]{"off","confirm"});
+  check(!active(unsafe)&&unsafe.messages.toString().contains("already off"),"repeat confirmation does not teleport or reactivate staff mode");
+  world.getBlockAt(0,120,0).setType(Material.STONE,false);
   getLogger().info("STAFF_COMPLETE checks="+checks);
  }
  public void onEnable(){Bukkit.getScheduler().runTask(this,()->{try{run();}catch(Throwable e){getLogger().log(java.util.logging.Level.SEVERE,"STAFF_FAILED",e);}finally{Bukkit.shutdown();}});}
