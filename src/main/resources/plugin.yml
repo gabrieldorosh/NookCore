@@ -7,6 +7,9 @@ author: NikosNook
 softdepend: [FancyNpcs, DiscordSRV, Vault, WorldGuard, WorldEdit, PlaceholderAPI]
 loadbefore: [ChestShop]
 commands:
+  pvp:
+    description: Toggle consensual player combat
+    usage: /pvp [on|off|status]
   staff:
     description: Message online helpers and admins privately
     aliases: [sc]
@@ -51,6 +54,9 @@ commands:
     permission: nookcore.admin
     usage: /nookadmin <status|teleport|return> ...
 permissions:
+  nookcore.pvp:
+    description: Enable your own PvP preference
+    default: true
   nookcore.staff:
     description: Staff mode tools without economy administration or general teleport bypass
     default: op

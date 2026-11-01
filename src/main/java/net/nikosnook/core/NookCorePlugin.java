@@ -28,12 +28,14 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     private GroundedTravel groundedTravel;
     private AdminTeleports adminTeleports;
     private StaffMode staffMode;
+    private PvpToggle pvp;
     private SpawnNpcs spawnNpcs;
     private EndOpening endOpening=new EndOpening(true,null);
     @Override public void onEnable(){
         buildIdentity=BuildIdentity.read(getResource("build-info.properties"));
         getLogger().info("NookCore source: "+buildIdentity.commit()+" ("+buildIdentity.state()+")");
         saveDefaultConfig();
+        pvp=new PvpToggle(this,()->healthy && store!=null);
         boolean recovery=Files.exists(getDataFolder().toPath().resolve("recovery-mode.flag"));
         if(!recovery && Files.exists(getDataFolder().toPath().resolve("plot-setup-pending.yml"))){blockStartup("Unfinished plot setup: recover plot-setup-pending.yml before enabling trades.");return;}
         try{
@@ -169,6 +171,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         lines.addAll((buildIdentity==null?BuildIdentity.read(null):buildIdentity).lines());
         lines.add("Economy/plots: "+(healthy?"available":"PAUSED")+" · "+healthDetail);
         lines.add(chat==null?"Chat: not initialised (disabled, conflict or startup failure)":chat.status());
+        lines.add(pvp==null?"PvP: unavailable":pvp.status());
         lines.add(groundedTravel==null?"Travel: unavailable":groundedTravel.status());
         lines.add(endOpening.status(System.currentTimeMillis()));
         lines.add(spawnNpcs==null?"NPCs: disabled or unavailable":spawnNpcs.status());

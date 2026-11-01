@@ -216,3 +216,7 @@ mob-protection:
 # Private local activity counters; no chat messages or economy changes.
 economy-metrics:
   enabled: true
+
+# Both players must opt in with /pvp. Preferences start off and persist across restarts.
+pvp:
+  combat-lock-seconds: 15
