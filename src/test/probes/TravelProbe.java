@@ -30,7 +30,7 @@ public final class TravelProbe extends JavaPlugin {
     },40);}
     private Player mockPlayer(UUID id,World inWorld,GameMode mode){
         return (Player)Proxy.newProxyInstance(getClassLoader(),new Class[]{Player.class},(o,m,a)->switch(m.getName()){
-            case "getUniqueId"->id;case "getWorld"->inWorld;case "getGameMode"->mode;case "isDead"->false;case "isOnGround"->grounded;case "isGliding","isSwimming","isInsideVehicle"->false;default->null;
+            case "getLocation"->new Location(inWorld,8.5,grounded?65:68,8.5);case "getUniqueId"->id;case "getWorld"->inWorld;case "getGameMode"->mode;case "isDead"->false;case "isOnGround"->grounded;case "isGliding","isSwimming","isInsideVehicle"->false;default->null;
         });
     }
     private void failed(Throwable e){getLogger().log(java.util.logging.Level.SEVERE,"TRAVEL_PROBE_FAILED",e);}
@@ -84,8 +84,20 @@ public final class TravelProbe extends JavaPlugin {
         cart.setMaxSpeed(1.6);cart.getPersistentDataContainer().set(new NamespacedKey("nookcore","travel-original-cart-speed"),PersistentDataType.DOUBLE,.6);call("restore",new Class[]{Entity.class},cart);
         check(Math.abs(cart.getMaxSpeed()-.6)<1e-6,"interrupted-run saved cart speed recovered");
         UUID id=UUID.randomUUID();Player player=(Player)Proxy.newProxyInstance(getClassLoader(),new Class[]{Player.class},(o,m,a)->switch(m.getName()){
-            case "getUniqueId"->id;case "getWorld"->world;case "getGameMode"->GameMode.SURVIVAL;case "isDead"->false;case "isOnGround"->grounded;case "isGliding","isSwimming","isInsideVehicle"->false;default->null;
+            case "getLocation"->new Location(world,8.5,grounded?65:68,8.5);case "getUniqueId"->id;case "getWorld"->world;case "getGameMode"->GameMode.SURVIVAL;case "isDead"->false;case "isOnGround"->grounded;case "isGliding","isSwimming","isInsideVehicle"->false;default->null;
         });
+        check((boolean)call("groundContact",new Class[]{Location.class},new Location(world,9.5,64.9375,8.5)),"path fractional height counts as landed");
+        check((boolean)call("groundContact",new Class[]{Location.class},new Location(world,10.5,64.5,8.5)),"bottom slab counts as landed");
+        check(!(boolean)call("groundContact",new Class[]{Location.class},new Location(world,8.5,65.2,8.5)),"air above a block does not count as landed");
+        var walkingFeet=new java.util.concurrent.atomic.AtomicReference<>(new Location(world,4.5,65,8.5));UUID walkingId=UUID.randomUUID();
+        Player walker=(Player)Proxy.newProxyInstance(getClassLoader(),new Class[]{Player.class},(o,m,a)->switch(m.getName()){
+            case "getUniqueId"->walkingId;case "getLocation"->walkingFeet.get().clone();case "getWorld"->world;case "getGameMode"->GameMode.SURVIVAL;
+            case "isOnGround"->false;case "isGliding"->true;case "isDead","isSwimming","isInsideVehicle"->false;default->null;
+        });
+        for(int step=0;step<=60;step++){tick(500+step);walkingFeet.set(new Location(world,4.5+step*.05,65,8.5));call("updateTakeoff",new Class[]{Player.class},walker);}
+        walkingFeet.set(new Location(world,7.5,68,8.5));tick(561);call("updateTakeoff",new Class[]{Player.class},walker);
+        var walkingState=((Map<UUID,Object>)field("takeoffs")).get(walkingId);var permit=walkingState.getClass().getDeclaredMethod("allowed",long.class,int.class);permit.setAccessible(true);
+        check((boolean)permit.invoke(walkingState,561L,60),"walking for three seconds rearms rockets despite stale ground and gliding flags");
         Firework firework=world.spawn(new Location(world,24,68,8),Firework.class);tick(100);
         var denied=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);call("rocket",new Class[]{PlayerElytraBoostEvent.class},denied);
         check(denied.isCancelled() && !denied.shouldConsume(),"airborne entry denies rocket without consumption");

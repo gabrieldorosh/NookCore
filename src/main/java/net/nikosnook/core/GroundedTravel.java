@@ -74,7 +74,23 @@ final class GroundedTravel implements Listener {
     private void updateTakeoff(Player player){
         UUID id=player.getUniqueId();
         if(player.isSwimming() || player.isInsideVehicle()){takeoffs.remove(id);return;}
-        takeoffs.computeIfAbsent(id,key->new TravelRules.Takeoff()).update(tick,player.isOnGround() && !player.isGliding(),rearm);
+        takeoffs.computeIfAbsent(id,key->new TravelRules.Takeoff()).update(tick,groundContact(player.getLocation()),rearm);
+    }
+    /** Measure the feet against block collisions; client ground/gliding flags can lag a moving landing. */
+    static boolean groundContact(Location feet){
+        World world=feet.getWorld();if(world==null || !Double.isFinite(feet.getX()) || !Double.isFinite(feet.getY()) || !Double.isFinite(feet.getZ()))return false;
+        double x=feet.getX(),y=feet.getY(),z=feet.getZ();
+        for(int bx=(int)Math.floor(x-.299);bx<=(int)Math.floor(x+.299);bx++)for(int bz=(int)Math.floor(z-.299);bz<=(int)Math.floor(z+.299);bz++){
+            if(!world.isChunkLoaded(bx>>4,bz>>4))continue;
+            for(int by=Math.max(world.getMinHeight(),(int)Math.floor(y-.06));by<=Math.min(world.getMaxHeight()-1,(int)Math.floor(y));by++){
+                var block=world.getBlockAt(bx,by,bz);
+                for(var local:block.getCollisionShape().getBoundingBoxes()){
+                    var box=local.clone().shift(bx,by,bz);
+                    if(Math.abs(box.getMaxY()-y)<=.06 && box.getMaxX()>x-.299 && box.getMinX()<x+.299 && box.getMaxZ()>z-.299 && box.getMinZ()<z+.299)return true;
+                }
+            }
+        }
+        return false;
     }
     private void updateMount(AbstractHorse horse){
         var state=activeMounts.computeIfAbsent(horse.getUniqueId(),id->new MountState(horse));
@@ -158,7 +174,7 @@ final class GroundedTravel implements Listener {
         var takeoff=takeoffs.get(player.getUniqueId());
         if(takeoff!=null && takeoff.allowed(tick,window))return;
         event.setCancelled(true);event.setShouldConsume(false);
-        if(tick-lastNotice.getOrDefault(player.getUniqueId(),-100L)>=40){lastNotice.put(player.getUniqueId(),tick);player.sendMessage(NookUi.message("NookTravel","Rockets work during take-off here. Stay on the ground for "+(rearm/20.0)+" seconds before taking off again."));}
+        if(tick-lastNotice.getOrDefault(player.getUniqueId(),-100L)>=40){lastNotice.put(player.getUniqueId(),tick);player.sendMessage(NookUi.message("NookTravel","Rockets work during take-off here. Stay on the ground for "+(rearm/20.0)+" seconds before taking off again. You can keep walking."));}
     }
     private void forget(Player player){
         takeoffs.remove(player.getUniqueId());lastNotice.remove(player.getUniqueId());
