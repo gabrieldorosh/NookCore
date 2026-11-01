@@ -37,7 +37,7 @@ final class CommandNavigation implements CommandExecutor,TabCompleter {
                 return run("plots",s,prepend("admin",rest));
             }
             if(sub.equals("quests")){
-                if(rest.length==0 || rest[0].equalsIgnoreCase("help"))return help(s,"Quest administration","/nookadmin quests inspect <player>","/nookadmin quests contributions — list community stock","/nookadmin quests contributions collect <item> <quantity>","/nookadmin quests activate-config [confirm] — preview replacement; fresh progress for everyone");
+                if(rest.length==0 || rest[0].equalsIgnoreCase("help"))return help(s,"Quest administration","/nookadmin quests next — preview next week", "/nookadmin quests inspect <player>","/nookadmin quests contributions — list community stock","/nookadmin quests contributions collect <item> <quantity>","/nookadmin quests activate-config [confirm] — preview replacement; fresh progress for everyone");
                 if(rest[0].equalsIgnoreCase("contributions") && rest.length>1){
                     if(rest.length!=4 || !rest[1].equalsIgnoreCase("collect"))return help(s,"Contributions","/nookadmin quests contributions collect <item> <quantity>");
                     return run("quests",s,new String[]{"collect",rest[2],rest[3]});
@@ -76,7 +76,7 @@ final class CommandNavigation implements CommandExecutor,TabCompleter {
         if(root.equals("nookadmin")){
             if(!s.hasPermission("nookcore.admin"))return List.of();
             if(a.length==1)choices=List.of("economy","plots","quests","shops","npc","vendor","status","help");
-            else if(a.length==2)choices=switch(a[0].toLowerCase(Locale.ROOT)){case "economy"->List.of("balance","give","take","report","metrics","backup","advancements");case "plots"->List.of("setup","clear","evict","storage","membership","absence","define","rent-cut");case "quests"->List.of("inspect","contributions","activate-config");case "shops"->List.of("review","recover-stock");case "npc"->List.of("place","accept","status");case "vendor"->List.of("catalogue","preview","status","review","recover");default->List.of();};
+            else if(a.length==2)choices=switch(a[0].toLowerCase(Locale.ROOT)){case "economy"->List.of("balance","give","take","report","metrics","backup","advancements");case "plots"->List.of("setup","clear","evict","storage","membership","absence","define","rent-cut");case "quests"->List.of("inspect","next","contributions","activate-config");case "shops"->List.of("review","recover-stock");case "npc"->List.of("place","accept","status");case "vendor"->List.of("catalogue","preview","status","review","recover");default->List.of();};
             else if(a.length==3 && a[0].equalsIgnoreCase("npc") && a[1].equalsIgnoreCase("place"))choices=List.of("niko","pip");
             else if(a[0].equalsIgnoreCase("plots"))return complete("plots",s,a[1].equalsIgnoreCase("setup")?tail(a,1):prepend("admin",tail(a,1)));
             else if(a[0].equalsIgnoreCase("economy"))return complete("nooks",s,tail(a,1));

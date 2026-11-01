@@ -24,6 +24,8 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
     private final BooleanSupplier healthy;
     private final Consumer<Exception> failure;
     private final List<QuestPlan.Goal> proposed;
+    private AutomaticQuests automatic=AutomaticQuests.disabled();
+    private static final Set<String> MINE_TARGETS=Set.of("COAL","IRON","DIAMOND","COPPER","GOLD","REDSTONE","LAPIS","EMERALD","QUARTZ","ANCIENT_DEBRIS");
     private final boolean enabled;
     private final LongSupplier clock;
     private BiConsumer<Player,Boolean> celebration=(player,challenge)->{};
@@ -47,18 +49,13 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         var parsed=new ArrayList<QuestPlan.Goal>();
         for(String id:section.getKeys(false)){
             var c=section.getConfigurationSection(id);var g=new QuestPlan.Goal(id,c.getString("title",""),c.getString("kind",""),c.getString("target",""),c.getInt("amount"),c.getLong("reward-cents"));
-            if(g.kind().equals("KILL") && !g.target().equals("HOSTILE"))EntityType.valueOf(g.target());
-            if(g.kind().equals("FISH") && !Set.of("COD","SALMON","TROPICAL_FISH","PUFFERFISH").contains(g.target()))throw new IllegalArgumentException("Invalid fish target");
-            if(g.kind().equals("BIOME") && !g.target().equals("ANY"))throw new IllegalArgumentException("Biome quests use ANY");
-            if(g.kind().equals("MINE") && !Set.of("COAL","IRON","DIAMOND").contains(g.target()))throw new IllegalArgumentException("Mining target must be COAL, IRON or DIAMOND");
-            if(g.kind().equals("DEPOSIT") && (Material.matchMaterial(g.target())==null || !Material.valueOf(g.target()).isItem()))throw new IllegalArgumentException("Invalid contribution item");
-            if(g.kind().equals("HARVEST") && !g.target().equals("MATURE_CROPS"))throw new IllegalArgumentException("Harvest quests use MATURE_CROPS");
-            if(g.kind().equals("TRADE") && !g.target().equals("VILLAGER"))throw new IllegalArgumentException("Trade quests use VILLAGER");
+            validateGoal(g);
             parsed.add(g);
         }
         if(parsed.size()!=7 || parsed.stream().filter(g->g.reward()==1500).count()!=6 || parsed.stream().filter(g->g.reward()==3000).count()!=1)throw new IllegalArgumentException("Configure six quests at 1500 cents and one challenge at 3000 cents");
         validateContributions(parsed);
         proposed=List.copyOf(parsed);
+        automatic=AutomaticQuests.load(plugin);
         var command=Objects.requireNonNull(plugin.getCommand("quests"));command.setExecutor(this);command.setTabCompleter(this);
         if(enabled){
             rotation(clock.getAsLong());plugin.getServer().getPluginManager().registerEvents(this,plugin);
@@ -75,8 +72,20 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         }
         plugin.getLogger().info("Weekly quests "+(enabled?"enabled":"disabled; enable in quests.yml for testing")+".");
     }
+    static void validateGoal(QuestPlan.Goal g){
+            if(g.kind().equals("KILL") && !g.target().equals("HOSTILE"))EntityType.valueOf(g.target());
+            if(g.kind().equals("FISH") && !Set.of("COD","SALMON","TROPICAL_FISH","PUFFERFISH").contains(g.target()))throw new IllegalArgumentException("Invalid fish target");
+            if(g.kind().equals("BIOME") && !g.target().equals("ANY"))throw new IllegalArgumentException("Biome quests use ANY");
+            if(g.kind().equals("MINE") && !MINE_TARGETS.contains(g.target()))throw new IllegalArgumentException("Unsupported natural ore target");
+            if(g.kind().equals("DEPOSIT") && (Material.matchMaterial(g.target())==null || !Material.valueOf(g.target()).isItem()))throw new IllegalArgumentException("Invalid contribution item");
+            if(g.kind().equals("HARVEST") && !g.target().equals("MATURE_CROPS"))throw new IllegalArgumentException("Harvest quests use MATURE_CROPS");
+            if(g.kind().equals("TRADE") && !g.target().equals("VILLAGER"))throw new IllegalArgumentException("Trade quests use VILLAGER");
+    }
     WeeklyQuests(NookStore store,BooleanSupplier healthy,Consumer<Exception> failure,List<QuestPlan.Goal> proposed,LongSupplier clock){
-        this.store=store;this.healthy=healthy;this.failure=failure;this.proposed=List.copyOf(proposed);this.clock=clock;this.enabled=true;
+        this(store,healthy,failure,proposed,clock,AutomaticQuests.disabled());
+    }
+    WeeklyQuests(NookStore store,BooleanSupplier healthy,Consumer<Exception> failure,List<QuestPlan.Goal> proposed,LongSupplier clock,AutomaticQuests automatic){
+        this.store=store;this.healthy=healthy;this.failure=failure;this.proposed=List.copyOf(proposed);this.clock=clock;this.enabled=true;this.automatic=automatic;
     }
     void sampleBiome(Player player,String biome){
         if(!eligible(player))return;
@@ -89,14 +98,18 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         if(!enabled)return "Quests: disabled";
         var due=QuestPlan.week(now);
         return "Quests: active week "+(week==null?"not loaded":week.id())+"; next reset "+NookUi.date(due.nextReset())+
-            "; configured goals "+(QuestPlan.sameDefinitions(goals,proposed)?"match active":"DIFFER from active")+
+            (automatic.enabled()?"; "+automatic.description():"; configured goals "+(QuestPlan.sameDefinitions(goals,proposed)?"match active":"DIFFER from active"))+
             (week!=null&&!week.id().equals(due.id())?"; rollover due (not activated by status)":"");
     }
     private void rotation(long now)throws Exception {
         var current=QuestPlan.week(now);
         if(week==null || !week.id().equals(current.id())){
-            goals=store.questRotation(current.id(),proposed);week=current;lastBiome.clear();capacityNotified.clear();notices.clear();
+            goals=store.questRotation(current.id(),selectionFor(current.id()));week=current;lastBiome.clear();capacityNotified.clear();notices.clear();
         }
+    }
+    private List<QuestPlan.Goal> selectionFor(String targetWeek)throws Exception {
+        var saved=store.savedQuestRotation(targetWeek);if(saved.isPresent())return saved.get();
+        return automatic.applies(targetWeek)?automatic.bank().select(targetWeek,store.previousQuestRotation(targetWeek)):proposed;
     }
     private boolean eligible(Player p){return enabled && healthy.getAsBoolean() && p.getGameMode()==GameMode.SURVIVAL;}
     boolean record(Player p,String kind,String target,String unique){
@@ -119,7 +132,12 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
     void setCelebration(BiConsumer<Player,Boolean> celebration,Consumer<Exception> error){this.celebration=celebration;this.cosmeticFailure=error;}
     private void celebrate(Player player,boolean challenge){try{celebration.accept(player,challenge);}catch(RuntimeException e){cosmeticFailure.accept(e);}}
     private static String position(org.bukkit.block.Block block){return block.getWorld().getUID()+":"+block.getX()+":"+block.getY()+":"+block.getZ();}
-    static String ore(Material type){return switch(type){case COAL_ORE,DEEPSLATE_COAL_ORE->"COAL";case IRON_ORE,DEEPSLATE_IRON_ORE->"IRON";case DIAMOND_ORE,DEEPSLATE_DIAMOND_ORE->"DIAMOND";default->null;};}
+    static String ore(Material type){
+        String name=type.name();if(name.equals("ANCIENT_DEBRIS"))return name;
+        if(name.startsWith("DEEPSLATE_"))name=name.substring(10);
+        if(name.equals("NETHER_GOLD_ORE"))return "GOLD";if(name.equals("NETHER_QUARTZ_ORE"))return "QUARTZ";
+        if(!name.endsWith("_ORE"))return null;String target=name.substring(0,name.length()-4);return MINE_TARGETS.contains(target)?target:null;
+    }
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void place(BlockPlaceEvent e){
         if(ore(e.getBlockPlaced().getType())!=null)try{store.markQuestBlock(position(e.getBlockPlaced()));}catch(Exception error){failure.accept(error);}
     }
@@ -234,6 +252,15 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         if(!enabled){sender.sendMessage(NookUi.message("NookQuests","Weekly quests are not open yet."));return true;}
         if(!healthy.getAsBoolean()){sender.sendMessage(NookUi.problem("NookQuests","Quests are paused; please contact staff."));return true;}
         try{
+            if(args.length>=1 && args[0].equalsIgnoreCase("next")){
+                if(!sender.hasPermission("nookcore.admin"))throw new IllegalArgumentException("Only admins can preview next week's quests.");
+                if(args.length!=1)throw new IllegalArgumentException("/nookadmin quests next");
+                var next=QuestPlan.week(QuestPlan.week(clock.getAsLong()).nextReset());
+                sender.sendMessage(NookUi.heading("Quests · Next week"));
+                sender.sendMessage(NookUi.text("Starts "+next.id()+" at 02:00 UK · "+automatic.description()));
+                for(var goal:selectionFor(next.id()))sender.sendMessage(NookUi.text(goal.title()+" · "+Money.format(goal.reward())));
+                sender.sendMessage(NookUi.text("Preview only. Current progress and the saved rotation are unchanged."));return true;
+            }
             if(args.length>=1 && args[0].equalsIgnoreCase("activate-config")){
                 if(!sender.hasPermission("nookcore.admin"))throw new IllegalArgumentException("Only admins can activate configured quests.");
                 long now=clock.getAsLong();rotation(now);
@@ -285,7 +312,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         return true;
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args){
-        if(args.length==1)return NookUi.complete(args[0],sender.hasPermission("nookcore.admin")?List.of("list","help","inspect","contribute","contributions","collect","activate-config"):List.of("list","help","contribute"));
+        if(args.length==1)return NookUi.complete(args[0],sender.hasPermission("nookcore.admin")?List.of("list","help","inspect","next","contribute","contributions","collect","activate-config"):List.of("list","help","contribute"));
         if(args.length==2 && args[0].equalsIgnoreCase("contribute")){
             if(!enabled || !healthy.getAsBoolean())return List.of();
             try{rotation(clock.getAsLong());return NookUi.complete(args[1],goals.stream().filter(g->g.kind().equals("DEPOSIT")).map(g->g.target().toLowerCase(Locale.ROOT)).toList());}catch(Exception e){failure.accept(e);return List.of();}

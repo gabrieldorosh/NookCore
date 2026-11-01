@@ -1,0 +1,312 @@
+# Curated automatic weekly quests. Existing saved weeks are never replaced.
+# Six regular goals pay 15 Nooks each; one challenge pays 30.
+# Selection avoids the previous week, with at most two contribution goals.
+enabled: true
+starts: '2026-11-04'
+regular:
+  mine-iron:
+    title: Mine 48 natural iron ore
+    kind: MINE
+    target: IRON
+    amount: 48
+  mine-diamond:
+    title: Mine 8 natural diamond ore
+    kind: MINE
+    target: DIAMOND
+    amount: 8
+  mine-copper:
+    title: Mine 96 natural copper ore
+    kind: MINE
+    target: COPPER
+    amount: 96
+  mine-gold:
+    title: Mine 32 natural gold ore
+    kind: MINE
+    target: GOLD
+    amount: 32
+  mine-redstone:
+    title: Mine 48 natural redstone ore
+    kind: MINE
+    target: REDSTONE
+    amount: 48
+  mine-lapis:
+    title: Mine 24 natural lapis ore
+    kind: MINE
+    target: LAPIS
+    amount: 24
+  mine-emerald:
+    title: Mine 4 natural emerald ore
+    kind: MINE
+    target: EMERALD
+    amount: 4
+  mine-quartz:
+    title: Mine 96 natural nether quartz ore
+    kind: MINE
+    target: QUARTZ
+    amount: 96
+  mine-ancient-debris:
+    title: Mine 4 natural ancient debris
+    kind: MINE
+    target: ANCIENT_DEBRIS
+    amount: 4
+  defeat-drowned:
+    title: Defeat 16 drowned
+    kind: KILL
+    target: DROWNED
+    amount: 16
+  defeat-witch:
+    title: Defeat 8 witches
+    kind: KILL
+    target: WITCH
+    amount: 8
+  defeat-phantom:
+    title: Defeat 6 phantoms
+    kind: KILL
+    target: PHANTOM
+    amount: 6
+  defeat-pillager:
+    title: Defeat 12 pillagers
+    kind: KILL
+    target: PILLAGER
+    amount: 12
+  defeat-shulker:
+    title: Defeat 8 shulkers
+    kind: KILL
+    target: SHULKER
+    amount: 8
+  defeat-blaze:
+    title: Defeat 12 blazes
+    kind: KILL
+    target: BLAZE
+    amount: 12
+  defeat-ghast:
+    title: Defeat 4 ghasts
+    kind: KILL
+    target: GHAST
+    amount: 4
+  defeat-magma-cube:
+    title: Defeat 12 magma cubes
+    kind: KILL
+    target: MAGMA_CUBE
+    amount: 12
+  defeat-wither-skeleton:
+    title: Defeat 8 wither skeletons
+    kind: KILL
+    target: WITHER_SKELETON
+    amount: 8
+  defeat-husk:
+    title: Defeat 12 husks
+    kind: KILL
+    target: HUSK
+    amount: 12
+  defeat-stray:
+    title: Defeat 12 strays
+    kind: KILL
+    target: STRAY
+    amount: 12
+  defeat-breeze:
+    title: Defeat 4 breezes
+    kind: KILL
+    target: BREEZE
+    amount: 4
+  defeat-piglin-brute:
+    title: Defeat 4 piglin brutes
+    kind: KILL
+    target: PIGLIN_BRUTE
+    amount: 4
+  contribute-rail:
+    title: Contribute 128 rails
+    kind: DEPOSIT
+    target: RAIL
+    amount: 128
+  contribute-oak-log:
+    title: Contribute 256 oak logs
+    kind: DEPOSIT
+    target: OAK_LOG
+    amount: 256
+  contribute-spruce-log:
+    title: Contribute 256 spruce logs
+    kind: DEPOSIT
+    target: SPRUCE_LOG
+    amount: 256
+  contribute-birch-log:
+    title: Contribute 256 birch logs
+    kind: DEPOSIT
+    target: BIRCH_LOG
+    amount: 256
+  contribute-stone:
+    title: Contribute 256 stone
+    kind: DEPOSIT
+    target: STONE
+    amount: 256
+  contribute-tuff:
+    title: Contribute 256 tuff
+    kind: DEPOSIT
+    target: TUFF
+    amount: 256
+  contribute-gravel:
+    title: Contribute 256 gravel
+    kind: DEPOSIT
+    target: GRAVEL
+    amount: 256
+  contribute-stone-bricks:
+    title: Contribute 128 stone bricks
+    kind: DEPOSIT
+    target: STONE_BRICKS
+    amount: 128
+  contribute-bricks:
+    title: Contribute 64 bricks
+    kind: DEPOSIT
+    target: BRICKS
+    amount: 64
+  contribute-glass:
+    title: Contribute 128 glass
+    kind: DEPOSIT
+    target: GLASS
+    amount: 128
+  contribute-carved-pumpkin:
+    title: Contribute 64 carved pumpkins
+    kind: DEPOSIT
+    target: CARVED_PUMPKIN
+    amount: 64
+  contribute-honey-bottle:
+    title: Contribute 16 honey bottles
+    kind: DEPOSIT
+    target: HONEY_BOTTLE
+    amount: 16
+  contribute-end-rod:
+    title: Contribute 16 end rods
+    kind: DEPOSIT
+    target: END_ROD
+    amount: 16
+  contribute-chorus-flower:
+    title: Contribute 16 chorus flowers
+    kind: DEPOSIT
+    target: CHORUS_FLOWER
+    amount: 16
+  contribute-glowstone:
+    title: Contribute 64 glowstone
+    kind: DEPOSIT
+    target: GLOWSTONE
+    amount: 64
+  contribute-paper:
+    title: Contribute 128 paper
+    kind: DEPOSIT
+    target: PAPER
+    amount: 128
+  contribute-white-wool:
+    title: Contribute 128 white wool
+    kind: DEPOSIT
+    target: WHITE_WOOL
+    amount: 128
+  contribute-bamboo:
+    title: Contribute 256 bamboo
+    kind: DEPOSIT
+    target: BAMBOO
+    amount: 256
+  contribute-leather:
+    title: Contribute 32 leather
+    kind: DEPOSIT
+    target: LEATHER
+    amount: 32
+  contribute-book:
+    title: Contribute 32 books
+    kind: DEPOSIT
+    target: BOOK
+    amount: 32
+  contribute-quartz-block:
+    title: Contribute 64 quartz blocks
+    kind: DEPOSIT
+    target: QUARTZ_BLOCK
+    amount: 64
+  mature-crops:
+    title: Harvest 128 mature crops
+    kind: HARVEST
+    target: MATURE_CROPS
+    amount: 128
+  local-trade:
+    title: Complete 16 villager trades
+    kind: TRADE
+    target: VILLAGER
+    amount: 16
+  biome-exploration:
+    title: Visit 8 different biomes
+    kind: BIOME
+    target: ANY
+    amount: 8
+challenges:
+  challenge-mine-diamond:
+    title: Mine 24 natural diamond ore
+    kind: MINE
+    target: DIAMOND
+    amount: 24
+  challenge-mine-ancient-debris:
+    title: Mine 12 natural ancient debris
+    kind: MINE
+    target: ANCIENT_DEBRIS
+    amount: 12
+  challenge-mine-iron:
+    title: Mine 192 natural iron ore
+    kind: MINE
+    target: IRON
+    amount: 192
+  challenge-mine-quartz:
+    title: Mine 256 natural nether quartz ore
+    kind: MINE
+    target: QUARTZ
+    amount: 256
+  challenge-defeat-witch:
+    title: Defeat 24 witches
+    kind: KILL
+    target: WITCH
+    amount: 24
+  challenge-defeat-drowned:
+    title: Defeat 48 drowned
+    kind: KILL
+    target: DROWNED
+    amount: 48
+  challenge-defeat-blaze:
+    title: Defeat 48 blazes
+    kind: KILL
+    target: BLAZE
+    amount: 48
+  challenge-defeat-ghast:
+    title: Defeat 12 ghasts
+    kind: KILL
+    target: GHAST
+    amount: 12
+  challenge-defeat-shulker:
+    title: Defeat 24 shulkers
+    kind: KILL
+    target: SHULKER
+    amount: 24
+  challenge-contribute-gravel:
+    title: Contribute 1024 gravel
+    kind: DEPOSIT
+    target: GRAVEL
+    amount: 1024
+  challenge-contribute-stone:
+    title: Contribute 1024 stone
+    kind: DEPOSIT
+    target: STONE
+    amount: 1024
+  challenge-contribute-tuff:
+    title: Contribute 1024 tuff
+    kind: DEPOSIT
+    target: TUFF
+    amount: 1024
+  challenge-contribute-book:
+    title: Contribute 128 books
+    kind: DEPOSIT
+    target: BOOK
+    amount: 128
+  challenge-harvest:
+    title: Harvest 512 mature crops
+    kind: HARVEST
+    target: MATURE_CROPS
+    amount: 512
+  challenge-trade:
+    title: Complete 64 villager trades
+    kind: TRADE
+    target: VILLAGER
+    amount: 64

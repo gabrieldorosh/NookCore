@@ -137,6 +137,17 @@ public final class NookStore implements AutoCloseable {
         });
     }
 
+    public synchronized Optional<List<QuestPlan.Goal>> savedQuestRotation(String week)throws SQLException {
+        try(var p=db.prepareStatement("SELECT definitions FROM quest_rotations WHERE week=?")){
+            bind(p,week);try(var rows=p.executeQuery()){return rows.next()?Optional.of(QuestPlan.decode(rows.getString(1))):Optional.empty();}
+        }
+    }
+    public synchronized List<QuestPlan.Goal> previousQuestRotation(String week)throws SQLException {
+        try(var p=db.prepareStatement("SELECT definitions FROM quest_rotations WHERE week<? ORDER BY week DESC LIMIT 1")){
+            bind(p,week);try(var rows=p.executeQuery()){return rows.next()?QuestPlan.decode(rows.getString(1)):List.of();}
+        }
+    }
+
     public List<QuestPlan.Goal> questRotation(String week,List<QuestPlan.Goal> proposed)throws SQLException {
         if(proposed.isEmpty() || proposed.stream().map(QuestPlan.Goal::id).distinct().count()!=proposed.size())throw new IllegalArgumentException("Quest IDs must be unique and rotation nonempty.");
         return tx(()->{
