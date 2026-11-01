@@ -183,7 +183,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     }
     private void remove(String role){var npc=npcs.remove(role);if(npc!=null){npc.removeForAll();FancyNpcsPlugin.get().getNpcManager().removeNpc(npc);}}
     private boolean near(Player p,String role){var loc=locations.get(role);return enabled() && healthy.getAsBoolean() && p.isOnline() && !p.isDead() && !StaffMode.active(p.getUniqueId()) && p.getGameMode()==GameMode.SURVIVAL && loc!=null && p.getWorld().equals(loc.getWorld()) && p.getLocation().distanceSquared(loc)<=36;}
-    private String directions(String role){var loc=locations.get(role);return loc==null?"Niko is being set up at spawn. Ask an admin for help with this week's quests.":"Speak to Niko at spawn: "+loc.getBlockX()+", "+loc.getBlockY()+", "+loc.getBlockZ()+" ("+loc.getWorld().getName()+").";}
+    private String directions(String role){return locations.get(role)==null?"Niko's getting ready at spawn. Ask a member of staff for a hand with your quests!":"Speak to Niko at spawn to get your quests!";}
     private static ItemStack icon(Material type,String title,String...lore){
         var item=new ItemStack(type);var meta=item.getItemMeta();meta.displayName(NookUi.text(title).decoration(TextDecoration.ITALIC,false));meta.lore(Arrays.stream(lore).map(s->NookUi.text(s).decoration(TextDecoration.ITALIC,false)).toList());item.setItemMeta(meta);return item;
     }

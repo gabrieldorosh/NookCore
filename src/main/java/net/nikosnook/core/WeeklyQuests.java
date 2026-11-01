@@ -15,7 +15,7 @@ import java.util.function.*;
 import net.kyori.adventure.text.Component;
 
 final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
-    private Supplier<String> nikoDirections=()->"Speak to Niko at spawn to start this week's quests.";
+    private Supplier<String> nikoDirections=()->"Speak to Niko at spawn to get your quests!";
     void nikoDirections(Supplier<String> directions){nikoDirections=directions;}
     String nikoWeek()throws Exception{if(!enabled || !healthy.getAsBoolean())throw new IllegalArgumentException("Quests are unavailable.");rotation(clock.getAsLong());return week.id();}
     List<QuestPlan.Goal> nikoGoals()throws Exception{nikoWeek();return goals;}
