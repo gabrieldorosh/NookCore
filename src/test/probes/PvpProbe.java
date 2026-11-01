@@ -41,7 +41,7 @@ public class PvpProbe extends JavaPlugin {
   denied=hit(a.player,b.player);call(pvp,"damage",denied);check(denied.isCancelled()&&!enabled(b),"one player opting in does not enable damage to the other");
   call(pvp,"onCommand",b.player,core.getCommand("pvp"),"pvp",new String[]{"on"});var allowed=hit(a.player,b.player);call(pvp,"damage",allowed);check(!allowed.isCancelled(),"direct combat allowed only after both opt in");
   var protectedHit=hit(a.player,b.player);protectedHit.setCancelled(true);call(pvp,"damage",protectedHit);check(protectedHit.isCancelled(),"PvP consent never uncancels another protection");
-  call(pvp,"combat",allowed);call(pvp,"onCommand",a.player,core.getCommand("pvp"),"pvp",new String[]{"off"});check(enabled(a)&&a.messages.toString().contains("after combat"),"successful damage prevents immediate PvP disable");
+  call(pvp,"combat",allowed);call(pvp,"onCommand",a.player,core.getCommand("pvp"),"pvp",new String[]{"off"});check(enabled(a)&&a.messages.toString().contains("Still in combat!"),"successful damage prevents immediate PvP disable");
   call(pvp,"onCommand",b.player,core.getCommand("pvp"),"pvp",new String[]{"off"});check(enabled(b),"victim receives the same combat lock");
   set(b,false);
   Arrow arrow=mock(Arrow.class,n->n.equals("getShooter")?a.player:null);var arrowHit=hit(arrow,b.player);call(pvp,"damage",arrowHit);check(arrowHit.isCancelled(),"arrows use their shooter's opt-in preference");

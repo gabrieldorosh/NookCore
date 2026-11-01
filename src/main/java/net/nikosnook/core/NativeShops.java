@@ -61,7 +61,7 @@ final class NativeShops implements Listener {
             side.getPersistentDataContainer().set(anchor,PersistentDataType.STRING,offer.id().toString());
             if(!side.update())throw new IllegalStateException("Could not save the shop container marker.");
         }
-        player.sendMessage(NookUi.message("NookShops","Shop created! Open it to add stock."));open(player,offer,true);
+        player.sendMessage(NookUi.message("NookShops","Shop created! Open it to add to the stock."));open(player,offer,true);
     }
     private NativeShop.Offer at(Block block)throws Exception {
         Block clicked=block;
@@ -266,7 +266,7 @@ final class NativeShops implements Listener {
                         offer=nearby(p,offer.id());openStock(p,offer,1);return;
                     }else if(slot==22 && !offer.closed()){
                         nearby(p,offer.id());
-                        if(offer.stock()>0){p.sendMessage(NookUi.problem("NookShops","Cannot close shop until "+offer.stock()+" "+name(offer.item())+" is collected from stock."));openClosing(p,offer);return;}
+                        if(offer.stock()>0){p.sendMessage(NookUi.problem("NookShops","Can't close the shop! "+offer.stock()+" "+name(offer.item())+" still in stock."));openClosing(p,offer);return;}
                         if(store.nativePaymentBalance(p.getUniqueId(),offer.id())>0){p.sendMessage(NookUi.problem("NookShops","Collect this shop's item payments first."));open(p,offer,true);return;}
                         store.closeNativeOffer(offer.id(),p.getUniqueId());clearMarker(offer);p.sendMessage(NookUi.message("NookShops","Shop closed."));return;
                     }

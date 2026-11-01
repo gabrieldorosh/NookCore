@@ -6,7 +6,7 @@ advancement-rewards-enabled: true
 vault-enabled: true
 chat:
   enabled: true
-  # TAB title/name only. Paper activity timer; no kicks or public messages.
+  # TAB display and public AFK notices. Paper activity timer; no idle kicks.
   afk:
     enabled: true
     after-seconds: 300
@@ -20,10 +20,10 @@ chat:
     topics:
       lag:
         phrases: [lag, lagging, laggy]
-        reply: "Seeing lag? TAB shows the server TPS. When asking staff for help, describe whether you see low FPS, freezing, or rubber-banding, and when it started. TPS alone does not explain every issue."
+        reply: "Lagging? Check TPS in TAB and let staff know if it is below 20! If not, let us know what kind of lag you are experiencing!"
       staff:
         phrases: [admin, admins, staff, helper, helpers]
-        reply: "Need staff help? Describe the issue in chat, or contact an admin privately on the server Discord for sensitive reports. This tip does not notify or summon staff."
+        reply: "Need help? Ping @helper or create a private ticket in the discord!"
   pronoun-options: [he/him, she/her, they/them, he/they, she/they, they/he, they/she, it/its, any, ask]
   # Leave blank until the real rank pack is prepared. Must match its delivered pack UUID.
   rank-images:

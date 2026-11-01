@@ -1349,7 +1349,7 @@ public final class NookStore implements AutoCloseable {
             return null;
         });
     }
-    static String vendorStockMessage(int stock){return stock==0?"Sold out.":"Only "+stock+" left in stock.";}
+    static String vendorStockMessage(int stock,boolean beforeRestock){return stock==0?"completely sold out! come back "+(beforeRestock?"on Friday":"next week")+" for more! </3":"Only "+stock+" left in stock.";}
     void expandVendorVisit(VendorOffer extra)throws SQLException {
         tx(()->{
             var current=vendorOffers(extra.visit());
@@ -1387,15 +1387,16 @@ public final class NookStore implements AutoCloseable {
     UUID beginVendorPurchase(UUID buyer,String visit,String design,int quantity,byte[] before,byte[] after,long now)throws SQLException {
         if(quantity<1 || quantity>64 || before.length!=32 || after.length!=32)throw new IllegalArgumentException("Invalid purchase plan.");
         return tx(()->{
-            try(var p=db.prepareStatement("SELECT 1 FROM pip_visits WHERE id=? AND arrival<=? AND departure>?")){
-                bind(p,visit,now,now);try(var r=p.executeQuery()){if(!r.next())throw new IllegalArgumentException("Pip has left. Come back for her next visit.");}
+            long restock;
+            try(var p=db.prepareStatement("SELECT restock FROM pip_visits WHERE id=? AND arrival<=? AND departure>?")){
+                bind(p,visit,now,now);try(var r=p.executeQuery()){if(!r.next())throw new IllegalArgumentException("Pip has left. Come back for her next visit.");restock=r.getLong(1);}
             }
             restockVendorInternal(visit,now);
             try(var p=db.prepareStatement("SELECT 1 FROM pip_receipts WHERE buyer=? AND state='REVIEW'")){
                 bind(p,buyer);try(var r=p.executeQuery()){if(r.next())throw new IllegalArgumentException("An earlier purchase needs staff review before you buy again.");}
             }
             var offer=vendorOffers(visit).stream().filter(o->o.design().equals(design)).findFirst().orElseThrow(()->new IllegalArgumentException("That product is no longer available."));
-            if(quantity>offer.stock())throw new IllegalArgumentException(vendorStockMessage(offer.stock()));
+            if(quantity>offer.stock())throw new IllegalArgumentException(vendorStockMessage(offer.stock(),now<restock));
             if(offer.cap()>0 && vendorBought(buyer,visit,design)+quantity>offer.cap())throw new IllegalArgumentException("That exceeds your allowance for this visit.");
             long total=Math.multiplyExact(offer.price(),quantity);UUID id=UUID.randomUUID();
             mutate(buyer,-total,"vendor",id.toString(),now);

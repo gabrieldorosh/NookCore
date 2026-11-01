@@ -190,17 +190,18 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     private Menu menu(Player p,String kind,String rotation,String design,int quantity,boolean preview,String title){var m=new Menu(p.getUniqueId(),kind,rotation,design,quantity,preview);m.inventory=Bukkit.createInventory(m,27,Component.text(title));return m;}
     void openNiko(Player p)throws Exception {
         if(!near(p,"niko"))throw new IllegalArgumentException(directions("niko"));
-        var week=quests.nikoWeek();boolean accepted=store.questAccepted(p.getUniqueId(),week);var m=menu(p,"niko",week,"",0,false,accepted?"Niko · Quests accepted":"Niko · Accept your quests");int slot=10;
+        var week=quests.nikoWeek();boolean accepted=store.questAccepted(p.getUniqueId(),week);var m=menu(p,"niko",week,"",0,false,"niko's weekly quests");int slot=10;
         for(var goal:quests.nikoGoals())m.inventory.setItem(slot++,icon(goal.reward()==3000?Material.NETHER_STAR:Material.BOOK,goal.title(),store.questProgress(p.getUniqueId(),week,goal.id())+" / "+goal.amount(),"Reward: "+Money.format(goal.reward())));
         m.inventory.setItem(4,icon(accepted?Material.LIME_DYE:Material.YELLOW_DYE,accepted?"Quests accepted":"Quests not accepted",accepted?"Your weekly quests are active.":"Accept below to start this week's quests.",accepted?"Use /quests to check your progress anywhere.":"All six quests and the challenge."));
-        m.inventory.setItem(22,icon(accepted?Material.MAP:Material.LIME_DYE,accepted?"View my progress":"Accept this week's quests",accepted?"Use /quests anywhere.":"All six quests and the challenge.","Rewards arrive automatically."));p.openInventory(m.inventory);
-        p.sendMessage(NookUi.message("Niko",store.nikoIntroWeek(week)?"Hi! Come and speak to me next week for new quests!":accepted?"Your quests are already active for this week. You can check your progress here or with /quests.":"Ready for this week's quests? Click Accept this week's quests below to get started."));
+        m.inventory.setItem(22,icon(accepted?Material.MAP:Material.LIME_DYE,accepted?"View my progress":"accept this week's quests",accepted?"Use /quests anywhere.":"All six quests and the challenge.","Rewards arrive automatically."));p.openInventory(m.inventory);
+        p.sendMessage(NookUi.message("Niko",store.nikoIntroWeek(week)?"Hi! Come and speak to me next week for new quests!":accepted?"you've already activated this week's quests! check your progress here or with /quests!":"i've got some more quests ready for you! pick them up below! :D"));
     }
     void openPip(Player p,boolean preview)throws Exception {
         if(!preview && !near(p,"pip"))throw new IllegalArgumentException("Visit Pip at her stall to shop.");
         if(!enabled())throw new IllegalArgumentException("NPC testing is disabled in spawn-npcs.yml.");
         var v=visit(System.currentTimeMillis());
-        if(!preview && (!v.open(System.currentTimeMillis()) || vendorPaused))throw new IllegalArgumentException("Pip is away. Next arrival: "+NookUi.date(v.nextArrival()));
+        if(!preview && vendorPaused)throw new IllegalArgumentException("pip needs a hand from staff before she can sell again!");
+        if(!preview && !v.open(System.currentTimeMillis()))throw new IllegalArgumentException("pip's off collecting more stock! she'll be back on "+NookUi.date(v.nextArrival())+".");
         if(!v.open(System.currentTimeMillis()))throw new IllegalArgumentException("Pip is away. Preview her catalogue during a visit, or use the isolated test-mode.");
         var m=menu(p,"pip",v.id(),"",0,preview,preview?"Pip · Catalogue preview":"Pip's Pop-up");int slot=10;
         for(var o:preview?store.vendorOffers(v.id()):offers(v,System.currentTimeMillis())){
@@ -209,23 +210,23 @@ final class SpawnNpcs implements Listener,AutoCloseable {
             lore.add(NookUi.text(o.stock()==0?"Sold out":"Available stock: "+o.stock()));
             meta.displayName(NookUi.text(o.name()+" · "+(o.stock()==0?"Sold out":o.stock()+" in stock")).decoration(TextDecoration.ITALIC,false));
             if(o.cap()>0)lore.add(NookUi.text("Your remaining allowance: "+Math.max(0,o.cap()-store.vendorBought(p.getUniqueId(),v.id(),o.design()))));
-            lore.add(NookUi.text(preview?"Preview only":o.stock()==0?"Check back after the next restock":"Click to choose a quantity"));meta.lore(lore);item.setItemMeta(meta);m.inventory.setItem(slot++,item);
+            lore.add(NookUi.text(preview?"Preview only":o.stock()==0?NookStore.vendorStockMessage(0,System.currentTimeMillis()<v.restock()):"Click to choose a quantity"));meta.lore(lore);item.setItemMeta(meta);m.inventory.setItem(slot++,item);
         }
         m.inventory.setItem(22,icon(Material.CLOCK,"Pip's visit",(System.currentTimeMillis()<v.restock()?"Restock: "+NookUi.date(v.restock()):"This visit's final stock is out."),"Leaves: "+NookUi.date(v.departure()),config.getBoolean("test-mode")?"LOCAL TEST · trial prices and stock":"Prices stay fixed for this visit."));p.openInventory(m.inventory);
     }
     private void cataloguePreview(Player p){
         var m=new Menu(p.getUniqueId(),"catalogue","","",0,true);
-        m.inventory=Bukkit.createInventory(m,54,Component.text("Pip � All test designs"));int slot=0;
+        m.inventory=Bukkit.createInventory(m,54,Component.text("pip's designs!"));int slot=0;
         for(var d:catalogue.stream().limit(54).toList()){
             var item=PipHeads.make(d);var meta=item.getItemMeta();var lore=new ArrayList<Component>(meta.lore());
-            lore.add(NookUi.text("Trial price: "+Money.format(d.price())));lore.add(NookUi.text("Preview only � "+d.id()));meta.lore(lore);item.setItemMeta(meta);m.inventory.setItem(slot++,item);
+            lore.add(NookUi.text("Trial price: "+Money.format(d.price())));lore.add(NookUi.text("Preview only · "+d.id()));meta.lore(lore);item.setItemMeta(meta);m.inventory.setItem(slot++,item);
         }
         p.openInventory(m.inventory);
     }
     private void checkout(Player p,Menu from,String design,int quantity)throws Exception {
         var o=store.vendorOffers(from.rotation).stream().filter(x->x.design().equals(design)).findFirst().orElseThrow();
         var m=menu(p,"checkout",from.rotation,design,quantity,false,"Pip · Confirm purchase");
-        if(o.stock()==0)throw new IllegalArgumentException(NookStore.vendorStockMessage(0));
+        if(o.stock()==0)throw new IllegalArgumentException(NookStore.vendorStockMessage(0,System.currentTimeMillis()<visit(System.currentTimeMillis()).restock()));
         var head=ItemStack.deserializeBytes(o.item());head.setAmount(quantity);
         var meta=head.getItemMeta();meta.displayName(NookUi.text(o.name()+" × "+quantity).decoration(TextDecoration.ITALIC,false));
         var lore=new ArrayList<Component>(meta.lore()==null?List.of():meta.lore());lore.add(NookUi.text("Available stock: "+o.stock()));meta.lore(lore);head.setItemMeta(meta);
@@ -242,7 +243,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         UUID receipt=store.beginVendorPurchase(p.getUniqueId(),v.id(),m.design,m.quantity,plan.beforeHash(),plan.afterHash(),now);
         try{inv.apply(plan.after());inv.persist(plan.after(),receipt);store.finishVendorPurchase(receipt);}
         catch(Exception ex){vendorPaused=true;plugin.getLogger().log(Level.SEVERE,"Pip purchase "+receipt+" needs review. Do not automatically replay or refund.",ex);throw new IllegalStateException("Purchase needs staff review. Do not retry; receipt "+receipt,ex);}
-        p.sendMessage(NookUi.message("Pip","Thank you! "+m.quantity+" × "+offer.name()+" for "+Money.format(offer.price()*m.quantity)+"."));openPip(p,false);
+        p.sendMessage(NookUi.message("Pip","enjoy! thanks for stopping by! <3"));openPip(p,false);
     }
     @EventHandler(priority=EventPriority.HIGHEST) public void click(InventoryClickEvent e){
         if(!(e.getView().getTopInventory().getHolder() instanceof Menu m))return;e.setCancelled(true);

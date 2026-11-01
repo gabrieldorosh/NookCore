@@ -29,7 +29,7 @@ final class PvpSettings {
     }
     void set(UUID player,boolean value)throws IOException{
         if(enabled(player)==value)return;
-        long seconds=secondsRemaining(player);if(seconds>0)throw new IllegalArgumentException("Wait "+seconds+" seconds after combat before changing PvP.");
+        long seconds=secondsRemaining(player);if(seconds>0)throw new IllegalArgumentException("Still in combat! Wait "+seconds+"s before disabling PvP!");
         Set<UUID> next=new HashSet<>(enabled);if(value)next.add(player);else next.remove(player);
         Path parent=file.toAbsolutePath().getParent();Files.createDirectories(parent);Path temp=Files.createTempFile(parent,"pvp-",".tmp");
         try{

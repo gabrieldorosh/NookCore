@@ -233,7 +233,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         }catch(Exception error){
             player.getInventory().setStorageContents(before);persistContributionInventory(player);store.cancelQuestDeposit(receipt);throw error;
         }
-        player.sendMessage(NookUi.message("NookQuests","Contributed "+removed+" "+goal.target().toLowerCase(Locale.ROOT).replace('_',' ')+". These items were consumed and recorded for the community."));
+        player.sendMessage(NookUi.message("NookQuests",removed+" "+goal.target().toLowerCase(Locale.ROOT).replace('_',' ')+" contributed! Thanks for adding to the community supplies!"));
         for(var update:updates){player.sendMessage(QuestUi.progress(update));if(update.paid())celebrate(player,update.goal().reward()==3000);}
     }
     @EventHandler public void death(EntityDeathEvent event){
@@ -306,7 +306,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
             for(var g:goals)if(g.reward()!=3000)sender.sendMessage(QuestUi.row(g,store.questProgress(player,week.id(),g.id())));
             for(var g:goals)if(g.reward()==3000)sender.sendMessage(QuestUi.row(g,store.questProgress(player,week.id(),g.id())));
             if(goals.stream().anyMatch(g->g.kind().equals("DEPOSIT")))sender.sendMessage(NookUi.command("/quests contribute").append(NookUi.text(" · donated materials stay with the community; no weekly refund")));
-            sender.sendMessage(Component.text("Resets "+NookUi.date(week.nextReset()),NookUi.MUTED));
+            sender.sendMessage(Component.text("Quests refreshing on: "+NookUi.date(week.nextReset()),NookUi.MUTED));
         }catch(IllegalArgumentException e){sender.sendMessage(NookUi.problem("NookQuests",e.getMessage()));}
         catch(Exception e){failure.accept(e);sender.sendMessage(NookUi.problem("NookQuests","Could not read quests; please contact staff."));}
         return true;

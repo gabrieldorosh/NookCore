@@ -32,7 +32,7 @@ public class ChatQolProbe extends JavaPlugin {
         var late=event(player(UUID.randomUUID(),received,true),"admin");Bukkit.getPluginManager().callEvent(late);late.setCancelled(true);
         Bukkit.getPluginManager().callEvent(event(player(UUID.randomUUID(),received,false),"admin"));
         Bukkit.getScheduler().runTaskLater(this,()->{try{
-            getLogger().info("Received="+received+" rules="+field(field(field(chat,"help"),"replies"),"rules"));check(received.size()==1 && received.getFirst().contains("TAB shows"),"exactly one private reply; cancelled, later-cancelled and disconnected senders skipped");check(other.isEmpty(),"observer gets no help reply");check(!first.isCancelled() && PlainTextComponentSerializer.plainText().serialize(first.message()).equals("LAG!") && first.viewers().size()==2,"original public chat and audience preserved");
+            getLogger().info("Received="+received+" rules="+field(field(field(chat,"help"),"replies"),"rules"));check(received.size()==1 && received.getFirst().contains("TPS"),"exactly one private reply; cancelled, later-cancelled and disconnected senders skipped");check(other.isEmpty(),"observer gets no help reply");check(!first.isCancelled() && PlainTextComponentSerializer.plainText().serialize(first.message()).equals("LAG!") && first.viewers().size()==2,"original public chat and audience preserved");
             Bukkit.getPluginManager().callEvent(event(sender,"laggy admin"));
             Bukkit.getScheduler().runTaskLater(this,()->{try{check(received.size()==1,"repeated message does not spam private tips");getLogger().info("CHAT_QOL_PASS checks="+checks);}catch(Throwable e){fail(e);}finally{Bukkit.shutdown();}},2);
         }catch(Throwable e){fail(e);Bukkit.shutdown();}},2);

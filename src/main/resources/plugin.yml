@@ -2,13 +2,13 @@ name: NookCore
 version: 0.1.0-SNAPSHOT
 main: net.nikosnook.core.NookCorePlugin
 api-version: '26.2'
-description: Niko's Nook season-two economy foundation
+description: quests, shops, and small comforts!
 author: NikosNook
 softdepend: [FancyNpcs, DiscordSRV, Vault, WorldGuard, WorldEdit, PlaceholderAPI]
 loadbefore: [ChestShop]
 commands:
   pvp:
-    description: Toggle consensual player combat
+    description: toggle pvp.
     usage: /pvp [on|off|status]
   staff:
     description: Message online helpers and admins privately

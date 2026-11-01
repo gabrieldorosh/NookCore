@@ -86,8 +86,10 @@ final class NookChat implements Listener, CommandExecutor, TabCompleter {
         catch(java.sql.SQLException e){if(!balanceWarning){plugin.getLogger().warning("TAB balance refresh failed; keeping the last displayed balance.");balanceWarning=true;}}
         boolean away=AfkDisplay.idle(afkEnabled,afkSeconds,player.getIdleDuration()), staff=StaffMode.active(id);
         snapshots.put(id,new Snapshot(player.getName(),rank,preferences.get(id),player.getStatistic(org.bukkit.Statistic.DEATHS),cents,away,staff));
-        if(previous!=null && !previous.staff() && !staff && previous.afk()!=away && plugin.getConfig().getBoolean("chat.afk.announcements",true))
-            Bukkit.broadcast(NookUi.message("Nook",player.getName()+(away?" is now AFK.":" is back.")));
+        if(plugin.getConfig().getBoolean("chat.afk.announcements",true)){
+            String notice=AfkNotices.message(player.getName(),previous==null?null:new AfkNotices.State(previous.afk(),previous.staff()),new AfkNotices.State(away,staff));
+            if(notice!=null){Bukkit.broadcast(NookUi.message("Nook",notice));AfkNotices.discord(plugin,notice);}
+        }
     }
     @EventHandler(priority=EventPriority.HIGH)
     public void death(org.bukkit.event.entity.PlayerDeathEvent event){

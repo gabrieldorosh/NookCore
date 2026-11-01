@@ -210,8 +210,7 @@ final class GroundedTravel implements Listener {
         event.setCancelled(true);event.setShouldConsume(false);
         if(tick-lastNotice.getOrDefault(player.getUniqueId(),-100L)>=40){
             lastNotice.put(player.getUniqueId(),tick);long remaining=state.remainingMillis(now);
-            String seconds=java.math.BigDecimal.valueOf(rocketCooldownMillis,3).stripTrailingZeros().toPlainString();
-            String message=remaining<0?"Your next rocket will be ready "+seconds+" seconds after you land. Water and boats count too!":"Your next rocket will be ready in "+((remaining+999)/1000)+"s. You can keep moving!";
+            String message=remaining<0?"rocketing too quickly! wait three seconds after landing before setting off again.":"your rocket will be ready in "+((remaining+999)/1000)+"s";
             player.sendMessage(NookUi.message("NookTravel",message));
         }
     }

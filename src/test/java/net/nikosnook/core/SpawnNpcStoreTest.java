@@ -20,7 +20,14 @@ class SpawnNpcStoreTest {
     UUID purchase(int quantity,long time)throws Exception{return store.beginVendorPurchase(player,visit.id(),"head0",quantity,new byte[32],new byte[32],time);}
     @Test void stockErrorsDistinguishSoldOutFromAvailable()throws Exception{
         open();assertEquals("Only 2 left in stock.",assertThrows(IllegalArgumentException.class,()->purchase(3,now)).getMessage());
-        store.finishVendorPurchase(purchase(2,now));assertEquals("Sold out.",assertThrows(IllegalArgumentException.class,()->purchase(1,now)).getMessage());
+        store.finishVendorPurchase(purchase(2,now));assertEquals("completely sold out! come back on Friday for more! </3",assertThrows(IllegalArgumentException.class,()->purchase(1,now)).getMessage());
+    }
+    @Test void soldOutNoticeChangesAfterTheActualFinalRestock()throws Exception{
+        open();store.finishVendorPurchase(purchase(2,now));
+        assertTrue(assertThrows(IllegalArgumentException.class,()->purchase(1,visit.restock()-1)).getMessage().contains("on Friday"));
+        store.finishVendorPurchase(purchase(2,visit.restock()));
+        assertTrue(assertThrows(IllegalArgumentException.class,()->purchase(1,visit.restock())).getMessage().contains("next week"));
+        assertEquals(4400,store.account(player).orElseThrow().cents());assertEquals(0,store.vendorOffers(visit.id()).getFirst().stock());
     }
     @Test void seventhDesignPreservesPurchasesAndAccountsForPriorRestock()throws Exception{
         open();store.finishVendorPurchase(purchase(1,now));store.restockVendor(visit.id(),visit.restock());

@@ -43,7 +43,7 @@ final class PvpToggle implements Listener,CommandExecutor,TabCompleter {
     private boolean allowed(UUID attacker,Player target){return attacker==null || attacker.equals(target.getUniqueId()) || settings!=null && healthy.getAsBoolean() && settings.allows(attacker,target.getUniqueId());}
     private void notice(UUID attacker){
         long now=System.currentTimeMillis();if(now-lastNotice.getOrDefault(attacker,0L)<2000)return;lastNotice.put(attacker,now);
-        var player=Bukkit.getPlayer(attacker);if(player!=null)player.sendActionBar(NookUi.text("Both players must enable /pvp before fighting."));
+        var player=Bukkit.getPlayer(attacker);if(player!=null)player.sendActionBar(NookUi.text("No fighting until you both have /pvp enabled!"));
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true) public void damage(EntityDamageByEntityEvent e){
         if(e.getEntity() instanceof Player target){UUID source=attacker(e);if(!allowed(source,target)){e.setCancelled(true);notice(source);}}
@@ -83,7 +83,7 @@ final class PvpToggle implements Listener,CommandExecutor,TabCompleter {
                 if(value && !p.getWorld().getPVP())throw new IllegalArgumentException("PvP is disabled in this world.");
                 settings.set(p.getUniqueId(),value);
             }
-            p.sendMessage(NookUi.message("PvP",settings.enabled(p.getUniqueId())?"PvP enabled. You can fight other players who also enable it.":"PvP disabled. Both players must enable /pvp before fighting."));
+            p.sendMessage(NookUi.message("PvP",settings.enabled(p.getUniqueId())?"PvP enabled! You can fight other players with it on!":"PvP is off. Use /pvp on if you want to fight!"));
         }catch(IllegalArgumentException e){sender.sendMessage(NookUi.problem("PvP",e.getMessage()));}
         catch(Exception e){plugin.getLogger().log(java.util.logging.Level.SEVERE,"Could not save PvP preference; existing setting kept",e);sender.sendMessage(NookUi.problem("PvP","Could not save your PvP setting. Your existing preference was kept."));}
         return true;
