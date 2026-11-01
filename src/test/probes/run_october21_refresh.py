@@ -15,6 +15,7 @@ for suffix in ['', '-wal', '-shm']:
     if p.exists():p.rename(cfg/('probe-before-'+str(__import__('time').time_ns())+'-'+p.name))
 npcconfig=(repo/'src/main/resources/spawn-npcs.yml').read_text(encoding='utf-8').replace('enabled: false','enabled: true',1).replace('test-mode: false','test-mode: true',1)
 (cfg/'spawn-npcs.yml').write_text(npcconfig,encoding='utf-8')
+for name in ['pip-catalogue.yml','quest-rotation.yml']:(cfg/name).write_text((repo/'src/main/resources'/name).read_text(encoding='utf-8'),encoding='utf-8')
 (cfg/'quests.yml').write_text((repo/'release/october-21-refresh/quests.yml').read_text(encoding='utf-8').replace('enabled: false','enabled: true',1),encoding='utf-8')
 skins=plugins/'FancyNpcs/skins';skins.mkdir(parents=True,exist_ok=True)
 for name in ['niko.png','vendor-aviator.png']:shutil.copy2(root/'assets/npc-skins'/name,skins/name)

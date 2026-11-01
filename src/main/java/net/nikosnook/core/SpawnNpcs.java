@@ -26,6 +26,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     private final BooleanSupplier healthy;
     private final Path file;
     private final YamlConfiguration config;
+    private final YamlConfiguration catalogueConfig;
     private final List<VendorCatalogue.Design> catalogue=new ArrayList<>();
     private final Map<String,Npc> npcs=new HashMap<>();
     private final Map<String,Location> locations=new HashMap<>();
@@ -53,9 +54,14 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         file=plugin.getDataFolder().toPath().resolve("spawn-npcs.yml");
         if(!Files.exists(file))plugin.saveResource("spawn-npcs.yml",false);
         config=new YamlConfiguration();config.load(file.toFile());
+        Path catalogueFile=plugin.getDataFolder().toPath().resolve("pip-catalogue.yml");
+        if(Files.exists(catalogueFile)){
+            catalogueConfig=new YamlConfiguration();catalogueConfig.load(catalogueFile.toFile());
+        }else catalogueConfig=config; // Existing installations keep their custom catalogue until explicitly migrated.
+
         if(!config.getBoolean("enabled",false))return;
         if(!Bukkit.getPluginManager().isPluginEnabled("FancyNpcs"))throw new IllegalStateException("Install FancyNpcs 2.12.1 to enable Niko and Pip.");
-        var products=Objects.requireNonNull(config.getConfigurationSection("catalogue"),"Missing Pip catalogue");
+        var products=Objects.requireNonNull(catalogueConfig.getConfigurationSection("catalogue"),"Missing Pip catalogue");
         for(String id:products.getKeys(false)){
             var c=products.getConfigurationSection(id);if(!c.getBoolean("enabled",true))continue;
             catalogue.add(new VendorCatalogue.Design(id,c.getString("name"),c.getString("texture"),VendorCatalogue.Rarity.valueOf(c.getString("rarity")),c.getString("category"),new HashSet<>(c.getStringList("seasons")),c.getBoolean("year-round",true),c.getBoolean("modern",false),c.getLong("price-cents"),c.getInt("stock-per-allocation"),c.getInt("cap-per-visit",0),c.getString("source","")));
@@ -124,8 +130,11 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     }
     private String season(long now){
         var date=Instant.ofEpochMilli(now).atZone(WeekSchedule.ZONE).toLocalDate();
-        for(String key:Objects.requireNonNull(config.getConfigurationSection("seasons")).getKeys(false)){
-            var s=config.getConfigurationSection("seasons."+key);
+        return season(catalogueConfig,date);
+    }
+    static String season(YamlConfiguration catalogueConfig,LocalDate date){
+        for(String key:Objects.requireNonNull(catalogueConfig.getConfigurationSection("seasons")).getKeys(false)){
+            var s=catalogueConfig.getConfigurationSection("seasons."+key);
             var from=MonthDay.parse(s.getString("from"));var to=MonthDay.parse(s.getString("until"));var today=MonthDay.from(date);
             if(from.compareTo(to)<0?today.compareTo(from)>=0&&today.compareTo(to)<0:today.compareTo(from)>=0||today.compareTo(to)<0)return key;
         }

@@ -28,7 +28,7 @@ public class SpawnNpcProbe extends JavaPlugin {
  void click(int slot,ClickType kind)throws Exception{var e=new InventoryClickEvent(view,InventoryType.SlotType.CONTAINER,slot,kind,InventoryAction.PICKUP_ALL);call(npcs,"click",e);check(e.isCancelled(),"menu cancels vanilla transfer "+stage+" "+kind);}
  void setup()throws Exception{
   core=(JavaPlugin)Bukkit.getPluginManager().getPlugin("NookCore");loader=core.getClass().getClassLoader();npcs=field(core,"spawnNpcs");store=field(core,"store");quests=field(core,"weeklyQuests");
-  check(npcs!=null,"NPC adapter initialises with FancyNpcs on Paper 26.2");world=Bukkit.getWorlds().getFirst();location=new Location(world,0.5,121,0.5);world.getBlockAt(0,120,0).setType(Material.STONE,false);
+  check(npcs!=null,"NPC adapter initialises with FancyNpcs on Paper");world=Bukkit.getWorlds().getFirst();location=new Location(world,0.5,121,0.5);world.getBlockAt(0,120,0).setType(Material.STONE,false);
   var handle=new ServerPlayer(((CraftServer)getServer()).getServer(),((CraftWorld)world).getHandle(),new GameProfile(UUID.randomUUID(),"NpcTester"),ClientInformation.createDefault());var real=handle.getBukkitEntity();uuid=real.getUniqueId();inventory=real.getInventory();top=Bukkit.createInventory(null,27);
   player=(Player)Proxy.newProxyInstance(getClassLoader(),new Class[]{Player.class},(o,m,a)->switch(m.getName()){
    case "getUniqueId"->uuid;case "getName"->"NpcTester";case "getLocation"->location.clone();case "getWorld"->world;case "isOnline"->true;case "isDead"->false;case "getGameMode"->GameMode.SURVIVAL;case "hasPermission"->admin;case "getOpenInventory"->view;
@@ -47,6 +47,11 @@ public class SpawnNpcProbe extends JavaPlugin {
  void placed()throws Exception {
   call(npcs,"tick");
   visit=(String)call(call(npcs,"visit",System.currentTimeMillis()),"id");week=(String)call(quests,"nikoWeek");
+  Object automatic=field(quests,"automatic");check((boolean)call(automatic,"enabled"),"automatic quest bank loads and validates against the live Paper item registry");
+  Object bank=call(automatic,"bank");check((int)call(bank,"regularCount")==46 && (int)call(bank,"challengeCount")==15,"expanded bank has 46 regular goals and 15 challenges");
+  String nextWeek=java.time.LocalDate.parse(week).plusWeeks(1).toString();check(((Optional<?>)call(store,"savedQuestRotation",nextWeek)).isEmpty(),"next week has no stored rotation before preview");
+  long beforePreview=money();call(quests,"onCommand",player,core.getCommand("quests"),"quests",new String[]{"next"});
+  check(((Optional<?>)call(store,"savedQuestRotation",nextWeek)).isEmpty() && money()==beforePreview && !(boolean)call(store,"questAccepted",uuid,week),"admin preview leaves future snapshots, balances and Niko acceptance unchanged");
   check(((Map<?,?>)field(npcs,"npcs")).size()==2,"both stationary NPCs register");call(npcs,"tick");check(((Map<?,?>)field(npcs,"npcs")).size()==2,"repeated tick does not duplicate NPCs");
   check(offers().size()==7,"seven persisted products");check(offers().stream().anyMatch(x->{try{return call(x,"design").equals("cctv-camera");}catch(Exception e){throw new RuntimeException(e);}}),"CCTV appears in first collection");
   check(!(boolean)call(store,"questAccepted",uuid,week),"local test begins before weekly acceptance");
@@ -126,7 +131,7 @@ public class SpawnNpcProbe extends JavaPlugin {
        for(var skin:skinMap.values())skinsReady &= (boolean)call(skin,"hasTexture");
        if(!skinsReady && skinWaits++<20){stage--;Bukkit.getScheduler().runTaskLater(this,this::tick,40L);return;}
        check(skinsReady,"both supplied PNG skins have signed textures ready");
-       call(npcs,"command",player,new String[]{"vendor","catalogue"});check(top.getSize()==54 && java.util.Arrays.stream(top.getContents()).filter(java.util.Objects::nonNull).count()==24,"all 24 designs are available in read-only catalogue review");
+       call(npcs,"command",player,new String[]{"vendor","catalogue"});check(top.getSize()==54 && java.util.Arrays.stream(top.getContents()).filter(java.util.Objects::nonNull).count()==48,"all 48 designs are available in read-only catalogue review");
        int stock=(int)call(offers().getFirst(),"stock");call(npcs,"close");
        var ctor=type("SpawnNpcs").getDeclaredConstructor(JavaPlugin.class,type("NookStore"),type("WeeklyQuests"),java.util.function.BooleanSupplier.class);ctor.setAccessible(true);npcs=ctor.newInstance(core,store,quests,(java.util.function.BooleanSupplier)()->true);call(npcs,"tick");
        check((boolean)call(store,"questAccepted",uuid,week),"NPC recreation preserves quest acceptance");check((int)call(offers().getFirst(),"stock")==stock,"NPC recreation preserves stock");check(((Map<?,?>)field(npcs,"npcs")).size()==2,"NPC recreation restores both persisted locations once");

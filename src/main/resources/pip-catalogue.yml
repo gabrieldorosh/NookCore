@@ -1,0 +1,620 @@
+# Decorative stock only. NPC positions, skins, schedules and balances stay in their existing files.
+# Restart after editing. Stable design IDs should never be reused for a different texture.
+seasons:
+  halloween:
+    from: --10-01
+    until: --11-01
+  autumn:
+    from: --09-01
+    until: --12-01
+  winter:
+    from: --12-01
+    until: --03-01
+  spring:
+    from: --03-01
+    until: --06-01
+  summer:
+    from: --06-01
+    until: --09-01
+catalogue:
+  chick:
+    name: Chick
+    texture: a4d816a475b3f313b620d65bf9358931b46af9c8f4e7c9ae64708880bea6be
+    rarity: UNCOMMON
+    category: animals
+    seasons: []
+    year-round: true
+    modern: false
+    price-cents: 800
+    stock-per-allocation: 5
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/animals/zcen
+  command-block:
+    name: Command Block
+    texture: 5f4c21d17ad636387ea3c736bff6ade897317e1374cd5d9b1c15e6e8953432
+    rarity: RARE
+    category: modern
+    seasons: []
+    year-round: true
+    modern: true
+    price-cents: 1500
+    stock-per-allocation: 4
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/blocks/skkc
+  burger:
+    name: Burger
+    texture: a6ef1c25f516f2e7d6f7667420e33adcf3cdf938cb37f9a41a8b35869f569b
+    rarity: RARE
+    category: modern
+    seasons: []
+    year-round: true
+    modern: true
+    price-cents: 1500
+    stock-per-allocation: 4
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/food/uvvm
+  money-bag:
+    name: Money Bag
+    texture: e36e94f6c34a35465fce4a90f2e25976389eb9709a12273574ff70fd4daa6852
+    rarity: UNCOMMON
+    category: home
+    seasons: []
+    year-round: true
+    modern: false
+    price-cents: 800
+    stock-per-allocation: 5
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/decoration/fogx
+  spiffo-plushie:
+    name: Spiffo Plushie
+    texture: 9e928faefbf0c475a4a24fdb673b717bbc6a347472df8ec0d5879a92002201b1
+    rarity: RARE
+    category: modern
+    seasons: []
+    year-round: true
+    modern: true
+    price-cents: 1500
+    stock-per-allocation: 4
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/decoration/qabg
+  monitor:
+    name: Monitor
+    texture: 51fad5d2b822fce8d59bce08414b9f87f27aa9d77a73823a58dd517ea80b2a5
+    rarity: RARE
+    category: modern
+    seasons: []
+    year-round: true
+    modern: true
+    price-cents: 1500
+    stock-per-allocation: 4
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/decoration/ndef
+  nutella:
+    name: Nutella
+    texture: 515dcb2da02cf734829e1e273e3025617d8071516f953251b52545da8d3e8db8
+    rarity: RARE
+    category: modern
+    seasons: []
+    year-round: true
+    modern: true
+    price-cents: 1500
+    stock-per-allocation: 4
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/food/gjlw
+  pepsi:
+    name: Pepsi
+    texture: 2bbae6df99dc82beaf49d064df74a1bbc15e8e376533276912c8c8fe59cb4f4
+    rarity: RARE
+    category: modern
+    seasons: []
+    year-round: true
+    modern: true
+    price-cents: 1500
+    stock-per-allocation: 4
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/food/jhcu
+  coke:
+    name: Coke
+    texture: 93b01fb2f6ba47c9d7638491f37cd8582a937731186df4d1eccd59b65bf37
+    rarity: RARE
+    category: modern
+    seasons: []
+    year-round: true
+    modern: true
+    price-cents: 1500
+    stock-per-allocation: 4
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/food/cijx
+  skull:
+    name: Skull
+    texture: a240f2b1a681366456bf9892d1c0f473399b96ba90bcab68e77b6848469eb57
+    rarity: UNCOMMON
+    category: spooky
+    seasons:
+    - halloween
+    year-round: true
+    modern: false
+    price-cents: 800
+    stock-per-allocation: 5
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/humans/vtys
+  pancakes:
+    name: Pancakes
+    texture: bbaa7f8e437112b3b6569471596d5b61daa7a3b408391d1ed432f5317796a2
+    rarity: COMMON
+    category: pantry
+    seasons: []
+    year-round: true
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/food/slte
+  sprite:
+    name: Sprite
+    texture: b8a34d86a7bb13d45afdc50d3dce5eed95e1844fbdee0cca753c6d3346e339e
+    rarity: RARE
+    category: modern
+    seasons: []
+    year-round: true
+    modern: true
+    price-cents: 1500
+    stock-per-allocation: 4
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/food/fgyv
+  globe:
+    name: Globe
+    texture: 2e2cc42015e6678f8fd49ccc01fbf787f1ba2c32bcf559a015332fc5db50
+    rarity: UNCOMMON
+    category: home
+    seasons: []
+    year-round: true
+    modern: false
+    price-cents: 800
+    stock-per-allocation: 5
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/decoration/paoz
+  santa-hat-snowman:
+    name: Santa Hat Snowman
+    texture: e27695bee2babf9baef11ae19fe5f817fa088cd52c4c473cc7b441d5c3f50fe
+    rarity: UNCOMMON
+    category: home
+    seasons:
+    - winter
+    year-round: false
+    modern: false
+    price-cents: 800
+    stock-per-allocation: 5
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/decoration/tqmx
+  cake:
+    name: Cake
+    texture: 121d8d9ae5278e26bc4399923d25ccb9173e83748e9bad6df76314ba94369e
+    rarity: COMMON
+    category: pantry
+    seasons: []
+    year-round: true
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/food/xsxd
+  beer:
+    name: Beer
+    texture: 4053e26867bb57538e9789137dbbb53774e18eda6fef51cb2edf426b37264
+    rarity: COMMON
+    category: pantry
+    seasons: []
+    year-round: true
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/food/fsoz
+  bread:
+    name: Bread
+    texture: 51997da64043b284822115643a654fdc4e8a7226664b48a4e1dbb557b5c0fe14
+    rarity: COMMON
+    category: pantry
+    seasons: []
+    year-round: true
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/food/wzva
+  fan:
+    name: Fan
+    texture: 172771fc11737063c81eb75973e9b82590951e3674f31acce8cddd1aad1b
+    rarity: RARE
+    category: modern
+    seasons: []
+    year-round: true
+    modern: true
+    price-cents: 1500
+    stock-per-allocation: 4
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/decoration/fytw
+  apple:
+    name: Apple
+    texture: e2b35bda5ebdf135f4e71ce49726fbec5739f0adedf01c519e2aea7f51951ea2
+    rarity: COMMON
+    category: plants
+    seasons: []
+    year-round: true
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/plants/iaqm
+  fries:
+    name: Fries
+    texture: a0eacac41a9eaf051376ef2f959701e1bbe1bf4aa6715adc34b6dc29a13ea9
+    rarity: RARE
+    category: modern
+    seasons: []
+    year-round: true
+    modern: true
+    price-cents: 1500
+    stock-per-allocation: 4
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/food/cype
+  popcorn:
+    name: Popcorn
+    texture: 1497b147cfae52205597f72e3c4ef52512e9677020e4b4fa7512c3c6acdd8c1
+    rarity: RARE
+    category: modern
+    seasons: []
+    year-round: true
+    modern: true
+    price-cents: 1500
+    stock-per-allocation: 4
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/food/pulq
+  ghost:
+    name: Ghost
+    texture: d02d2db4b055ca5f189096b3cdf6d496e0f5a57861e25dde7e4746820ab3e475
+    rarity: UNCOMMON
+    category: spooky
+    seasons:
+    - halloween
+    year-round: false
+    modern: false
+    price-cents: 800
+    stock-per-allocation: 5
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/humanoid/mgda
+  cctv-camera:
+    name: CCTV Camera
+    texture: d6d15e72acf219bc1da8ae7686f4f83c773adcb4f8facc87cbbd43ee79057f3
+    rarity: RARE
+    category: modern
+    seasons: []
+    year-round: true
+    modern: true
+    price-cents: 1500
+    stock-per-allocation: 4
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/decoration/mznd
+  carved-pumpkin:
+    name: Carved Pumpkin
+    texture: ee28a03ed2eb90eaff1a119a5b554452701b97af47bff73ce710849c6b0
+    rarity: COMMON
+    category: pumpkin
+    seasons:
+    - halloween
+    - autumn
+    year-round: false
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/plants/ofnd
+  black-cat:
+    name: Black Cat
+    texture: 68c2f1f7e8cd6b00d30f0edaeefce38e889173c30c701fac0da860e0a2125ec8
+    rarity: RARE
+    category: animals
+    seasons: []
+    year-round: true
+    modern: false
+    price-cents: 1500
+    stock-per-allocation: 4
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/animals/rwws
+  orange-tabby-cat:
+    name: Orange Tabby Cat
+    texture: 2113dbd3c6a078a17b4edb78ce07d836c38dace5027d4b0a83fd60e7ca7a0fcb
+    rarity: UNCOMMON
+    category: animals
+    seasons: []
+    year-round: true
+    modern: false
+    price-cents: 800
+    stock-per-allocation: 5
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/animals/zfta
+  grey-tabby-cat:
+    name: Grey Tabby Cat
+    texture: aea5a2f6d7711217a7388eea383e1f2b26e60275c938437bbafe3c419ea2cf1d
+    rarity: COMMON
+    category: animals
+    seasons: []
+    year-round: true
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/animals/upqd
+  stack-of-books:
+    name: Stack of Books
+    texture: fd723853b0f19e4bf55d8ab9a953b4477328d3b20f77f304e37297fed752f942
+    rarity: COMMON
+    category: home
+    seasons: []
+    year-round: true
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/decoration/mrca
+  candle-lantern:
+    name: Candle Lantern
+    texture: 3d25e46719f967b33c297ed14a51be94ed64bbed362aac91c79f3903e1ea491
+    rarity: COMMON
+    category: home
+    seasons: []
+    year-round: true
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/decoration/irlr
+  bread-basket:
+    name: Bread Basket
+    texture: db4f3480822813c131008ec191139f10208544c2be0ccb5ef958d8a006e4198a
+    rarity: COMMON
+    category: pantry
+    seasons: []
+    year-round: true
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/decoration/xvga
+  workshop-hammer:
+    name: Workshop Hammer
+    texture: efdc6d3bad396e7abc57ef56e84e016d016b862747b9f59b055ac20e4e3a0930
+    rarity: UNCOMMON
+    category: workshop
+    seasons: []
+    year-round: true
+    modern: false
+    price-cents: 800
+    stock-per-allocation: 5
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/miscellaneous/oajf
+  travellers-compass:
+    name: Traveller's Compass
+    texture: 1982557421e8f6fe4436da1b8b8e32a4de1eb82517042320186209cf45349ee3
+    rarity: RARE
+    category: workshop
+    seasons: []
+    year-round: true
+    modern: false
+    price-cents: 1500
+    stock-per-allocation: 4
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/decoration/uiyk
+  apple-basket:
+    name: Apple Basket
+    texture: 2104f13c719f0c8af92f536dbd109285e6e3d21af3158ed91f603f7ecf7359b0
+    rarity: COMMON
+    category: pantry
+    seasons:
+    - autumn
+    - halloween
+    year-round: false
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/decoration/bwxb
+  mushroom-basket:
+    name: Mushroom Basket
+    texture: 3afcd3549f84eaae54a093ed674608895609fbe42161f03453c88a22e4a8d8c3
+    rarity: COMMON
+    category: pantry
+    seasons:
+    - autumn
+    - halloween
+    year-round: false
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/decoration/hpey
+  red-mushroom:
+    name: Red Mushroom
+    texture: 4ce0a230acd6436abc86f13be72e9ba94537ee54f0325bb862577a1e062f37
+    rarity: COMMON
+    category: plants
+    seasons:
+    - autumn
+    - halloween
+    year-round: false
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/plants/vrax
+  autumn-lantern:
+    name: Autumn Lantern
+    texture: 2bb8d7259c8e725e7cf7581c769add4222e76675fe96ed01ad7b4db7d554f4a3
+    rarity: UNCOMMON
+    category: home
+    seasons:
+    - autumn
+    - halloween
+    year-round: false
+    modern: false
+    price-cents: 800
+    stock-per-allocation: 5
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/decoration/qbvv
+  wrapped-present:
+    name: Wrapped Present
+    texture: f39b4fc5986c025df4e411782bad88e5da0d7501ff2d99cdfc52226febe92d
+    rarity: COMMON
+    category: home
+    seasons:
+    - winter
+    year-round: false
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/decoration/fvcg
+  hot-chocolate:
+    name: Hot Chocolate
+    texture: fb28aa303b4cae877d7c6d27aa83761a2691f9d78a3d9289530ca6abb5fdf4c
+    rarity: COMMON
+    category: pantry
+    seasons:
+    - winter
+    year-round: false
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/food/myyq
+  fir-cone:
+    name: Fir Cone
+    texture: d4491cfdeba8a2058ca2c663381f6cadbc75276395f6acb484dee22c51618
+    rarity: COMMON
+    category: plants
+    seasons:
+    - winter
+    year-round: false
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/plants/jgvs
+  penguin:
+    name: Penguin
+    texture: d3c57facbb3a4db7fd55b5c0dc7d19c19cb0813c748ccc9710c714727551f5b9
+    rarity: UNCOMMON
+    category: animals
+    seasons:
+    - winter
+    year-round: false
+    modern: false
+    price-cents: 800
+    stock-per-allocation: 5
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/animals/qnsu
+  blue-flower-pot:
+    name: Blue Flower Pot
+    texture: 9225a0326aa8c771b8e2e903be1688112e03d783e576276eca2cc30a9759f41e
+    rarity: COMMON
+    category: plants
+    seasons:
+    - spring
+    year-round: false
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/decoration/znsa
+  orange-flower-pot:
+    name: Orange Flower Pot
+    texture: 591cfc354dca15d770a74dbb106d193fd8e595522213b735e46a9c03f448c7c6
+    rarity: COMMON
+    category: plants
+    seasons:
+    - spring
+    year-round: false
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/decoration/wnsa
+  easter-egg-basket:
+    name: Easter Egg Basket
+    texture: 68ddbba0a10370298c1b4a63fa49770cc99fb3ab11b560eb601e1dae605bcf30
+    rarity: COMMON
+    category: pantry
+    seasons:
+    - spring
+    year-round: false
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/decoration/opzb
+  grass-basket:
+    name: Grass Basket
+    texture: c27d6d59df767083c479ae4814fad09fd360e71e9d77d4ae40c1eb144f6ab707
+    rarity: UNCOMMON
+    category: home
+    seasons:
+    - spring
+    year-round: false
+    modern: false
+    price-cents: 800
+    stock-per-allocation: 5
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/decoration/cqve
+  fruit-basket:
+    name: Fruit Basket
+    texture: aa4d995b7dc9dce514c6a9e9ffd73441505b2c5a82c974a2cf4a734f58b9f74a
+    rarity: COMMON
+    category: pantry
+    seasons:
+    - summer
+    year-round: false
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/food/xccg
+  picnic-basket:
+    name: Picnic Basket
+    texture: 7a6bf916e28ccb80b4ebfacf98686ad6af7c4fb257e57a8cb78c71d19dccb2
+    rarity: COMMON
+    category: home
+    seasons:
+    - summer
+    year-round: false
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/food/xhds
+  bunch-of-grapes:
+    name: Bunch of Grapes
+    texture: 8cdcf38a8438ed3a547f8d5b47e0801559c595f0e26c45656a76b5bf8a56f
+    rarity: COMMON
+    category: plants
+    seasons:
+    - summer
+    year-round: false
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/plants/jdfr
+  summer-turtle:
+    name: Turtle in a Straw Hat
+    texture: 467b14617ca7fe624eca5de41595ebb8cc5799011be9cb3fe7776b624370e4f7
+    rarity: UNCOMMON
+    category: animals
+    seasons:
+    - summer
+    year-round: false
+    modern: false
+    price-cents: 800
+    stock-per-allocation: 5
+    cap-per-visit: 0
+    source: https://mcheads.ru/en/animals/vaud
