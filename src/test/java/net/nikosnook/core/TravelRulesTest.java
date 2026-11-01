@@ -26,11 +26,6 @@ class TravelRulesTest {
         assertEquals(0,boost);
     }
     @Test void returningToRoadReversesDecaySmoothly(){assertEquals(.55,TravelRules.roadBoost(.5,150,100,30,20,true),1e-9);}
-    @Test void freshAirborneLoginDoesNotAllowRocket(){assertFalse(TravelRules.rocketAllowed(1,null,60));}
-    @Test void takeoffWindowExpiresAndDoesNotResetOnBoost(){
-        assertTrue(TravelRules.rocketAllowed(101,100L,60));assertTrue(TravelRules.rocketAllowed(160,100L,60));assertFalse(TravelRules.rocketAllowed(161,100L,60));
-    }
-    @Test void freshLandingAllowsAnotherTakeoff(){assertTrue(TravelRules.rocketAllowed(501,500L,60));}
     @Test void invalidTuningIsRejected(){for(double value:new double[]{Double.NaN,Double.POSITIVE_INFINITY,-1,41})assertThrows(IllegalArgumentException.class,()->TravelRules.bounded(value,8,40,"speed"));}
     @Test void onlyLivingSurvivalOrAdventureRidersQualify(){
         for(GameMode mode:GameMode.values())for(boolean dead:new boolean[]{false,true}){

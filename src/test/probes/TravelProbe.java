@@ -13,7 +13,7 @@ import com.destroystokyo.paper.event.player.PlayerElytraBoostEvent;
 
 /** Disposable Paper-world adapter checks, not a substitute for rider/client tests. */
 public final class TravelProbe extends JavaPlugin {
-    private boolean grounded;
+    private final java.util.concurrent.atomic.AtomicLong clock=new java.util.concurrent.atomic.AtomicLong(100_000);
     private Object travel; private Class<?> type; private Horse horse; private World world; private int checks;
     private Object call(String name,Class<?>[] types,Object... args)throws Exception {Method m=type.getDeclaredMethod(name,types);m.setAccessible(true);return m.invoke(travel,args);}
     private Object field(String name)throws Exception {Field f=type.getDeclaredField(name);f.setAccessible(true);return f.get(travel);}
@@ -22,17 +22,40 @@ public final class TravelProbe extends JavaPlugin {
     @Override public void onEnable(){getServer().getScheduler().runTaskLater(this,()->{
         try{
             var core=getServer().getPluginManager().getPlugin("NookCore");Field f=core.getClass().getDeclaredField("groundedTravel");f.setAccessible(true);travel=f.get(core);type=travel.getClass();world=Bukkit.getWorlds().getFirst();
+            call("close",new Class[]{});
+            Constructor<?> constructor=type.getDeclaredConstructor(JavaPlugin.class,java.util.function.LongSupplier.class);constructor.setAccessible(true);
+            travel=constructor.newInstance(core,(java.util.function.LongSupplier)clock::get);f.set(core,travel);
             for(int x=0;x<=1;x++)for(int z=0;z<=1;z++)world.setChunkForceLoaded(x,z,true);
             for(int x=4;x<=28;x++)for(int z=4;z<=12;z++){world.getBlockAt(x,64,z).setType(Material.COBBLESTONE);world.getBlockAt(x,65,z).setType(Material.AIR);world.getBlockAt(x,66,z).setType(Material.AIR);}
             horse=world.spawn(new Location(world,8.5,65,8.5),Horse.class);Bukkit.getMobGoals().removeAllGoals(horse);
             getServer().getScheduler().runTaskLater(this,()->{try{runChecks();}catch(Throwable e){failed(e);}finally{Bukkit.shutdown();}},30);
         }catch(Throwable e){failed(e);Bukkit.shutdown();}
     },40);}
-    private Player mockPlayer(UUID id,World inWorld,GameMode mode){
-        return (Player)Proxy.newProxyInstance(getClassLoader(),new Class[]{Player.class},(o,m,a)->switch(m.getName()){
-            case "getLocation"->new Location(inWorld,8.5,grounded?65:68,8.5);case "getUniqueId"->id;case "getWorld"->inWorld;case "getGameMode"->mode;case "isDead"->false;case "isOnGround"->grounded;case "isGliding","isSwimming","isInsideVehicle"->false;default->null;
-        });
+    private static Object defaultValue(Class<?> type){
+        if(type==boolean.class)return false;if(type==int.class)return 0;if(type==long.class)return 0L;if(type==double.class)return 0.0;if(type==float.class)return 0f;return null;
     }
+    private final class FlightPlayer {
+        final UUID id;final org.bukkit.persistence.PersistentDataContainer data;final Player player;
+        Location location=new Location(world,8.5,80,8.5);World inWorld=world;GameMode mode=GameMode.SURVIVAL;
+        boolean water;Entity vehicle;
+        FlightPlayer(){this(UUID.randomUUID());}
+        FlightPlayer(UUID id){
+            this.id=id;data=world.getPersistentDataContainer().getAdapterContext().newPersistentDataContainer();
+            player=(Player)Proxy.newProxyInstance(getClassLoader(),new Class[]{Player.class},(o,m,a)->switch(m.getName()){
+                case "getLocation"->location.clone();case "getUniqueId"->id;case "getWorld"->inWorld;case "getGameMode"->mode;
+                case "getPersistentDataContainer"->data;case "getName"->"RocketTester";case "getVehicle"->vehicle;
+                case "isOnGround"->false;case "isGliding"->true;case "isInWater","isSwimming"->water;case "isInsideVehicle"->vehicle!=null;
+                case "equals"->o==a[0];case "hashCode"->System.identityHashCode(o);default->defaultValue(m.getReturnType());
+            });
+        }
+        void at(double x,double y,double z){location=new Location(inWorld,x,y,z);}
+    }
+    private Object observe(FlightPlayer player)throws Exception{return call("observeRocket",new Class[]{Player.class,Location.class},player.player,player.location);}
+    private PlayerElytraBoostEvent boost(FlightPlayer player,Firework firework,EquipmentSlot hand){
+        var event=new PlayerElytraBoostEvent(player.player,new ItemStack(Material.FIREWORK_ROCKET),firework,hand);
+        getServer().getPluginManager().callEvent(event);return event;
+    }
+    private long deadline(FlightPlayer player){return player.data.getOrDefault(new NamespacedKey("nookcore","rocket-ready-at"),PersistentDataType.LONG,-1L);}
     private void failed(Throwable e){getLogger().log(java.util.logging.Level.SEVERE,"TRAVEL_PROBE_FAILED",e);}
     @SuppressWarnings("unchecked") private void runChecks()throws Exception {
         check((boolean)call("roadUnder",new Class[]{Location.class},new Location(world,8.5,65,8.5)),"cobblestone surface");
@@ -83,51 +106,105 @@ public final class TravelProbe extends JavaPlugin {
         check(!cart.getPersistentDataContainer().has(new NamespacedKey("nookcore","travel-original-cart-speed"),PersistentDataType.DOUBLE),"restoration removes recovery marker");
         cart.setMaxSpeed(1.6);cart.getPersistentDataContainer().set(new NamespacedKey("nookcore","travel-original-cart-speed"),PersistentDataType.DOUBLE,.6);call("restore",new Class[]{Entity.class},cart);
         check(Math.abs(cart.getMaxSpeed()-.6)<1e-6,"interrupted-run saved cart speed recovered");
-        UUID id=UUID.randomUUID();Player player=(Player)Proxy.newProxyInstance(getClassLoader(),new Class[]{Player.class},(o,m,a)->switch(m.getName()){
-            case "getLocation"->new Location(world,8.5,grounded?65:68,8.5);case "getUniqueId"->id;case "getWorld"->world;case "getGameMode"->GameMode.SURVIVAL;case "isDead"->false;case "isOnGround"->grounded;case "isGliding","isSwimming","isInsideVehicle"->false;default->null;
-        });
         check((boolean)call("groundContact",new Class[]{Location.class},new Location(world,9.5,64.9375,8.5)),"path fractional height counts as landed");
         check((boolean)call("groundContact",new Class[]{Location.class},new Location(world,10.5,64.5,8.5)),"bottom slab counts as landed");
+        world.getBlockAt(6,64,10).setType(Material.CHEST);
+        check((boolean)call("groundContact",new Class[]{Location.class},new Location(world,6.5,64.875,10.5)),"chest fractional top counts as landed");
         check(!(boolean)call("groundContact",new Class[]{Location.class},new Location(world,8.5,65.2,8.5)),"air above a block does not count as landed");
-        var walkingFeet=new java.util.concurrent.atomic.AtomicReference<>(new Location(world,4.5,65,8.5));UUID walkingId=UUID.randomUUID();
-        Player walker=(Player)Proxy.newProxyInstance(getClassLoader(),new Class[]{Player.class},(o,m,a)->switch(m.getName()){
-            case "getUniqueId"->walkingId;case "getLocation"->walkingFeet.get().clone();case "getWorld"->world;case "getGameMode"->GameMode.SURVIVAL;
-            case "isOnGround"->false;case "isGliding"->true;case "isDead","isSwimming","isInsideVehicle"->false;default->null;
-        });
-        for(int step=0;step<=60;step++){tick(500+step);walkingFeet.set(new Location(world,4.5+step*.05,65,8.5));call("updateTakeoff",new Class[]{Player.class},walker);}
-        walkingFeet.set(new Location(world,7.5,68,8.5));tick(561);call("updateTakeoff",new Class[]{Player.class},walker);
-        var walkingState=((Map<UUID,Object>)field("takeoffs")).get(walkingId);var permit=walkingState.getClass().getDeclaredMethod("allowed",long.class,int.class);permit.setAccessible(true);
-        check((boolean)permit.invoke(walkingState,561L,60),"walking for three seconds rearms rockets despite stale ground and gliding flags");
         Firework firework=world.spawn(new Location(world,24,68,8),Firework.class);tick(100);
-        var denied=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);call("rocket",new Class[]{PlayerElytraBoostEvent.class},denied);
-        check(denied.isCancelled() && !denied.shouldConsume(),"airborne entry denies rocket without consumption");
-        grounded=true;tick(39);call("updateTakeoff",new Class[]{Player.class},player);
-        tick(99);call("updateTakeoff",new Class[]{Player.class},player);
-        grounded=false;tick(100);call("updateTakeoff",new Class[]{Player.class},player);tick(160);
-        var allowed=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);call("rocket",new Class[]{PlayerElytraBoostEvent.class},allowed);check(!allowed.isCancelled(),"three-second boundary allows takeoff rocket");
-        tick(161);var expired=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);call("rocket",new Class[]{PlayerElytraBoostEvent.class},expired);check(expired.isCancelled(),"boost does not extend window");
-        for(World.Environment environment:new World.Environment[]{World.Environment.NETHER,World.Environment.THE_END}){
-            World exemptWorld=(World)Proxy.newProxyInstance(getClassLoader(),new Class[]{World.class},(o,m,a)->m.getName().equals("getEnvironment")?environment:null);
-            Player exempt=mockPlayer(UUID.randomUUID(),exemptWorld,GameMode.SURVIVAL);
-            var event=new PlayerElytraBoostEvent(exempt,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.OFF_HAND);
-            call("rocket",new Class[]{PlayerElytraBoostEvent.class},event);
-            check(!event.isCancelled() && event.shouldConsume(),"rocket exemption remains "+environment);
+        FlightPlayer player=new FlightPlayer();observe(player);clock.addAndGet(600_000);
+        check(!boost(player,firework,EquipmentSlot.HAND).isCancelled(),"first rocket works after a long unboosted glide with no takeoff window");
+        var denied=boost(player,firework,EquipmentSlot.OFF_HAND);
+        check(denied.isCancelled() && !denied.shouldConsume(),"second rocket in the same flight is denied without consuming offhand stock");
+        clock.addAndGet(10_000);check(boost(player,firework,EquipmentSlot.HAND).isCancelled(),"long airtime after using a rocket does not rearm it");
+        player.at(4.5,65,8.5);observe(player);long firstLanding=clock.get();
+        for(int step=1;step<=10;step++){
+            clock.addAndGet(100);player.at(4.5+step*.05,step%2==0?65:66,8.5);observe(player);
         }
-        var creative=new PlayerElytraBoostEvent(mockPlayer(UUID.randomUUID(),world,GameMode.CREATIVE),new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);
-        call("rocket",new Class[]{PlayerElytraBoostEvent.class},creative);check(!creative.isCancelled(),"creative rockets remain unrestricted");
-        var offhand=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.OFF_HAND);
-        call("rocket",new Class[]{PlayerElytraBoostEvent.class},offhand);check(offhand.isCancelled() && !offhand.shouldConsume(),"expired offhand rocket is not consumed");
-        grounded=true;tick(170);call("updateTakeoff",new Class[]{Player.class},player);
-        grounded=false;tick(180);call("updateTakeoff",new Class[]{Player.class},player);
-        var bounce=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);
-        call("rocket",new Class[]{PlayerElytraBoostEvent.class},bounce);check(bounce.isCancelled() && !bounce.shouldConsume(),"short landing cannot re-arm rocket window");
-        grounded=true;tick(181);call("updateTakeoff",new Class[]{Player.class},player);tick(241);call("updateTakeoff",new Class[]{Player.class},player);
-        grounded=false;tick(242); // Rocket precedes the next contact-sampling tick.
-        var rearmed=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.OFF_HAND);
-        call("rocket",new Class[]{PlayerElytraBoostEvent.class},rearmed);check(!rearmed.isCancelled(),"three seconds continuously grounded re-arms offhand rocket");
-        call("forget",new Class[]{Player.class},player);
-        var forgotten=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);
-        call("rocket",new Class[]{PlayerElytraBoostEvent.class},forgotten);check(forgotten.isCancelled(),"relog teleport and mode cleanup removes armed flight");
+        check(deadline(player)==firstLanding+3000,"walking jumping and repeated landings preserve the first landing deadline");
+        clock.set(firstLanding+2999);player.at(7.5,80,8.5);
+        check(boost(player,firework,EquipmentSlot.HAND).isCancelled(),"rocket remains blocked one millisecond before the landing deadline");
+        clock.incrementAndGet();check(!boost(player,firework,EquipmentSlot.OFF_HAND).isCancelled(),"rocket works at exactly three seconds even while airborne again");
+        check(boost(player,firework,EquipmentSlot.HAND).isCancelled(),"using the rearmed rocket spends the new flight allowance");
+        var spentKey=new NamespacedKey("nookcore","rocket-flight-spent");
+        check(Byte.valueOf((byte)1).equals(player.data.get(spentKey,PersistentDataType.BYTE)),"accepted boost writes the durable player-data marker");
+        byte[] saved=player.data.serializeToBytes();call("forget",new Class[]{Player.class},player.player);
+        FlightPlayer rejoined=new FlightPlayer(player.id);rejoined.data.readFromBytes(saved,true);
+        check(boost(rejoined,firework,EquipmentSlot.HAND).isCancelled(),"serialized player data prevents an airborne relog granting another rocket");
+        var teleport=new org.bukkit.event.player.PlayerTeleportEvent(rejoined.player,rejoined.location,new Location(world,12.5,80,11.5));
+        call("teleport",new Class[]{org.bukkit.event.player.PlayerTeleportEvent.class},teleport);rejoined.location=teleport.getTo();
+        check(boost(rejoined,firework,EquipmentSlot.HAND).isCancelled(),"teleporting into air does not erase the spent flight");
+        var modeEvent=new org.bukkit.event.player.PlayerGameModeChangeEvent(rejoined.player,GameMode.CREATIVE);
+        call("mode",new Class[]{org.bukkit.event.player.PlayerGameModeChangeEvent.class},modeEvent);rejoined.mode=GameMode.CREATIVE;
+        check(!boost(rejoined,firework,EquipmentSlot.HAND).isCancelled(),"creative remains exempt even with an outstanding Survival boost");
+        rejoined.mode=GameMode.SURVIVAL;
+        check(boost(rejoined,firework,EquipmentSlot.HAND).isCancelled(),"changing game modes cannot grant another Survival rocket");
+        rejoined.at(6.5,64.875,10.5);observe(rejoined);long chestLanding=clock.get();saved=rejoined.data.serializeToBytes();
+        call("forget",new Class[]{Player.class},rejoined.player);clock.addAndGet(1500);
+        FlightPlayer cooling=new FlightPlayer(rejoined.id);cooling.data.readFromBytes(saved,true);cooling.at(8.5,80,8.5);observe(cooling);
+        check(deadline(cooling)==chestLanding+3000,"reconnecting halfway through cooldown preserves the original absolute deadline");
+        clock.set(chestLanding+3000);check(!boost(cooling,firework,EquipmentSlot.HAND).isCancelled(),"cooldown time elapsed offline still counts");
+        FlightPlayer jumper=new FlightPlayer();clock.addAndGet(10_000);
+        jumper.at(5.5,65,8.5);observe(jumper);jumper.at(5.5,66,8.5);observe(jumper);jumper.at(6.5,64.875,10.5);observe(jumper);jumper.at(6.5,80,10.5);
+        check(!boost(jumper,firework,EquipmentSlot.HAND).isCancelled(),"ordinary jumps and a chest-top fall do not spend an unused rocket");
+        FlightPlayer launch=new FlightPlayer();launch.at(5.5,65,8.5);
+        check(!boost(launch,firework,EquipmentSlot.HAND).isCancelled(),"rocket on a launch frame with lingering support is allowed");
+        observe(launch);launch.at(5.5,80,8.5);observe(launch);clock.addAndGet(10_000);
+        check(boost(launch,firework,EquipmentSlot.HAND).isCancelled() && deadline(launch)<0,"launch frame contact cannot start an in-flight rearm timer");
+        FlightPlayer swimmer=new FlightPlayer();boost(swimmer,firework,EquipmentSlot.HAND);swimmer.water=true;observe(swimmer);long waterLanding=clock.get();
+        swimmer.water=false;clock.addAndGet(3000);
+        check(!boost(swimmer,firework,EquipmentSlot.HAND).isCancelled() && clock.get()==waterLanding+3000,"water starts the timer and leaving water does not pause it");
+        Entity boat=world.spawnEntity(new Location(world,23,68,10),EntityType.OAK_BOAT);
+        FlightPlayer sailor=new FlightPlayer();boost(sailor,firework,EquipmentSlot.HAND);sailor.vehicle=boat;observe(sailor);long boatLanding=clock.get();
+        sailor.vehicle=null;clock.addAndGet(3000);
+        check(!boost(sailor,firework,EquipmentSlot.HAND).isCancelled() && clock.get()==boatLanding+3000,"boarding a boat starts the timer even after dismounting again");boat.remove();
+        FlightPlayer airborneMount=new FlightPlayer();boost(airborneMount,firework,EquipmentSlot.HAND);
+        airborneMount.vehicle=(Entity)Proxy.newProxyInstance(getClassLoader(),new Class[]{Entity.class},(o,m,a)->defaultValue(m.getReturnType()));observe(airborneMount);
+        check(deadline(airborneMount)<0,"boarding an airborne non-boat mount does not count as touching down");
+        airborneMount.vehicle=horse;observe(airborneMount);
+        check(deadline(airborneMount)==clock.get()+3000,"a grounded horse counts as a landing even above the block collision surface");
+        FlightPlayer brief=new FlightPlayer();boost(brief,firework,EquipmentSlot.HAND);
+        Location chest=new Location(world,6.5,64.875,10.5);
+        call("move",new Class[]{org.bukkit.event.player.PlayerMoveEvent.class},new org.bukkit.event.player.PlayerMoveEvent(brief.player,brief.location,chest));
+        long briefLanding=clock.get();brief.at(6.5,80,10.5);clock.addAndGet(3000);
+        check(deadline(brief)==briefLanding+3000 && !boost(brief,firework,EquipmentSlot.HAND).isCancelled(),"a brief chest-top movement landing between scheduler samples starts the timer");
+        FlightPlayer cancelled=new FlightPlayer();
+        org.bukkit.event.Listener cancelLater=new org.bukkit.event.Listener(){
+            @org.bukkit.event.EventHandler(priority=org.bukkit.event.EventPriority.HIGHEST) public void cancel(PlayerElytraBoostEvent event){if(event.getPlayer()==cancelled.player)event.setCancelled(true);}
+        };
+        getServer().getPluginManager().registerEvents(cancelLater,this);
+        check(boost(cancelled,firework,EquipmentSlot.HAND).isCancelled() && !cancelled.data.has(spentKey),"a later protection cancellation does not spend the rocket allowance");
+        org.bukkit.event.HandlerList.unregisterAll(cancelLater);
+        check(!boost(cancelled,firework,EquipmentSlot.HAND).isCancelled(),"the first successful rocket still works after a cancelled attempt");
+        FlightPlayer preCancelled=new FlightPlayer();var alreadyCancelled=new PlayerElytraBoostEvent(preCancelled.player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);alreadyCancelled.setCancelled(true);
+        getServer().getPluginManager().callEvent(alreadyCancelled);
+        check(!preCancelled.data.has(spentKey) && !boost(preCancelled,firework,EquipmentSlot.HAND).isCancelled(),"an already cancelled event leaves the rocket available");
+        for(World.Environment environment:new World.Environment[]{World.Environment.NETHER,World.Environment.THE_END}){
+            World exemptWorld=(World)Proxy.newProxyInstance(getClassLoader(),new Class[]{World.class},(o,m,a)->m.getName().equals("getEnvironment")?environment:defaultValue(m.getReturnType()));
+            FlightPlayer exempt=new FlightPlayer();exempt.inWorld=exemptWorld;
+            check(!boost(exempt,firework,EquipmentSlot.OFF_HAND).isCancelled() && !boost(exempt,firework,EquipmentSlot.HAND).isCancelled(),"repeated rockets remain unrestricted in "+environment);
+            check(!exempt.data.has(spentKey),"exempt dimension rockets do not spend the Overworld allowance "+environment);
+        }
+        FlightPlayer dimensional=new FlightPlayer();boost(dimensional,firework,EquipmentSlot.HAND);
+        World endWorld=(World)Proxy.newProxyInstance(getClassLoader(),new Class[]{World.class},(o,m,a)->m.getName().equals("getEnvironment")?World.Environment.THE_END:defaultValue(m.getReturnType()));
+        var intoEnd=new org.bukkit.event.player.PlayerTeleportEvent(dimensional.player,dimensional.location,new Location(endWorld,8.5,80,8.5));
+        call("teleport",new Class[]{org.bukkit.event.player.PlayerTeleportEvent.class},intoEnd);dimensional.inWorld=endWorld;dimensional.location=intoEnd.getTo();
+        check(!boost(dimensional,firework,EquipmentSlot.HAND).isCancelled() && !boost(dimensional,firework,EquipmentSlot.HAND).isCancelled(),"an outstanding Overworld flight does not restrict End rockets");
+        var outOfEnd=new org.bukkit.event.player.PlayerTeleportEvent(dimensional.player,dimensional.location,new Location(world,8.5,80,8.5));
+        call("teleport",new Class[]{org.bukkit.event.player.PlayerTeleportEvent.class},outOfEnd);dimensional.inWorld=world;dimensional.location=outOfEnd.getTo();
+        check(boost(dimensional,firework,EquipmentSlot.HAND).isCancelled(),"returning from an airborne End visit does not erase the Overworld flight allowance");
+        FlightPlayer creativePlayer=new FlightPlayer();creativePlayer.mode=GameMode.CREATIVE;
+        check(!boost(creativePlayer,firework,EquipmentSlot.HAND).isCancelled() && !creativePlayer.data.has(spentKey),"creative rockets remain unrestricted and untracked");
+        FlightPlayer adventure=new FlightPlayer();adventure.mode=GameMode.ADVENTURE;boost(adventure,firework,EquipmentSlot.HAND);
+        check(boost(adventure,firework,EquipmentSlot.HAND).isCancelled(),"Adventure follows the same one-rocket flight policy");
+        // Reconstruct the adapter: the player's tags, not this Java object's map, preserve the flight.
+        call("close",new Class[]{});var corePlugin=(JavaPlugin)getServer().getPluginManager().getPlugin("NookCore");
+        Constructor<?> timedConstructor=type.getDeclaredConstructor(JavaPlugin.class,java.util.function.LongSupplier.class);timedConstructor.setAccessible(true);
+        travel=timedConstructor.newInstance(corePlugin,(java.util.function.LongSupplier)clock::get);
+        check(boost(adventure,firework,EquipmentSlot.HAND).isCancelled(),"recreating the travel service preserves spent player data");
+        call("close",new Class[]{});corePlugin.getConfig().set("travel.grounded.elytra.landing-cooldown-seconds",null);corePlugin.getConfig().set("travel.grounded.elytra.grounded-rearm-ticks",80);
+        travel=timedConstructor.newInstance(corePlugin,(java.util.function.LongSupplier)clock::get);FlightPlayer legacy=new FlightPlayer();boost(legacy,firework,EquipmentSlot.HAND);legacy.at(5.5,65,8.5);observe(legacy);
+        check(deadline(legacy)==clock.get()+4000,"existing rearm-ticks setting remains an elapsed-time cooldown fallback");
         call("close",new Class[]{});
         cart.setMaxSpeed(1.6);cart.getPersistentDataContainer().set(new NamespacedKey("nookcore","travel-original-cart-speed"),PersistentDataType.DOUBLE,.6);
         var core=(JavaPlugin)getServer().getPluginManager().getPlugin("NookCore");
@@ -135,7 +212,7 @@ public final class TravelProbe extends JavaPlugin {
         Constructor<?> constructor=type.getDeclaredConstructor(JavaPlugin.class);constructor.setAccessible(true);
         travel=constructor.newInstance(core);
         check(Math.abs(cart.getMaxSpeed()-.6)<1e-6 && !cart.getPersistentDataContainer().has(new NamespacedKey("nookcore","travel-original-cart-speed"),PersistentDataType.DOUBLE),"disabled feature startup recovers saved cart limit");
-        var disabledRocket=new PlayerElytraBoostEvent(player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);
+        var disabledRocket=new PlayerElytraBoostEvent(player.player,new ItemStack(Material.FIREWORK_ROCKET),firework,EquipmentSlot.HAND);
         call("rocket",new Class[]{PlayerElytraBoostEvent.class},disabledRocket);check(!disabledRocket.isCancelled(),"disabled feature does not restrict rockets");
         call("close",new Class[]{});core.getConfig().set("travel.grounded.enabled",true);
         horse.remove();cart.remove();firework.remove();

@@ -63,8 +63,10 @@ travel:
       acceleration-per-tick: 0.04
     elytra:
       enabled: true
-      takeoff-ticks: 60
-      grounded-rearm-ticks: 60
+      # One rocket at any point in a flight. The first landing after using it starts this timer.
+      # Walking, jumping and falling again do not restart it. Water and boats count too; other mounts must touch ground or water.
+      landing-cooldown-seconds: 3
+      # Existing grounded-rearm-ticks is still accepted as a fallback; takeoff-ticks is ignored.
 advancement-rewards:
   "minecraft:adventure/adventuring_time": 4500
   "minecraft:adventure/arbalistic": 1800
