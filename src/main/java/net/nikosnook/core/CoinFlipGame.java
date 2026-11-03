@@ -143,7 +143,8 @@ final class CoinFlipGame implements CommandExecutor,TabCompleter,Listener,AutoCl
     private void invite(Player target,WagerService.Match match)throws SQLException {
         String creator=name(match.creator());
         target.sendMessage(NookUi.message("Coin flip",creator+" would like a coin flip! stake "+Money.format(match.stake())+" each for a "+Money.format(match.pot())+" pot."));
-        target.sendMessage(NookUi.text("50/50 · full pot · no fee · invitation lasts "+(settings.invitationMillis()/1000)+" seconds"));
+        target.sendMessage(NookUi.text("you're tails; "+creator+" is heads. 50/50 · full pot · no fee"));
+        target.sendMessage(NookUi.text("reply within "+Math.max(0,(match.expires()-System.currentTimeMillis()+999)/1000)+" seconds"));
         Component actions=NookUi.command("decline","/coinflip decline "+creator).clickEvent(ClickEvent.runCommand("/coinflip decline "+creator));
         if(settings.enabled())actions=NookUi.command("accept","/coinflip accept "+creator).clickEvent(ClickEvent.runCommand("/coinflip accept "+creator)).append(NookUi.text("  ·  ")).append(actions);
         target.sendMessage(actions);
