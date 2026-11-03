@@ -9,9 +9,9 @@ final class QuestRotationBank {
     QuestRotationBank(List<QuestPlan.Goal> regular,List<QuestPlan.Goal> challenges){
         this.regular=List.copyOf(regular);this.challenges=List.copyOf(challenges);
         var all=new ArrayList<>(regular);all.addAll(challenges);
-        if(regular.size()<8 || challenges.size()<2 || all.stream().map(QuestPlan.Goal::id).distinct().count()!=all.size()
+        if(regular.size()<9 || challenges.size()<2 || all.stream().map(QuestPlan.Goal::id).distinct().count()!=all.size()
             || regular.stream().anyMatch(g->g.reward()!=1500) || challenges.stream().anyMatch(g->g.reward()!=3000)
-            || regular.stream().map(QuestPlan.Goal::kind).distinct().count()<3)throw new IllegalArgumentException("Quest bank needs unique IDs, eight regular goals, two challenges and at least three activity types.");
+            || regular.stream().map(QuestPlan.Goal::kind).distinct().count()<3)throw new IllegalArgumentException("Quest bank needs unique IDs, nine regular goals, two challenges and at least three activity types.");
     }
     int regularCount(){return regular.size();}int challengeCount(){return challenges.size();}
     static String target(QuestPlan.Goal goal){return goal.kind()+":"+goal.target();}
@@ -26,12 +26,12 @@ final class QuestRotationBank {
             if(deposits>2)continue;
             var pool=new ArrayList<>(regular.stream().filter(g->!used.contains(target(g))).toList());Collections.shuffle(pool,new Random(seed+second.id().hashCode()));
             for(var goal:pool){
-                if(chosen.stream().filter(g->g.kind().equals(goal.kind())).count()>=3 || goal.kind().equals("DEPOSIT") && deposits>=2 || !used.add(target(goal)))continue;
+                if(chosen.stream().filter(g->g.kind().equals(goal.kind())).count()>=4 || goal.kind().equals("DEPOSIT") && deposits>=2 || !used.add(target(goal)))continue;
                 chosen.add(goal);if(goal.kind().equals("DEPOSIT"))deposits++;
-                if(chosen.size()==8){chosen.add(first);chosen.add(second);return List.copyOf(chosen);}
+                if(chosen.size()==9){chosen.add(first);chosen.add(second);return List.copyOf(chosen);}
             }
         }
-        throw new IllegalArgumentException("The quest bank needs more varied goals to offer eight quests and two challenges.");
+        throw new IllegalArgumentException("The quest bank needs more varied goals to offer nine quests and two challenges.");
     }
     List<QuestPlan.Goal> select(String week,List<QuestPlan.Goal> previous){
         long seed=LocalDate.parse(week).toEpochDay() ^ 0x4e494b4f534e4f4fL;

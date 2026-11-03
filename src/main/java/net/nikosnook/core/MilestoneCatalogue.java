@@ -13,7 +13,7 @@ record MilestoneCatalogue(boolean enabled,Definition root,List<Definition> miles
     record Definition(String id,String title,String description,String icon,Event event,boolean enabled,boolean showToast) {
         String criterion(){return id.equals(ROOT)?"visit":id.equals(CHOICE)?"chosen":"complete";}
         String json(){
-            String display="\"icon\":{\"id\":"+quote("minecraft:"+icon.toLowerCase(Locale.ROOT))+"},\"title\":{\"text\":"+quote(title)+"},\"description\":{\"text\":"+quote(description)+"},\"frame\":\"task\",\"announce_to_chat\":false,\"show_toast\":"+showToast;
+            String display="\"icon\":{\"id\":"+quote("minecraft:"+icon.toLowerCase(Locale.ROOT))+"},\"title\":{\"text\":"+quote(title)+"},\"description\":{\"text\":"+quote(description)+"},\"frame\":\"task\",\"announce_to_chat\":"+!id.equals(ROOT)+",\"show_toast\":"+showToast;
             return "{"+(id.equals(ROOT)?"":"\"parent\":"+quote(ROOT)+",")+"\"criteria\":{"+quote(criterion())+":{\"trigger\":\"minecraft:impossible\"}},\"requirements\":[["+quote(criterion())+"]],\"display\":{"+display+(id.equals(ROOT)?",\"background\":\"minecraft:gui/advancements/backgrounds/stone\"":"")+"}}";
         }
     }

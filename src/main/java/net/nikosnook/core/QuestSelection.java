@@ -5,7 +5,9 @@ import java.util.*;
 /** Shared offers are immutable; each confirmed player chooses exactly six plus one. */
 final class QuestSelection {
     static boolean board(List<QuestPlan.Goal> goals){
-        return goals.size()==10 && goals.stream().filter(g->g.reward()==1500).count()==8
+        long regular=goals.stream().filter(g->g.reward()==1500).count();
+        // Frozen eight-offer boards remain valid until their normal rollover.
+        return (regular==8 || regular==9) && goals.size()==regular+2
             && goals.stream().filter(g->g.reward()==3000).count()==2;
     }
     static Set<String> validate(List<QuestPlan.Goal> offers,Collection<String> ids){

@@ -71,12 +71,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             store=new NookStore(getDataFolder().toPath().resolve("nooks.db"));
             staffMode=new StaffMode(this);
             var section=getConfig().getConfigurationSection("advancement-rewards");
-            if(section==null)throw new IllegalArgumentException("Missing advancement reward map.");
-            for(String key:section.getKeys(false)) {
-                long amount=section.getLong(key,-1);
-                if(amount<0 || amount>Money.MAX || !key.startsWith("minecraft:"))throw new IllegalArgumentException("Invalid reward: "+key);
-                rewards.put(key,amount);
-            }
+            rewards.putAll(MilestoneRewards.load(section));
             try{economyMetrics=new EconomyMetrics(this,store);}catch(Exception ex){getLogger().log(Level.WARNING,"Activity metrics unavailable; gameplay is unaffected",ex);}
             bunnyBoots=new BunnyBoots(this,store,()->healthy,this::fail);
             groundedTravel=new GroundedTravel(this);

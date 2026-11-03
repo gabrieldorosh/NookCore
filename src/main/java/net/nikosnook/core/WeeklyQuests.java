@@ -31,11 +31,14 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
     private void checkWeekMilestone(Player player){
         if(!eligible(player) || week==null)return;
         try{
-            if(!store.questAccepted(player.getUniqueId(),week.id()))return;
-            var chosen=store.playerQuestGoals(player.getUniqueId(),week.id());if(chosen.isEmpty())return;
-            for(var goal:chosen)if(store.questProgress(player.getUniqueId(),week.id(),goal.id())<goal.amount())return;
-            milestone("WEEK_COMPLETE",player);
+            if(nikoComplete(player.getUniqueId(),week.id()))milestone("WEEK_COMPLETE",player);
         }catch(Exception e){cosmeticFailure.accept(e);}
+    }
+    boolean nikoComplete(UUID player,String shownWeek)throws Exception {
+        if(!store.questAccepted(player,shownWeek))return false;
+        var chosen=store.playerQuestGoals(player,shownWeek);if(chosen.isEmpty())return false;
+        for(var goal:chosen)if(store.questProgress(player,shownWeek,goal.id())<goal.amount())return false;
+        return true;
     }
     private final NookStore store;
     private final BooleanSupplier healthy;
@@ -344,13 +347,12 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
             }
             rotation(clock.getAsLong());
             if(sender instanceof Player p && player.equals(p.getUniqueId()) && !store.questAccepted(player,week.id())){sender.sendMessage(NookUi.message("Niko",nikoDirections.get()));return true;}
-            sender.sendMessage(Component.empty());sender.sendMessage(Component.text("NookQuests",NookUi.ACCENT).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD));
+            sender.sendMessage(Component.empty());sender.sendMessage(Component.text("NookQuests - Refresh: "+NookUi.date(week.nextReset()),NookUi.ACCENT).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD));
             var personal=store.playerQuestGoals(player,week.id());
             if(sender instanceof Player p && player.equals(p.getUniqueId()))checkWeekMilestone(p);
             for(var g:personal)if(g.reward()!=3000)sender.sendMessage(QuestUi.row(g,store.questProgress(player,week.id(),g.id())));
             for(var g:personal)if(g.reward()==3000)sender.sendMessage(QuestUi.row(g,store.questProgress(player,week.id(),g.id())));
-            if(personal.stream().anyMatch(g->g.kind().equals("DEPOSIT")))sender.sendMessage(NookUi.command("/quests contribute").append(NookUi.text(" · donated materials stay with the community; no weekly refund")));
-            sender.sendMessage(Component.text("Quests refreshing on: "+NookUi.date(week.nextReset()),NookUi.MUTED));
+            if(personal.stream().anyMatch(g->g.kind().equals("DEPOSIT")))sender.sendMessage(NookUi.command("/quests contribute").append(NookUi.text(" · contribute materials")));
         }catch(IllegalArgumentException e){sender.sendMessage(NookUi.problem("NookQuests",e.getMessage()));}
         catch(Exception e){failure.accept(e);sender.sendMessage(NookUi.problem("NookQuests","Could not read quests; please contact staff."));}
         return true;

@@ -13,7 +13,7 @@ Edit the existing live plugins/NookCore/quest-rotation.yml. Keep its root sectio
     amount: 16
 ```
 
-Use enabled:false to leave a draft out of the pool. Existing supported kinds are MINE, KILL, FISH, BIOME, DEPOSIT, HARVEST and TRADE. Use an existing entry as the template for its target syntax; a new kind needs a tracker in the plugin. Rewards are fixed by section: regular15Nooks, challenge30Nooks.
+Use enabled:false to leave a draft out of the pool. Existing supported kinds are MINE, KILL, FISH, BIOME, DEPOSIT, HARVEST and TRADE. Use an existing entry as the template for its target syntax; a new kind needs a tracker in the plugin. Rewards are fixed by section: regular 15 Nooks, challenge 30 Nooks.
 
 After saving:
 
@@ -29,8 +29,10 @@ The scheduler treats the same kind+target as one family. Different amounts/title
 
 ## Advancements
 
-plugins/NookCore/advancements.yml is installed automatically if missing. New definitions use a stable nikosnook path, title, description, vanilla item icon, event and enabled/show-toast flags. Events currently supported: QUESTS_CHOSEN, PIP_VISITED, COMMUNITY_CONTRIBUTION and WEEK_COMPLETE. These are cosmetic: no money or command reward fields are supported in this catalogue.
+plugins/NookCore/advancements.yml is installed automatically if missing. New definitions use a stable nikosnook path, title, description, vanilla item icon, event and enabled/show-toast flags. Events currently supported: QUESTS_CHOSEN, PIP_VISITED, COMMUNITY_CONTRIBUTION and WEEK_COMPLETE. This catalogue defines presentation and triggers; money and command fields are not supported here. The four built-in milestones use separate one-time rewards through the existing advancement award ledger: 75 cents for choosing quests, visiting Pip and contributing; 300 cents for completing a week. Missing entries in config.yml advancement-rewards use these defaults; explicit nikosnook:<path> amounts override them, and 0 disables payment. Existing reward settings are retained. Previously completed advancements are not automatically backfilled.
 
 Adding a new ID for an existing event needs no JAR rebuild. New action counters/events still need tracking code. Restart to load changes; there is no advancement reload command in this iteration. Disabled definitions stop granting and retain existing completion history. Existing installed title/icon/description changes are warned and retained for a reviewed migration; the loader does not delete/recreate earned advancement trees. Keep IDs and criteria stable.
 
-Owner checks: confirm each toast/entry once, reopen menus/restart without duplicate rewards, confirm a Pip admin preview does not count as a visit, confirm a failed contribution does not grant the contribution milestone, and complete a selected week. Existing choice progress must survive the upgrade. Check actual Java client display; the automated server probe is not a client visual check.
+Owner checks: confirm each toast, chat announcement and celebration once, reopen menus/restart without duplicate rewards, confirm a Pip admin preview does not count as a visit, confirm a failed contribution does not grant the contribution milestone, and complete a selected week. Existing choice progress must survive the upgrade. Payments and celebrations must not repeat when reopening menus or restarting. Check actual Java client display; the automated server probe is not a client visual check.
+
+New unsaved weeks offer nine regular quests plus two challenges. Players choose six plus one. Saved eight-offer choice boards and shared seven-task weeks remain authoritative.

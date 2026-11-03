@@ -32,6 +32,8 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     private final Map<String,Location> locations=new HashMap<>();
     private final Map<String,SkinData> skins=new HashMap<>();
     private final Map<UUID,Recovery> recoveries=new HashMap<>();
+    private final PipGreetings greetings=new PipGreetings();
+    private final PipIdlePose<Npc> pipIdle;
     private boolean closed, vendorPaused, initializing;
     private final NpcConfigWriter configWriter=new NpcConfigWriter();
     private java.util.concurrent.CompletableFuture<Void> pendingSave;
@@ -54,6 +56,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     }
     SpawnNpcs(JavaPlugin plugin,NookStore store,WeeklyQuests quests,BooleanSupplier healthy)throws Exception {
         this.plugin=plugin;this.store=store;this.quests=quests;this.healthy=healthy;
+        this.pipIdle=PipIdlePose.fancy(plugin.getLogger()::warning);
         file=plugin.getDataFolder().toPath().resolve("spawn-npcs.yml");
         if(!Files.exists(file))plugin.saveResource("spawn-npcs.yml",false);
         config=new YamlConfiguration();config.load(file.toFile());
@@ -78,9 +81,19 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         ticker=Bukkit.getScheduler().runTaskTimer(plugin,()->{
             if(closed)return;
             pollSave();
-            if(tickCounter++ % 100 != 0)return;
+            int step=tickCounter++;
+            if(step%10==0)animatePip();
+            if(step%100!=0)return;
             try{tick();}catch(Exception ex){problem=ex.getMessage();plugin.getLogger().log(Level.SEVERE,"NPC update failed; Pip purchases paused",ex);vendorPaused=true;}
         },1,1);
+    }
+    private void animatePip(){
+        if(!config.getBoolean("pip-idle.sitting-enabled",false) || !enabled() || !healthy.getAsBoolean())return;
+        var pip=npcs.get("pip");var at=locations.get("pip");
+        boolean nearby=at!=null && Bukkit.getOnlinePlayers().stream().anyMatch(p->!p.isDead()
+            && !StaffMode.active(p.getUniqueId()) && p.getGameMode()!=GameMode.SPECTATOR
+            && p.getWorld().equals(at.getWorld()) && p.getLocation().distanceSquared(at)<=64);
+        pipIdle.update(pip,nearby,System.nanoTime());
     }
     private boolean enabled(){return config.getBoolean("enabled",false) && !closed && !initializing;}
     private void save(String snapshot,Runnable success,CommandSender requester){
@@ -194,20 +207,21 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     void openNiko(Player p)throws Exception {
         if(!near(p,"niko"))throw new IllegalArgumentException(directions("niko"));
         var week=quests.nikoWeek();boolean accepted=store.questAccepted(p.getUniqueId(),week);
+        boolean complete=accepted && quests.nikoComplete(p.getUniqueId(),week);
         var offers=quests.nikoGoals();
         if(QuestSelection.board(offers)){
             var m=menu(p,"niko-choice",week,"",0,false,"niko's weekly quests");m.offers=offers;
             if(accepted){m.choices.addAll(store.questChoices(p.getUniqueId(),week));quests.nikoMilestone(p);}
-            int[] regular={10,11,12,13,14,15,16,19},challenge={21,23};int r=0,c=0;
+            int[] regular={9,10,11,12,13,14,15,16,17},challenge={21,23};int r=0,c=0;
             for(var goal:offers)m.questSlots.put(goal.reward()==3000?challenge[c++]:regular[r++],goal.id());
             paintNikoChoices(p,m);p.openInventory(m.inventory);
-            p.sendMessage(NookUi.message("Niko",accepted?"you've already activated this week's quests! check your progress here or with /quests!":"i've got some more quests ready for you! pick them up below! :D"));return;
+            p.sendMessage(NookUi.message("Niko",complete?"you've completed all of this week's quests! visit me next week for more :3":accepted?"you've already activated this week's quests! check your progress here or with /quests!":"i've got some more quests ready for you! pick them up below! :D"));return;
         }
         var m=menu(p,"niko",week,"",0,false,"niko's weekly quests");int slot=10;
         for(var goal:quests.nikoGoals())m.inventory.setItem(slot++,icon(goal.reward()==3000?Material.NETHER_STAR:Material.BOOK,goal.title(),store.questProgress(p.getUniqueId(),week,goal.id())+" / "+goal.amount(),"Reward: "+Money.format(goal.reward())));
         m.inventory.setItem(4,icon(accepted?Material.LIME_DYE:Material.YELLOW_DYE,accepted?"Quests accepted":"Quests not accepted",accepted?"Your weekly quests are active.":"Accept below to start this week's quests.",accepted?"Use /quests to check your progress anywhere.":"All six quests and the challenge."));
         m.inventory.setItem(22,icon(accepted?Material.MAP:Material.LIME_DYE,accepted?"View my progress":"accept this week's quests",accepted?"Use /quests anywhere.":"All six quests and the challenge.","Rewards arrive automatically."));p.openInventory(m.inventory);
-        p.sendMessage(NookUi.message("Niko",store.nikoIntroWeek(week)?"Hi! Come and speak to me next week for new quests!":accepted?"you've already activated this week's quests! check your progress here or with /quests!":"i've got some more quests ready for you! pick them up below! :D"));
+        p.sendMessage(NookUi.message("Niko",store.nikoIntroWeek(week)?"Hi! Come and speak to me next week for new quests!":complete?"you've completed all of this week's quests! visit me next week for more :3":accepted?"you've already activated this week's quests! check your progress here or with /quests!":"i've got some more quests ready for you! pick them up below! :D"));
     }
     private void paintNikoChoices(Player p,Menu m)throws Exception {
         boolean accepted=store.questAccepted(p.getUniqueId(),m.rotation);
@@ -216,7 +230,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         m.inventory.setItem(4,icon(accepted?Material.LIME_DYE:Material.BOOK,accepted?"your quests are ready!":"pick your quests!",regular+" / 6 quests · "+challenges+" / 1 challenge",accepted?"Use /quests to check your progress anywhere.":"Choose six quests and one challenge, then confirm."));
         for(var entry:m.questSlots.entrySet()){
             var goal=m.offers.stream().filter(g->g.id().equals(entry.getValue())).findFirst().orElseThrow();boolean selected=m.choices.contains(goal.id());
-            var item=icon(goal.reward()==3000?Material.NETHER_STAR:selected?Material.LIME_DYE:Material.BOOK,
+            var item=icon(goal.reward()==3000?Material.NETHER_STAR:selected?Material.ENCHANTED_BOOK:Material.BOOK,
                 (selected?"✓ ":"")+(goal.reward()==3000?"Challenge · ":"")+goal.title(),
                 accepted?(selected?store.questProgress(p.getUniqueId(),m.rotation,goal.id())+" / "+goal.amount():"Not chosen this week."):"Target: "+goal.amount(),
                 "Reward: "+Money.format(goal.reward()),accepted?"Your choices stay fixed until the refresh.":selected?"Tap to unselect.":"Tap to choose.");
@@ -242,7 +256,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
             lore.add(NookUi.text(preview?"Preview only":o.stock()==0?NookStore.vendorStockMessage(0,System.currentTimeMillis()<v.restock()):"Click to choose a quantity"));meta.lore(lore);item.setItemMeta(meta);m.inventory.setItem(slot++,item);
         }
         m.inventory.setItem(22,icon(Material.CLOCK,"Pip's visit",(System.currentTimeMillis()<v.restock()?"Restock: "+NookUi.date(v.restock()):"This visit's final stock is out."),"Leaves: "+NookUi.date(v.departure()),config.getBoolean("test-mode")?"LOCAL TEST · trial prices and stock":"Prices stay fixed for this visit."));p.openInventory(m.inventory);
-        if(!preview)quests.milestone("PIP_VISITED",p);
+        if(!preview){if(config.getBoolean("pip-idle.sitting-enabled",false))pipIdle.standOnClick(npcs.get("pip"),System.nanoTime());greetings.greet(p.getUniqueId(),p.getName(),System.currentTimeMillis()).ifPresent(message->p.sendMessage(NookUi.message("Pip",message)));quests.milestone("PIP_VISITED",p);}
     }
     private void cataloguePreview(Player p){
         var m=new Menu(p.getUniqueId(),"catalogue","","",0,true);

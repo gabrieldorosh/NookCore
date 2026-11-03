@@ -1,4 +1,5 @@
-# Cosmetic milestones. No money or command rewards are supported here.
+# Advancement presentation. One-time Nooks rewards use config.yml advancement-rewards.
+# Do not add money or command fields to this catalogue.
 # Keep IDs stable: Minecraft saves progress against the ID and criterion.
 # Edits to enabled/event apply after restart. New IDs are installed automatically.
 # Disabling stops new grants and keeps the existing tree entry and progress.

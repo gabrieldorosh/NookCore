@@ -1,5 +1,5 @@
 # Curated automatic weekly quests. Existing saved weeks are never replaced.
-# Eight regular offers and two challenges; players choose six plus one.
+# Nine regular offers and two challenges; players choose six plus one.
 # Chosen regular goals pay 15 Nooks each; the chosen challenge pays 30.
 # Entries may set enabled: false. Validate/reload with /nookadmin quests.
 # Selection avoids the previous week, with at most two contribution goals.

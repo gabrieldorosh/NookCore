@@ -11,6 +11,9 @@ skin-models:
   niko: SLIM
   pip: SLIM
 locations: {}
+# Optional idle pose at Pip's placed position; test the seat height with your stall first.
+pip-idle:
+  sitting-enabled: false
 first-visit-pins: [cctv-camera]
 seasons:
   halloween:

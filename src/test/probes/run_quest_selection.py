@@ -8,7 +8,7 @@ for name in ['cache','libraries','versions','.paper']:
     source=Path(os.environ.get('NN_PAPER_CACHE',str(root/'staging/upgrade-26.3-staff-20261101')))/name
     if source.exists() and not (server/name).exists():shutil.copytree(source,server/name)
 for name in ['VaultUnlocked-2.20.3.jar','PlaceholderAPI-2.12.3.jar','ChestShop.jar','worldedit-bukkit-7.4.6.jar','worldguard-bukkit-7.0.20.jar','FancyNpcs-2.12.1.jar']:shutil.copy2(Path(os.environ.get('NN_PLUGIN_CANDIDATES',str(root/'staging/candidates')))/('ChestShop-build-481.jar' if name=='ChestShop.jar' else name),plugins/name)
-artifact=repo/'target/nookcore-0.1.0-SNAPSHOT.jar';shutil.copy2(artifact,plugins/'NookCore.jar')
+artifact=Path(os.environ.get('NN_CORE_JAR',str(repo/'target/nookcore-0.1.0-SNAPSHOT.jar')));shutil.copy2(artifact,plugins/'NookCore.jar')
 cfg=plugins/'NookCore';cfg.mkdir(exist_ok=True)
 for suffix in ['', '-wal', '-shm']:
     p=cfg/('nooks.db'+suffix)

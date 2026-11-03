@@ -68,6 +68,11 @@ travel:
       landing-cooldown-seconds: 3
       # Existing grounded-rearm-ticks is still accepted as a fallback; takeoff-ticks is ignored.
 advancement-rewards:
+  # One-time custom milestones. Missing entries use these defaults; explicit 0 disables payment.
+  "nikosnook:quests/a_little_choice": 75
+  "nikosnook:community/just_browsing": 75
+  "nikosnook:community/a_helping_hand": 75
+  "nikosnook:quests/all_in_a_weeks_work": 300
   "minecraft:adventure/adventuring_time": 4500
   "minecraft:adventure/arbalistic": 1800
   "minecraft:adventure/avoid_vibration": 450

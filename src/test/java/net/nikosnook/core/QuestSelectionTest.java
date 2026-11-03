@@ -70,11 +70,57 @@ class QuestSelectionTest {
         var swapped=QuestSelection.toggle(board(),selected,"goal9");assertFalse(swapped.contains("goal8"));assertTrue(swapped.contains("goal9"));assertEquals(7,swapped.size());
         assertEquals(6,QuestSelection.toggle(board(),swapped,"goal0").size());
     }
+    List<QuestPlan.Goal> nineOfferBoard(){
+        var expanded=new ArrayList<>(board());
+        expanded.add(8,new QuestPlan.Goal("extra","Defeat an enderman","KILL","ENDERMAN",1,1500));
+        return List.copyOf(expanded);
+    }
+    @Test void boardDetectionKeepsFrozenEightOffersAndRecognisesNineOffers(){
+        assertTrue(QuestSelection.board(board()));assertTrue(QuestSelection.board(nineOfferBoard()));
+        assertFalse(QuestSelection.board(board().stream().filter(g->choices().contains(g.id())).toList()));
+        var invalid=new ArrayList<>(nineOfferBoard());invalid.set(8,new QuestPlan.Goal("extra","Another challenge","KILL","ENDERMAN",1,3000));
+        assertFalse(QuestSelection.board(invalid));
+    }
+    @Test void nineOfferBoardStillSelectsExactlySixPlusOneAndPaysOnly120Nooks()throws Exception{
+        String next="2026-11-11";long later=now+7*86400000L;var offers=nineOfferBoard();
+        store.questRotation(next,offers);assertTrue(store.acceptNiko(player,next,choices(),"niko",later));
+        assertEquals(7,store.playerQuestGoals(player,next).size());
+        for(var goal:offers)store.advanceQuests(player,next,"KILL",goal.target(),null,later);
+        assertEquals(12000,store.account(player).orElseThrow().cents());
+        assertEquals(0,store.questProgress(player,next,"extra"));
+        var tooMany=new HashSet<>(choices());tooMany.add("extra");
+        assertThrows(IllegalArgumentException.class,()->QuestSelection.validate(offers,tooMany));
+        assertThrows(IllegalArgumentException.class,()->QuestSelection.toggle(offers,choices(),"extra"));
+    }
+    @Test void savedNineOfferBoardAndChoicesSurviveBankChangesAndRestart()throws Exception{
+        String next="2026-11-11";long later=now+7*86400000L;var offers=nineOfferBoard();
+        store.questRotation(next,offers);store.acceptNiko(player,next,choices(),"niko",later);
+        store.advanceQuests(player,next,"KILL","ZOMBIE",null,later);store.close();store=new NookStore(folder.resolve("nooks.db"));
+        var replacement=QuestRotationBankTest.bundled().offers(next,List.of());
+        assertEquals(offers,store.questRotation(next,replacement));
+        assertEquals(choices(),store.questChoices(player,next));assertEquals(7,store.playerQuestGoals(player,next).size());
+        assertEquals(1,store.questProgress(player,next,"goal0"));assertEquals(1500,store.account(player).orElseThrow().cents());
+    }
+    @Test void nineOffersCanFollowAWeekUsingEverySingleFamilyActivityType(){
+        String[][] used={{"HARVEST","MATURE_CROPS"},{"TRADE","VILLAGER"},{"BIOME","ANY"},
+            {"DEPOSIT","STONE"},{"DEPOSIT","TUFF"},{"MINE","IRON"},{"MINE","COPPER"},
+            {"KILL","SKELETON"},{"KILL","ZOMBIE"},{"MINE","DIAMOND"},{"KILL","SHULKER"}};
+        var previous=new ArrayList<QuestPlan.Goal>();
+        for(int n=0;n<used.length;n++)previous.add(new QuestPlan.Goal("prior"+n,"Prior task "+n,used[n][0],used[n][1],1,n<9?1500:3000));
+        var offers=QuestRotationBankTest.bundled().offers("2026-11-11",previous);
+        assertEquals(11,offers.size());assertEquals(9,offers.stream().filter(g->g.reward()==1500).count());
+        var prior=previous.stream().map(QuestRotationBank::target).collect(java.util.stream.Collectors.toSet());
+        assertTrue(offers.stream().noneMatch(g->prior.contains(QuestRotationBank.target(g))));
+        var regular=offers.stream().filter(g->g.reward()==1500).toList();
+        assertTrue(regular.stream().map(QuestPlan.Goal::kind).distinct().count()>=3);
+        assertTrue(regular.stream().anyMatch(g->regular.stream().filter(x->x.kind().equals(g.kind())).count()==4));
+        assertTrue(offers.stream().filter(g->g.kind().equals("DEPOSIT")).count()<=2);
+    }
     @Test void offerBoardsStayVariedAndAvoidPreviousTargetsForTwoYears(){
         var bank=QuestRotationBankTest.bundled();List<QuestPlan.Goal> prior=List.of();
         for(int i=0;i<104;i++){
             String date=java.time.LocalDate.of(2026,11,4).plusWeeks(i).toString();var offers=bank.offers(date,prior);assertTrue(QuestSelection.board(offers),date);
-            assertEquals(10,offers.stream().map(QuestRotationBank::target).distinct().count());assertTrue(offers.stream().filter(g->g.kind().equals("DEPOSIT")).count()<=2);
+            assertEquals(11,offers.size());assertEquals(9,offers.stream().filter(g->g.reward()==1500).count());assertEquals(2,offers.stream().filter(g->g.reward()==3000).count());assertEquals(11,offers.stream().map(QuestRotationBank::target).distinct().count());assertTrue(offers.stream().filter(g->g.kind().equals("DEPOSIT")).count()<=2);
             var old=prior.stream().map(QuestRotationBank::target).collect(java.util.stream.Collectors.toSet());assertTrue(offers.stream().noneMatch(g->old.contains(QuestRotationBank.target(g))),date);
             assertEquals(offers,bank.offers(date,prior));prior=offers;
         }

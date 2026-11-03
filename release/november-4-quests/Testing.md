@@ -1,20 +1,18 @@
-# Niko quest selection — client checks
+# Niko and Pip — follow-up acceptance
 
-Development candidate, not a confirmed live release. Choose six of eight regular quests and one of two challenges; rewards remain six ×15 plus30 Nooks. The current accepted shared week is preserved. Automatic new offer boards begin at the next eligible unsaved week from4November02:00UK.
+The first owner checks T01–T09 passed on 3 November; T10 was skipped. This revision addresses that feedback. Use the fresh local follow-up fixture listed in the candidate package; keep existing data intact.
 
-Use the separate generated quest-selection playtest, not the old travel server. Its start script and address are recorded in the staging package. Keep it local. Its bank start date is deliberately earlier for testing today's board; never upload its configuration, worlds or databases to the live server.
+1. A new unsaved board has nine regular offers in a full row and two challenges. Select six plus one. Regular books become enchanted books when selected. A seventh regular is refused; switching challenges replaces the previous choice.
+2. Previously frozen eight-plus-two boards and seven-task shared weeks retain their definitions, choices, progress and rewards. Deploying this JAR does not expand or reset those weeks.
+3. Confirming choices awards a little choice once: chat, toast, quest-style celebration and 0.75 Nooks. Reopening does not repeat it.
+4. Pip's first ordinary click greets the player privately. Reopening/quantity returns respect the five-minute per-player cooldown. Admin previews do not greet or award just browsing. The ordinary first visit pays 0.75 Nooks once, with chat and effects; no purchase required.
+5. A successful selected contribution awards a helping hand once, with 0.75 Nooks alongside its existing quest reward. Failed/unselected/repeated hand-ins take nothing and grant no extra milestone. Review whether overlapping quest/milestone effects are too busy.
+6. Completing all seven personal tasks awards all in a week's work once, with 3 Nooks and a stronger celebration. Niko recognises the completed week and invites the player back next week. Unselected tasks do not block completion.
+7. The four milestones total 5.25 Nooks once per player. Weekly quests remain six × 15 plus 30, maximum 120 per week. Reconnect/restart/menu reopening cannot pay or celebrate again. Existing completed advancements are not automatically backfilled.
+8. /quests shows the refresh date in its heading and a concise contribution hint. Check Java client readability, skin interactions and the custom advancement tab.
+9. Optional Pip sitting: pip-idle.sitting-enabled defaults to false in spawn-npcs.yml. When enabled, she sits after 10 seconds without a visible player within 8 blocks, stands within about half a second on approach, and stands on click. Check carpet/cushion height, skin/seat cleanup, repeated approach and restart. Hidden staff/spectators must not wake her. Animation failures must not affect shopping.
+10. nookadmin quests next previews nine regular offers and two challenges without current/within-board target repeats. Validate/reload checks remain admin-only, preserve current snapshots and keep the loaded bank after a bad edit. The previous automatic schedule and 02:00 UK reset remain.
 
-1. Open Niko: eight regular tasks, two challenges, zero selected. Closing without confirmation leaves quests unaccepted and /quests directs you to Niko.
-2. Choose six regular quests. A seventh is refused. Tap a choice to deselect it; select another. Switch between the two challenges and confirm only one remains selected. Selected items have a tick/glint as well as colour.
-3. Confirm an incomplete selection: no acceptance or progress. Confirm six-plus-one, including repeated clicks: /quests shows only those seven tasks. Acceptance itself pays nothing. The 'a little choice' advancement should appear once; its extra Nooks reward is zero by default.
-4. Reopen Niko: saved choices and current progress are visible, with View my progress. Choices cannot be changed after confirmation. Reconnect and restart; both choices and progress remain.
-5. A second account chooses a different six-plus-one set. Progress on an unselected task pays nothing. Check a selected combat/mining/crop/trade task and the contribution flow if offered. Contribution completion and its reward happen once; an unselected contribution should not take items or appear in your contribution choices.
-6. Leave the menu open and move away from Niko. Selection/confirmation is refused. Shift-click, number keys, dragging and double clicks must not move menu items into your inventory.
-7. On a disposable database, test the02:00 roll and leave an old menu open. It must say quests refreshed and accept neither the old nor new week. The saved prior week remains available to staff inspection without resetting rewards. Do not change the production clock for this test.
-8. Check Java and Bedrock menu interaction and advancement presentation. FancyNpcs skins and actual NPC clicks are owner/client checks beyond the synthetic inventory-event probe.
+Niko roaming remains planned: a bounded owner-approved route, pauses while interacting, obstruction recovery and actual-position interaction checks. No roaming is enabled here.
 
-Read-only live checks: `nookadmin status` and `nookadmin quests next`. Once this candidate is installed, next-week preview lists ten offers, not ten payable quests per player. No manual activate-config command is required for normal rollover.
-
-Admin fallback: `nookadmin npc accept <player>` lists the offers and their IDs for a choice week. After asking the player, use `nookadmin npc accept <player> <seven,comma,separated,IDs>` with six regular IDs and one challenge ID. This is logged and cannot replace an accepted selection. Legacy shared weeks retain the existing fallback.
-
-Deployment is JAR-only after acceptance and a fresh backup. Preserve every live NookCore file/data directory. New quest_choices schema and the cosmetic advancement definitions are installed automatically. Deploying after a shared week has already been frozen will preserve that set; it will not silently convert everyone's current quests into a new board.
+Deploy only NookCore.jar after acceptance and a fresh backup. Preserve the entire existing NookCore data/configuration directory. Missing custom reward entries use approved defaults automatically; explicit config values override them. No config folder replacement is required.

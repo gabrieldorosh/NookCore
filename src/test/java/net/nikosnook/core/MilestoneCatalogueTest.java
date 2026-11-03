@@ -5,6 +5,11 @@ import java.lang.reflect.Proxy;
 import java.util.*;
 import java.util.function.Predicate;
 import org.bukkit.entity.Player;
+import org.bukkit.GameMode;
+import org.bukkit.NamespacedKey;
+import org.bukkit.advancement.Advancement;
+import org.bukkit.event.player.PlayerAdvancementDoneEvent;
+import net.kyori.adventure.text.Component;
 import org.junit.jupiter.api.Test;
 import org.yaml.snakeyaml.Yaml;
 import static org.junit.jupiter.api.Assertions.*;
@@ -19,7 +24,7 @@ class MilestoneCatalogueTest {
         public boolean criterionExists(MilestoneCatalogue.Definition d){return !incompatible.contains(d.id());}
         public boolean presentationMatches(MilestoneCatalogue.Definition d){return installed.get(d.id()).json().equals(d.json());}
         public void register(MilestoneCatalogue.Definition d){if(d.id().equals(failRegister))throw new IllegalStateException("test failure");assertFalse(installed.containsKey(d.id()),"must never overwrite an installed advancement");installed.put(d.id(),d);}
-        public void grant(Player p,MilestoneCatalogue.Definition d){if(d.id().equals(failGrant))throw new IllegalStateException("test grant failure");grants.add(d.id()+":"+d.criterion());}
+        public boolean grant(Player p,MilestoneCatalogue.Definition d){if(d.id().equals(failGrant))throw new IllegalStateException("test grant failure");return grants.add(d.id()+":"+d.criterion());}
     }
     static Player player(){return (Player)Proxy.newProxyInstance(MilestoneCatalogueTest.class.getClassLoader(),new Class<?>[]{Player.class},(p,m,a)->null);}
     @Test void defaultsContainFourCosmeticEventsAndPreserveLegacyIds()throws Exception{
@@ -32,7 +37,7 @@ class MilestoneCatalogueTest {
         String edited=defaults().replace("title: 'a little choice'","title: 'a \"little\" \\ choice <3'");var definition=parse(edited).milestones().getFirst();
         @SuppressWarnings("unchecked")var json=(Map<String,Object>)new Yaml().load(definition.json());
         @SuppressWarnings("unchecked")var display=(Map<String,Object>)json.get("display");
-        assertEquals(Map.of("text","a \"little\" \\ choice <3"),display.get("title"));assertEquals(false,display.get("announce_to_chat"));assertEquals("nikosnook:small_comforts",json.get("parent"));
+        assertEquals(Map.of("text","a \"little\" \\ choice <3"),display.get("title"));assertEquals(true,display.get("announce_to_chat"));assertEquals("nikosnook:small_comforts",json.get("parent"));
     }
     @Test void schemaUnknownEventAndInvalidIconAreRejected()throws Exception{
         String yaml=defaults();assertThrows(IllegalArgumentException.class,()->parse(yaml.replace("schema-version: 1","schema-version: 2")));
@@ -76,6 +81,44 @@ class MilestoneCatalogueTest {
         var memory=new Memory();var warnings=new ArrayList<String>();memory.failRegister="nikosnook:community/just_browsing";memory.incompatible.add(MilestoneCatalogue.CHOICE);
         var milestones=new NookMilestones(parse(defaults()),memory,warnings::add);milestones.selectedQuests(player());assertFalse(memory.grants.contains(MilestoneCatalogue.CHOICE+":chosen"));
         milestones.trigger("COMMUNITY_CONTRIBUTION",player());assertTrue(memory.grants.contains("nikosnook:community/a_helping_hand:complete"));assertEquals(2,warnings.size());
+    }
+    static Player namedPlayer(GameMode mode){return (Player)Proxy.newProxyInstance(MilestoneCatalogueTest.class.getClassLoader(),new Class<?>[]{Player.class},(p,m,a)->switch(m.getName()){case "getName"->"DrunkeUnicorn";case "getUniqueId"->UUID.fromString("27572a99-54f0-40f0-9e6e-8553e20e4930");case "getGameMode"->mode;default->null;});}
+    static PlayerAdvancementDoneEvent event(Player player,String id,Component message){
+        var advancement=(Advancement)Proxy.newProxyInstance(MilestoneCatalogueTest.class.getClassLoader(),new Class<?>[]{Advancement.class},(p,m,a)->m.getName().equals("getKey")?NamespacedKey.fromString(id):null);
+        return new PlayerAdvancementDoneEvent(player,advancement,message);
+    }
+    @Test void onlyNewMilestonesCelebrateAndCompletionUsesChallengeEffect()throws Exception{
+        var memory=new Memory();var warnings=new ArrayList<String>();var effects=new ArrayList<Boolean>();
+        var milestones=new NookMilestones(parse(defaults()),memory,warnings::add,(p,challenge)->effects.add(challenge));
+        milestones.selectedQuests(player());milestones.selectedQuests(player());milestones.trigger("PIP_VISITED",player());milestones.trigger("COMMUNITY_CONTRIBUTION",player());milestones.trigger("WEEK_COMPLETE",player());milestones.trigger("WEEK_COMPLETE",player());
+        assertEquals(List.of(false,false,false,true),effects);assertEquals(5,memory.grants.size());assertTrue(warnings.isEmpty());
+    }
+    @Test void alreadyEarnedCriteriaDoNotCelebrateAfterModuleReconstruction()throws Exception{
+        var memory=new Memory();var effects=new ArrayList<Boolean>();var catalogue=parse(defaults());
+        new NookMilestones(catalogue,memory,s->{},(p,c)->effects.add(c)).selectedQuests(player());
+        new NookMilestones(catalogue,memory,s->{},(p,c)->effects.add(c)).selectedQuests(player());assertEquals(List.of(false),effects);
+    }
+    @Test void celebrationFailureKeepsGrantAndCannotEscapeIntoQuestPayout()throws Exception{
+        var memory=new Memory();var warnings=new ArrayList<String>();var milestones=new NookMilestones(parse(defaults()),memory,warnings::add,(p,c)->{throw new IllegalStateException("particles unavailable");});
+        assertDoesNotThrow(()->milestones.trigger("PIP_VISITED",player()));assertDoesNotThrow(()->milestones.trigger("PIP_VISITED",player()));
+        assertTrue(memory.grants.contains("nikosnook:community/just_browsing:complete"));assertEquals(1,warnings.size());assertTrue(warnings.getFirst().contains("celebrate"));
+    }
+    @Test void legacySilentInstalledAdvancementsGetEventAnnouncementWithoutReplacement()throws Exception{
+        var memory=new Memory();var milestones=new NookMilestones(parse(defaults()),memory,s->{});var before=new LinkedHashMap<>(memory.installed);
+        var event=event(namedPlayer(GameMode.SURVIVAL),MilestoneCatalogue.CHOICE,null);milestones.announce(event);
+        assertEquals(NookMilestones.announcement(event.getPlayer(),memory.installed.get(MilestoneCatalogue.CHOICE)),event.message());assertEquals(before,memory.installed);
+    }
+    @Test void nativeAnnouncementIsNotDuplicatedAndRootForeignAndDisabledStayQuiet()throws Exception{
+        var milestones=new NookMilestones(parse(defaults()),new Memory(),s->{});var player=namedPlayer(GameMode.SURVIVAL);var original=Component.text("existing native announcement");
+        var nativeEvent=event(player,MilestoneCatalogue.CHOICE,original);milestones.announce(nativeEvent);assertSame(original,nativeEvent.message());
+        for(String id:List.of(MilestoneCatalogue.ROOT,"minecraft:story/mine_stone","nikosnook:unknown")){var other=event(player,id,null);milestones.announce(other);assertNull(other.message());}
+        var disabled=new NookMilestones(parse(defaults().replace("enabled: true","enabled: false")),new Memory(),s->{});var inactive=event(player,MilestoneCatalogue.CHOICE,null);disabled.announce(inactive);assertNull(inactive.message());
+    }
+    @Test void nonSurvivalMilestoneAnnouncementIsSuppressedAndRootJsonRemainsSilent()throws Exception{
+        var catalogue=parse(defaults());var milestones=new NookMilestones(catalogue,new Memory(),s->{});
+        var creative=event(namedPlayer(GameMode.CREATIVE),MilestoneCatalogue.CHOICE,Component.text("native"));milestones.announce(creative);assertNull(creative.message());
+        @SuppressWarnings("unchecked")var json=(Map<String,Object>)new Yaml().load(catalogue.root().json());
+        @SuppressWarnings("unchecked")var display=(Map<String,Object>)json.get("display");assertEquals(false,display.get("announce_to_chat"));
     }
     @Test void grantFailureCannotEscapeIntoEconomyAndWarningIsNotRepeated()throws Exception{
         var memory=new Memory();var warnings=new ArrayList<String>();memory.failGrant=MilestoneCatalogue.CHOICE;var milestones=new NookMilestones(parse(defaults()),memory,warnings::add);
