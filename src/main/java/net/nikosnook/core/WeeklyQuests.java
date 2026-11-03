@@ -24,13 +24,26 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         if(!eligible(player))throw new IllegalArgumentException("Speak to Niko while playing Survival.");
         nikoWeek();store.acceptNiko(player.getUniqueId(),shownWeek,choices,"niko",clock.getAsLong());nikoMilestone(player);
     }
-    private Consumer<Player> selectionMilestone=player->{};
-    void nikoMilestone(Player player){try{selectionMilestone.accept(player);}catch(RuntimeException e){cosmeticFailure.accept(e);}}
+    private BiConsumer<String,Player> milestones=(event,player)->{};
+    void milestone(String event,Player player){if(!eligible(player))return;try{milestones.accept(event,player);}catch(RuntimeException e){cosmeticFailure.accept(e);}}
+    void nikoMilestone(Player player){milestone("QUESTS_CHOSEN",player);checkWeekMilestone(player);}
+    void setMilestones(BiConsumer<String,Player> callback){milestones=callback;}
+    private void checkWeekMilestone(Player player){
+        if(!eligible(player) || week==null)return;
+        try{
+            if(!store.questAccepted(player.getUniqueId(),week.id()))return;
+            var chosen=store.playerQuestGoals(player.getUniqueId(),week.id());if(chosen.isEmpty())return;
+            for(var goal:chosen)if(store.questProgress(player.getUniqueId(),week.id(),goal.id())<goal.amount())return;
+            milestone("WEEK_COMPLETE",player);
+        }catch(Exception e){cosmeticFailure.accept(e);}
+    }
     private final NookStore store;
     private final BooleanSupplier healthy;
     private final Consumer<Exception> failure;
     private final List<QuestPlan.Goal> proposed;
     private AutomaticQuests automatic=AutomaticQuests.disabled();
+    private AutomaticQuests.Loader automaticLoader=()->automatic;
+    void automaticLoader(AutomaticQuests.Loader loader){automaticLoader=loader;}
     private static final Set<String> MINE_TARGETS=Set.of("COAL","IRON","DIAMOND","COPPER","GOLD","REDSTONE","LAPIS","EMERALD","QUARTZ","ANCIENT_DEBRIS");
     private final boolean enabled;
     private final LongSupplier clock;
@@ -51,7 +64,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         var config=new YamlConfiguration();config.load(file);enabled=config.getBoolean("enabled",false);
         if(config.getBoolean("celebrations-enabled",true))celebration=QuestCelebrations::play;
         cosmeticFailure=e->plugin.getLogger().warning("Quest celebration failed: "+e.getClass().getSimpleName());
-        selectionMilestone=new NookMilestones(plugin)::selectedQuests;
+        milestones=new NookMilestones(plugin)::trigger;
         var section=Objects.requireNonNull(config.getConfigurationSection("goals"),"Missing quest goals");
         var parsed=new ArrayList<QuestPlan.Goal>();
         for(String id:section.getKeys(false)){
@@ -62,7 +75,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         if(parsed.size()!=7 || parsed.stream().filter(g->g.reward()==1500).count()!=6 || parsed.stream().filter(g->g.reward()==3000).count()!=1)throw new IllegalArgumentException("Configure six quests at 1500 cents and one challenge at 3000 cents");
         validateContributions(parsed);
         proposed=List.copyOf(parsed);
-        automatic=AutomaticQuests.load(plugin);
+        automatic=AutomaticQuests.load(plugin);automaticLoader=()->AutomaticQuests.load(plugin);
         var command=Objects.requireNonNull(plugin.getCommand("quests"));command.setExecutor(this);command.setTabCompleter(this);
         if(enabled){
             rotation(clock.getAsLong());plugin.getServer().getPluginManager().registerEvents(this,plugin);
@@ -125,7 +138,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
             long now=clock.getAsLong();rotation(now);
             if(!store.questAccepted(p.getUniqueId(),week.id()))return false;
             var updates=store.advanceQuests(p.getUniqueId(),week.id(),kind,target,unique,now);
-            if(updates.stream().anyMatch(NookStore.QuestUpdate::paid))capacityNotified.remove(p.getUniqueId());
+            if(updates.stream().anyMatch(NookStore.QuestUpdate::paid)){capacityNotified.remove(p.getUniqueId());checkWeekMilestone(p);}
             for(var update:updates){
                 if(notices.immediate(p.getUniqueId(),update,now))p.sendMessage(QuestUi.progress(update));
                 if(update.paid())celebrate(p,update.goal().reward()==3000);
@@ -241,6 +254,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         }catch(Exception error){
             player.getInventory().setStorageContents(before);persistContributionInventory(player);store.cancelQuestDeposit(receipt);throw error;
         }
+        milestone("COMMUNITY_CONTRIBUTION",player);checkWeekMilestone(player);
         player.sendMessage(NookUi.message("NookQuests",removed+" "+goal.target().toLowerCase(Locale.ROOT).replace('_',' ')+" contributed! Thanks for adding to the community supplies!"));
         for(var update:updates){player.sendMessage(QuestUi.progress(update));if(update.paid())celebrate(player,update.goal().reward()==3000);}
     }
@@ -256,10 +270,30 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         }
     }
     @EventHandler public void quit(PlayerQuitEvent event){notices.forget(event.getPlayer().getUniqueId());lastBiome.remove(event.getPlayer().getUniqueId());capacityNotified.remove(event.getPlayer().getUniqueId());}
+    void validateFutureBank(AutomaticQuests candidate,long now)throws Exception {
+        String next=QuestPlan.week(QuestPlan.week(now).nextReset()).id();var previous=store.previousQuestRotation(next);
+        for(int n=0;n<8;n++){
+            var saved=store.savedQuestRotation(next);
+            previous=saved.isPresent()?saved.get():candidate.applies(next)?candidate.bank().offers(next,previous):proposed;
+            next=java.time.LocalDate.parse(next).plusWeeks(1).toString();
+        }
+    }
+    private void refreshBank(CommandSender sender,boolean apply){
+        try{
+            var candidate=automaticLoader.load();validateFutureBank(candidate,clock.getAsLong());
+            if(apply)automatic=candidate;
+            sender.sendMessage(NookUi.message("NookQuests",(apply?"quest bank reloaded! ":"quest bank looks good! ")+candidate.description()+". Checked the next eight weeks; saved weeks and progress are unchanged."));
+        }catch(Exception e){sender.sendMessage(NookUi.problem("NookQuests","The quest bank was not changed: "+e.getMessage()));}
+    }
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args){
         if(!enabled){sender.sendMessage(NookUi.message("NookQuests","Weekly quests are not open yet."));return true;}
         if(!healthy.getAsBoolean()){sender.sendMessage(NookUi.problem("NookQuests","Quests are paused; please contact staff."));return true;}
         try{
+            if(args.length>=1 && Set.of("validate","reload").contains(args[0].toLowerCase(Locale.ROOT))){
+                if(!sender.hasPermission("nookcore.admin"))throw new IllegalArgumentException("Only admins can change the quest bank.");
+                if(args.length!=1)throw new IllegalArgumentException("/nookadmin quests "+args[0].toLowerCase(Locale.ROOT));
+                refreshBank(sender,args[0].equalsIgnoreCase("reload"));return true;
+            }
             if(args.length>=1 && args[0].equalsIgnoreCase("next")){
                 if(!sender.hasPermission("nookcore.admin"))throw new IllegalArgumentException("Only admins can preview next week's quests.");
                 if(args.length!=1)throw new IllegalArgumentException("/nookadmin quests next");
@@ -306,12 +340,13 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
                 if(!(sender instanceof Player p)){sender.sendMessage(NookUi.message("NookQuests","Use quests inspect <player> from console."));return true;}player=p.getUniqueId();
             }else{
                 NookUi.help(sender,"Weekly quests","/quests — view your progress and rewards");
-                if(sender.hasPermission("nookcore.admin"))NookUi.help(sender,"Staff","/nookadmin quests inspect <player> — view progress without changing it");return true;
+                if(sender.hasPermission("nookcore.admin"))NookUi.help(sender,"Staff","/nookadmin quests inspect <player> — view progress without changing it","/nookadmin quests validate — check the edited bank","/nookadmin quests reload — use a valid bank for future unsaved weeks","/nookadmin quests next — preview next week");return true;
             }
             rotation(clock.getAsLong());
             if(sender instanceof Player p && player.equals(p.getUniqueId()) && !store.questAccepted(player,week.id())){sender.sendMessage(NookUi.message("Niko",nikoDirections.get()));return true;}
             sender.sendMessage(Component.empty());sender.sendMessage(Component.text("NookQuests",NookUi.ACCENT).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD));
             var personal=store.playerQuestGoals(player,week.id());
+            if(sender instanceof Player p && player.equals(p.getUniqueId()))checkWeekMilestone(p);
             for(var g:personal)if(g.reward()!=3000)sender.sendMessage(QuestUi.row(g,store.questProgress(player,week.id(),g.id())));
             for(var g:personal)if(g.reward()==3000)sender.sendMessage(QuestUi.row(g,store.questProgress(player,week.id(),g.id())));
             if(personal.stream().anyMatch(g->g.kind().equals("DEPOSIT")))sender.sendMessage(NookUi.command("/quests contribute").append(NookUi.text(" · donated materials stay with the community; no weekly refund")));
@@ -321,7 +356,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         return true;
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args){
-        if(args.length==1)return NookUi.complete(args[0],sender.hasPermission("nookcore.admin")?List.of("list","help","inspect","next","contribute","contributions","collect","activate-config"):List.of("list","help","contribute"));
+        if(args.length==1)return NookUi.complete(args[0],sender.hasPermission("nookcore.admin")?List.of("list","help","inspect","next","validate","reload","contribute","contributions","collect","activate-config"):List.of("list","help","contribute"));
         if(args.length==2 && args[0].equalsIgnoreCase("contribute")){
             if(!enabled || !healthy.getAsBoolean())return List.of();
             try{rotation(clock.getAsLong());return NookUi.complete(args[1],(sender instanceof Player p?store.playerQuestGoals(p.getUniqueId(),week.id()):goals).stream().filter(g->g.kind().equals("DEPOSIT")).map(g->g.target().toLowerCase(Locale.ROOT)).toList());}catch(Exception e){failure.accept(e);return List.of();}

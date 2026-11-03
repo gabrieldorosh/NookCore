@@ -1,0 +1,41 @@
+# Cosmetic milestones. No money or command rewards are supported here.
+# Keep IDs stable: Minecraft saves progress against the ID and criterion.
+# Edits to enabled/event apply after restart. New IDs are installed automatically.
+# Disabling stops new grants and keeps the existing tree entry and progress.
+# Existing title/description/icon edits are reported and retained for a reviewed
+# migration, rather than deleting/recreating advancement progress.
+schema-version: 1
+enabled: true
+root:
+  title: "niko's nook"
+  description: 'little adventures and small comforts <3'
+  icon: BOOK
+milestones:
+  quests/a_little_choice:
+    enabled: true
+    title: 'a little choice'
+    description: 'choose your weekly quests with Niko'
+    icon: WRITTEN_BOOK
+    event: QUESTS_CHOSEN
+    show-toast: true
+  community/just_browsing:
+    enabled: true
+    title: 'just browsing'
+    description: 'stop by and say hello to Pip'
+    icon: SPYGLASS
+    event: PIP_VISITED
+    show-toast: true
+  community/a_helping_hand:
+    enabled: true
+    title: 'a helping hand'
+    description: 'add something to the community supplies'
+    icon: CHEST
+    event: COMMUNITY_CONTRIBUTION
+    show-toast: true
+  quests/all_in_a_weeks_work:
+    enabled: true
+    title: 'all in a week’s work'
+    description: 'finish all of your chosen weekly quests'
+    icon: EMERALD
+    event: WEEK_COMPLETE
+    show-toast: true

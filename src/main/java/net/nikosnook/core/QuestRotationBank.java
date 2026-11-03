@@ -9,9 +9,9 @@ final class QuestRotationBank {
     QuestRotationBank(List<QuestPlan.Goal> regular,List<QuestPlan.Goal> challenges){
         this.regular=List.copyOf(regular);this.challenges=List.copyOf(challenges);
         var all=new ArrayList<>(regular);all.addAll(challenges);
-        if(regular.size()<6 || challenges.isEmpty() || all.stream().map(QuestPlan.Goal::id).distinct().count()!=all.size()
+        if(regular.size()<8 || challenges.size()<2 || all.stream().map(QuestPlan.Goal::id).distinct().count()!=all.size()
             || regular.stream().anyMatch(g->g.reward()!=1500) || challenges.stream().anyMatch(g->g.reward()!=3000)
-            || regular.stream().map(QuestPlan.Goal::kind).distinct().count()<3)throw new IllegalArgumentException("Quest bank needs unique IDs, six regular goals, a challenge and at least three activity types.");
+            || regular.stream().map(QuestPlan.Goal::kind).distinct().count()<3)throw new IllegalArgumentException("Quest bank needs unique IDs, eight regular goals, two challenges and at least three activity types.");
     }
     int regularCount(){return regular.size();}int challengeCount(){return challenges.size();}
     static String target(QuestPlan.Goal goal){return goal.kind()+":"+goal.target();}

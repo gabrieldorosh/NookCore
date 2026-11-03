@@ -37,7 +37,7 @@ final class CommandNavigation implements CommandExecutor,TabCompleter {
                 return run("plots",s,prepend("admin",rest));
             }
             if(sub.equals("quests")){
-                if(rest.length==0 || rest[0].equalsIgnoreCase("help"))return help(s,"Quest administration","/nookadmin quests next — preview next week", "/nookadmin quests inspect <player>","/nookadmin quests contributions — list community stock","/nookadmin quests contributions collect <item> <quantity>","/nookadmin quests activate-config [confirm] — preview replacement; fresh progress for everyone");
+                if(rest.length==0 || rest[0].equalsIgnoreCase("help"))return help(s,"Quest administration","/nookadmin quests next — preview next week","/nookadmin quests validate — check quest bank edits","/nookadmin quests reload — apply edits to future unsaved weeks", "/nookadmin quests inspect <player>","/nookadmin quests contributions — list community stock","/nookadmin quests contributions collect <item> <quantity>","/nookadmin quests activate-config [confirm] — preview replacement; fresh progress for everyone");
                 if(rest[0].equalsIgnoreCase("contributions") && rest.length>1){
                     if(rest.length!=4 || !rest[1].equalsIgnoreCase("collect"))return help(s,"Contributions","/nookadmin quests contributions collect <item> <quantity>");
                     return run("quests",s,new String[]{"collect",rest[2],rest[3]});

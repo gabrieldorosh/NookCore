@@ -242,6 +242,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
             lore.add(NookUi.text(preview?"Preview only":o.stock()==0?NookStore.vendorStockMessage(0,System.currentTimeMillis()<v.restock()):"Click to choose a quantity"));meta.lore(lore);item.setItemMeta(meta);m.inventory.setItem(slot++,item);
         }
         m.inventory.setItem(22,icon(Material.CLOCK,"Pip's visit",(System.currentTimeMillis()<v.restock()?"Restock: "+NookUi.date(v.restock()):"This visit's final stock is out."),"Leaves: "+NookUi.date(v.departure()),config.getBoolean("test-mode")?"LOCAL TEST · trial prices and stock":"Prices stay fixed for this visit."));p.openInventory(m.inventory);
+        if(!preview)quests.milestone("PIP_VISITED",p);
     }
     private void cataloguePreview(Player p){
         var m=new Menu(p.getUniqueId(),"catalogue","","",0,true);

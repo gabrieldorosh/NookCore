@@ -29,6 +29,7 @@ public class QuestChoiceProbe extends JavaPlugin {
   set(quests,"clock",(LongSupplier)clock::get);set(quests,"week",null);week=(String)call(quests,"nikoWeek");
   world=Bukkit.getWorlds().getFirst();location=new Location(world,0.5,121,0.5);world.getBlockAt(0,120,0).setType(Material.STONE,false);
   ((Map<String,Location>)field(npcs,"locations")).put("niko",location.clone());
+  ((Map<String,Location>)field(npcs,"locations")).put("pip",location.clone());
   var handle=new ServerPlayer(((CraftServer)getServer()).getServer(),((CraftWorld)world).getHandle(),new GameProfile(UUID.randomUUID(),"ChoiceTester"),ClientInformation.createDefault());var real=handle.getBukkitEntity();uuid=real.getUniqueId();inventory=real.getInventory();top=Bukkit.createInventory(null,27);
   player=(Player)Proxy.newProxyInstance(getClassLoader(),new Class[]{Player.class},(o,m,a)->switch(m.getName()){
    case "getUniqueId"->uuid;case "getName"->"ChoiceTester";case "getLocation"->location.clone();case "getWorld"->world;case "isOnline"->true;case "isDead"->false;case "getGameMode"->GameMode.SURVIVAL;case "hasPermission"->false;case "getOpenInventory"->view;
@@ -38,7 +39,22 @@ public class QuestChoiceProbe extends JavaPlugin {
   view=(InventoryView)Proxy.newProxyInstance(getClassLoader(),new Class[]{InventoryView.class},(o,m,a)->switch(m.getName()){
    case "getTopInventory"->top;case "getBottomInventory"->inventory;case "getPlayer"->player;case "getType"->InventoryType.CHEST;case "convertSlot"->(int)a[0]<27?(int)a[0]:(int)a[0]-27;case "getItem"->(int)a[0]<27?top.getItem((int)a[0]):inventory.getItem((int)a[0]-27);case "getInventory"->(int)a[0]<27?top:inventory;default->null;
   });
-  call(store,"join",uuid,"ChoiceTester",clock.get(),6000L);call(npcs,"openNiko",player);
+  call(store,"join",uuid,"ChoiceTester",clock.get(),6000L);
+  for(String id:new String[]{"quests/a_little_choice","community/just_browsing","community/a_helping_hand","quests/all_in_a_weeks_work"})check(Bukkit.getAdvancement(new NamespacedKey("nikosnook",id))!=null,"registered milestone "+id);
+  var pip=Bukkit.getAdvancement(new NamespacedKey("nikosnook","community/just_browsing"));
+  call(npcs,"openPip",player,true);check(!player.getAdvancementProgress(pip).isDone(),"admin catalogue preview does not grant Pip visit");
+  call(npcs,"openPip",player,false);check(player.getAdvancementProgress(pip).isDone(),"ordinary Pip visit grants milestone without a purchase");
+  check((long)call(((Optional<?>)call(store,"account",uuid)).orElseThrow(),"cents")==6000L,"Pip visit milestone pays no Nooks");
+  call(quests,"onCommand",Bukkit.getConsoleSender(),core.getCommand("quests"),"quests",new String[]{"validate"});
+  call(quests,"onCommand",Bukkit.getConsoleSender(),core.getCommand("quests"),"quests",new String[]{"reload"});
+  check(((Optional<?>)call(store,"savedQuestRotation","2026-11-11")).isEmpty(),"validate and reload do not publish future snapshots");
+  var bankFile=new java.io.File(core.getDataFolder(),"quest-rotation.yml");String bankBefore=java.nio.file.Files.readString(bankFile.toPath());Object loaded=field(quests,"automatic");
+  try{
+   var broken=new org.bukkit.configuration.file.YamlConfiguration();broken.load(bankFile);String first=broken.getConfigurationSection("regular").getKeys(false).iterator().next();broken.set("regular."+first+".amount",-1);broken.save(bankFile);
+   call(quests,"onCommand",Bukkit.getConsoleSender(),core.getCommand("quests"),"quests",new String[]{"reload"});check(field(quests,"automatic")==loaded,"invalid bank reload retains last loaded configuration");
+  }finally{java.nio.file.Files.writeString(bankFile.toPath(),bankBefore);}
+  check(((List<?>)call(quests,"nikoGoals")).size()==10,"invalid bank leaves current choice board available");
+  call(npcs,"openNiko",player);
   check(((List<?>)field(top.getHolder(),"offers")).size()==10,"eight regular offers and two challenges displayed");
   check(((Map<?,?>)field(top.getHolder(),"questSlots")).size()==10,"every offer has its own distinct slot");
   check(top.getItem(25).getType()==Material.GRAY_DYE,"confirmation begins disabled-looking");
