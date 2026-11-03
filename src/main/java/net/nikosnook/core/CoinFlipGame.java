@@ -117,6 +117,7 @@ final class CoinFlipGame implements CommandExecutor,TabCompleter,Listener,AutoCl
         if(target==null || !eligible(target))throw new IllegalArgumentException("that player isn't available for a coin flip right now.");
         var match=wagers.invite(player.getUniqueId(),target.getUniqueId(),Money.parse(amount),System.currentTimeMillis());
         player.sendMessage(NookUi.message("Coin flip","invited "+target.getName()+"! your "+Money.format(match.stake())+" stake is held until they reply or the invitation expires."));
+        player.sendMessage(NookUi.text("you're heads; "+target.getName()+" is tails. 50/50 · full pot · no fee"));
         player.sendMessage(NookUi.command("cancel invitation","/coinflip cancel").clickEvent(ClickEvent.runCommand("/coinflip cancel")));
         invite(target,match);
     }
@@ -125,6 +126,7 @@ final class CoinFlipGame implements CommandExecutor,TabCompleter,Listener,AutoCl
         else {
             player.sendMessage(NookUi.heading("a little coin flip?"));
             player.sendMessage(NookUi.text("equal stakes · 50/50 · winner takes the full pot · no fee"));
+            player.sendMessage(NookUi.text("the inviter plays heads; the guest plays tails."));
             player.sendMessage(NookUi.command("/coinflip invite <player> <amount>").append(NookUi.text(" · "+Money.format(settings.minimum())+" to "+Money.format(settings.maximum())+" each")));
         }
         var outgoing=wagers.outgoing(player.getUniqueId());

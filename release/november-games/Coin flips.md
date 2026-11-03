@@ -1,6 +1,6 @@
 # Coin flips and shared game money — development handoff
 
-Coin flips are disabled by default. Proposed test stakes are 1–100 Nooks each, a 90-second invitation and a five-second invitation cooldown. These are trial settings for owner review, not approved live prices. The coin is 50/50; the winner takes the complete two-player pot and no house fee is charged.
+Coin flips are disabled by default. Proposed test stakes are 1–100 Nooks each, a 90-second invitation and a five-second invitation cooldown. These are trial settings for owner review, not approved live prices. The inviter plays heads and the guest plays tails, disclosed to both before acceptance. The coin is 50/50; the winner takes the complete two-player pot and no house fee is charged.
 
 Commands use player names:
 
