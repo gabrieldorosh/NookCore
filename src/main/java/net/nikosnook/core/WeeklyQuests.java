@@ -347,7 +347,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
             }
             rotation(clock.getAsLong());
             if(sender instanceof Player p && player.equals(p.getUniqueId()) && !store.questAccepted(player,week.id())){sender.sendMessage(NookUi.message("Niko",nikoDirections.get()));return true;}
-            sender.sendMessage(Component.empty());sender.sendMessage(Component.text("NookQuests - Refresh: "+NookUi.date(week.nextReset()),NookUi.ACCENT).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD));
+            sender.sendMessage(Component.empty());sender.sendMessage(Component.text("NookQuests",NookUi.ACCENT).decorate(net.kyori.adventure.text.format.TextDecoration.BOLD).append(Component.text(" - Refresh: "+NookUi.date(week.nextReset()),NookUi.MUTED).decoration(net.kyori.adventure.text.format.TextDecoration.BOLD,false)));
             var personal=store.playerQuestGoals(player,week.id());
             if(sender instanceof Player p && player.equals(p.getUniqueId()))checkWeekMilestone(p);
             for(var g:personal)if(g.reward()!=3000)sender.sendMessage(QuestUi.row(g,store.questProgress(player,week.id(),g.id())));

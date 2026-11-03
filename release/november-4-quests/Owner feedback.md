@@ -13,3 +13,5 @@ Optional Pip sitting uses the supported FancyNpcs pose at her saved anchor. It d
 Niko roaming is queued separately. FancyNpcs has no built-in pathfinding/waypoint system. Use a small owner-approved public path route with pauses, no pathfinding through arbitrary player plots, a stop while someone uses his menu, current-position interaction checks and safe home recovery on obstruction/unloaded chunks. Do not enable movement around a fixed interaction anchor.
 
 Future custom advancements should include server life and infrastructure: first player-shop purchase, contributing to a community project, a meaningful road journey and a railway journey. Travel counters need persistence and teleport/lag filtering; avoid adding several titles for the same immediate event. Coordinate later themes with each Wednesday drop.
+
+All follow-up F01–F06 passed on 3 November. The final requested style change keeps only the NookQuests label bold/gold; the refresh suffix is grey and explicitly non-bold. The owner is preparing the live JAR-only deployment. Optional Pip sitting still requires its existing-file opt-in.
