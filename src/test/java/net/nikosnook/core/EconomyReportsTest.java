@@ -35,6 +35,34 @@ class EconomyReportsTest {
         store.transfer(buyer,seller,500,3);buy(offer(new byte[]{1},4,250),4,true);
         var report=store.economyReport(0,10);assertEquals(30000,report.issued());assertEquals(100,report.sunk());assertEquals(29900,report.supply());assertEquals(29900,report.net());assertEquals(0,report.internalNet());
     }
+    UUID purchaseFromPip(long now)throws Exception {
+        var visit=VendorSchedule.at(now);var offers=new ArrayList<NookStore.VendorOffer>();
+        for(int i=0;i<7;i++)offers.add(new NookStore.VendorOffer(visit.id(),"design"+i,"Design "+i,new byte[]{1},400,4,4,0));
+        store.openVendorVisit(visit,offers,"autumn");
+        return store.beginVendorPurchase(buyer,visit.id(),"design0",1,new byte[32],new byte[32],now);
+    }
+    @Test void pipPurchaseCountsAsRemovedMoneyWhilePlayerTradesStayInternal()throws Exception {
+        setupShop();store.transfer(buyer,seller,500,3);buy(offer(new byte[]{1},4,250),4,true);
+        long now=java.time.Instant.parse("2026-11-04T12:00:00Z").toEpochMilli();
+        store.finishVendorPurchase(purchaseFromPip(now));
+        var report=store.economyReport(0,now+1);
+        assertEquals(20000,report.issued());assertEquals(500,report.sunk());
+        assertEquals(19500,report.supply());assertEquals(19500,report.net());assertEquals(0,report.internalNet());
+        assertTrue(report.flows().stream().anyMatch(f->f.kind().equals("vendor") && f.added()==0 && f.removed()==400));
+        assertEquals(1,report.market().size());assertEquals(250,report.market().getFirst().cents());
+    }
+    @Test void pipRefundCountsAsReturnedMoneyAndRespectsReportWindow()throws Exception {
+        setupShop();long now=java.time.Instant.parse("2026-11-04T12:00:00Z").toEpochMilli();
+        UUID receipt=purchaseFromPip(now);
+        var before=store.economyReport(0,now+1);assertEquals(20000,before.issued());assertEquals(500,before.sunk());assertEquals(19500,before.supply());
+        store.resolveVendor(receipt,false,"Console","Confirmed item was not delivered",now+1);
+        var report=store.economyReport(0,now+2);
+        assertEquals(20400,report.issued());assertEquals(500,report.sunk());
+        assertEquals(19900,report.supply());assertEquals(19900,report.net());assertEquals(0,report.internalNet());
+        assertTrue(report.flows().stream().anyMatch(f->f.kind().equals("vendor-refund") && f.added()==400 && f.removed()==0));
+        var refundOnly=store.economyReport(now+1,now+2);assertEquals(400,refundOnly.issued());assertEquals(0,refundOnly.sunk());assertEquals(400,refundOnly.net());
+        assertTrue(report.market().isEmpty());
+    }
     @Test void weightedPriceUsesItemQuantitiesAndHistoricalReceipts()throws Exception {
         setupShop();var first=offer(new byte[]{1},4,250);var second=offer(new byte[]{1},16,640);
         buy(first,3,true);buy(second,4,true);store.priceNativeOffer(first.id(),seller,900,5);

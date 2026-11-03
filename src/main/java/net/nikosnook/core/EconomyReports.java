@@ -12,8 +12,8 @@ import org.bukkit.inventory.ItemStack;
 /** Read-only staff summaries. Receipt snapshots, not current shop terms, determine prices. */
 final class EconomyReports {
     private static final Set<String> INTERNAL=Set.of("transfer","native-shop-buy","native-shop-sale");
-    private static final Set<String> SOURCES=Set.of("award","staff","rent-refund");
-    private static final Set<String> SINKS=Set.of("rent","rent-prepay","rent-reopen","bunny-time","staff");
+    private static final Set<String> SOURCES=Set.of("award","staff","rent-refund","vendor-refund");
+    private static final Set<String> SINKS=Set.of("rent","rent-prepay","rent-reopen","bunny-time","staff","vendor");
     record Flow(String kind,long added,long removed) { long net(){return added-removed;} }
     record Market(byte[] item,long sales,long items,long cents) {
         Market { item=item.clone(); }
