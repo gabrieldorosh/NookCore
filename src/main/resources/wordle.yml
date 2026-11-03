@@ -1,0 +1,4 @@
+# Development candidate: enable only after testing and choosing the daily reward.
+enabled: false
+# Integer hundredths of a Nook; this trial value is one Nook per daily solve.
+reward-cents: 100

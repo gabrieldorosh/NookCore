@@ -7,6 +7,9 @@ author: NikosNook
 softdepend: [FancyNpcs, DiscordSRV, Vault, WorldGuard, WorldEdit, PlaceholderAPI]
 loadbefore: [ChestShop]
 commands:
+  wordle:
+    description: a little daily word puzzle
+    usage: /wordle [word|help|share]
   pvp:
     description: toggle pvp.
     usage: /pvp [on|off|status]
@@ -54,6 +57,9 @@ commands:
     permission: nookcore.admin
     usage: /nookadmin <status|teleport|return> ...
 permissions:
+  nookcore.wordle:
+    description: Play the daily word puzzle
+    default: true
   nookcore.pvp:
     description: Enable your own PvP preference
     default: true
