@@ -62,6 +62,7 @@ public final class NookStore implements AutoCloseable {
             s.execute("CREATE TABLE IF NOT EXISTS ledger (id INTEGER PRIMARY KEY AUTOINCREMENT, time INTEGER NOT NULL, uuid TEXT NOT NULL REFERENCES accounts(uuid), delta INTEGER NOT NULL, kind TEXT NOT NULL, reference TEXT NOT NULL)");
 
             s.execute("CREATE INDEX IF NOT EXISTS ledger_account ON ledger(uuid,id)");
+            GameLedger.install(s);
             s.execute("CREATE TABLE IF NOT EXISTS offline_income (ledger_id INTEGER PRIMARY KEY REFERENCES ledger(id))");
             s.execute("CREATE TABLE IF NOT EXISTS bunny_time (uuid TEXT PRIMARY KEY REFERENCES accounts(uuid), seconds INTEGER NOT NULL CHECK(seconds BETWEEN 0 AND 360000))");
             s.execute("CREATE TABLE IF NOT EXISTS bunny_grants (id INTEGER PRIMARY KEY, uuid TEXT NOT NULL, seconds INTEGER NOT NULL, actor TEXT NOT NULL, time INTEGER NOT NULL)");
@@ -248,6 +249,15 @@ public final class NookStore implements AutoCloseable {
         try(var p=db.prepareStatement("SELECT target,SUM(amount) FROM quest_material_claims WHERE state IN ('REVIEW','COMPLETE') GROUP BY target");var r=p.executeQuery()){while(r.next())lines.add("Collected/reserved: "+r.getLong(2)+" "+r.getString(1));}
         return lines;
     }
+    synchronized <T>T gameTransaction(GameLedger.Work<T> work)throws SQLException {
+        if(!db.getAutoCommit())throw new SQLException("Nested game transactions are not supported.");
+        return tx(()->{
+            var transaction=new GameLedger.Tx(db);
+            try{return work.run(transaction);}finally{transaction.close();}
+        });
+    }
+    long gameHeldFunds()throws SQLException {return gameTransaction(GameLedger.Tx::heldTotal);}
+
     private synchronized <T> T tx(Work<T> work) throws SQLException {
 
         db.setAutoCommit(false);
