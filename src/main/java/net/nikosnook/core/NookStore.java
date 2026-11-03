@@ -101,6 +101,7 @@ public final class NookStore implements AutoCloseable {
             s.execute("CREATE TABLE IF NOT EXISTS quest_progress (uuid TEXT NOT NULL REFERENCES accounts(uuid), week TEXT NOT NULL REFERENCES quest_rotations(week), goal TEXT NOT NULL, progress INTEGER NOT NULL, PRIMARY KEY(uuid,week,goal))");
             s.execute("CREATE TABLE IF NOT EXISTS quest_visits (uuid TEXT NOT NULL REFERENCES accounts(uuid), week TEXT NOT NULL REFERENCES quest_rotations(week), goal TEXT NOT NULL, biome TEXT NOT NULL, PRIMARY KEY(uuid,week,goal,biome))");
             s.execute("CREATE TABLE IF NOT EXISTS niko_acceptance(uuid TEXT NOT NULL REFERENCES accounts(uuid),week TEXT NOT NULL REFERENCES quest_rotations(week),time INTEGER NOT NULL,actor TEXT NOT NULL,PRIMARY KEY(uuid,week))");
+            s.execute("CREATE TABLE IF NOT EXISTS quest_choices (uuid TEXT NOT NULL REFERENCES accounts(uuid), week TEXT NOT NULL, goal TEXT NOT NULL, PRIMARY KEY(uuid,week,goal))");
             s.execute("CREATE TABLE IF NOT EXISTS pip_visits(id TEXT PRIMARY KEY,arrival INTEGER NOT NULL,restock INTEGER NOT NULL,departure INTEGER NOT NULL,season TEXT NOT NULL,restocked INTEGER NOT NULL DEFAULT 0)");
             s.execute("CREATE TABLE IF NOT EXISTS pip_offers(visit TEXT NOT NULL REFERENCES pip_visits(id),design TEXT NOT NULL,name TEXT NOT NULL,item BLOB NOT NULL,price INTEGER NOT NULL CHECK(price>0),allocation INTEGER NOT NULL CHECK(allocation>0),stock INTEGER NOT NULL CHECK(stock>=0),cap INTEGER NOT NULL CHECK(cap>=0),PRIMARY KEY(visit,design))");
             s.execute("CREATE TABLE IF NOT EXISTS pip_receipts(id TEXT PRIMARY KEY,buyer TEXT NOT NULL REFERENCES accounts(uuid),visit TEXT NOT NULL,design TEXT NOT NULL,quantity INTEGER NOT NULL CHECK(quantity>0),cents INTEGER NOT NULL CHECK(cents>0),before_hash BLOB NOT NULL,after_hash BLOB NOT NULL,time INTEGER NOT NULL,state TEXT NOT NULL DEFAULT 'REVIEW' CHECK(state IN ('REVIEW','DELIVERED','REFUNDED')),resolution TEXT NOT NULL DEFAULT '',FOREIGN KEY(visit,design) REFERENCES pip_offers(visit,design))");
@@ -177,7 +178,7 @@ public final class NookStore implements AutoCloseable {
 
             List<QuestPlan.Goal> goals;
             try(var p=db.prepareStatement("SELECT definitions FROM quest_rotations WHERE week=?")){
-                bind(p,week);try(var rows=p.executeQuery()){if(!rows.next())throw new IllegalArgumentException("Unknown quest rotation");goals=QuestPlan.decode(rows.getString(1));}
+                bind(p,week);try(var rows=p.executeQuery()){if(!rows.next())throw new IllegalArgumentException("Unknown quest rotation");goals=playerQuestGoals(player,week);}
             }
             if(!QuestPlan.week(now).id().equals(week))throw new IllegalArgumentException("Quest week has changed");
             if(!questAccepted(player,week))return List.of();
@@ -208,7 +209,7 @@ public final class NookStore implements AutoCloseable {
         try(var query=db.prepareStatement("SELECT definitions FROM quest_rotations WHERE week=?")){
             bind(query,week);try(var rows=query.executeQuery()){
                 if(!rows.next())throw new IllegalArgumentException("Unknown quest rotation.");
-                var goal=QuestPlan.decode(rows.getString(1)).stream().filter(g->g.kind().equals("DEPOSIT") && g.target().equals(target)).findFirst().orElseThrow(()->new IllegalArgumentException("This material is not requested this week."));
+                var goal=playerQuestGoals(player,week).stream().filter(g->g.kind().equals("DEPOSIT") && g.target().equals(target)).findFirst().orElseThrow(()->new IllegalArgumentException("This material is not requested this week."));
                 if(amount>goal.amount()-questProgress(player,week,goal.id()))throw new IllegalArgumentException("That exceeds your remaining contribution target.");
             }
         }
@@ -1325,15 +1326,44 @@ public final class NookStore implements AutoCloseable {
     synchronized String nikoGateStart(){return nikoGateWeek;}
     synchronized boolean nikoIntroWeek(String week){return nikoGateEnabled && week.compareTo(nikoGateWeek)<0;}
     synchronized boolean questAccepted(UUID player,String week)throws SQLException {
+        var offers=savedQuestRotation(week).orElse(List.of());
+        if(QuestSelection.board(offers))return !playerQuestGoals(player,week).isEmpty();
         if(!nikoGateEnabled || week.compareTo(nikoGateWeek)<0)return true;
         try(var p=db.prepareStatement("SELECT 1 FROM niko_acceptance WHERE uuid=? AND week=?")){
             bind(p,player,week);try(var r=p.executeQuery()){return r.next();}
         }
     }
+    synchronized Set<String> questChoices(UUID player,String week)throws SQLException {
+        Set<String> ids=new LinkedHashSet<>();
+        try(var p=db.prepareStatement("SELECT goal FROM quest_choices WHERE uuid=? AND week=?")){
+            bind(p,player,week);try(var r=p.executeQuery()){while(r.next())ids.add(r.getString(1));}
+        }return Set.copyOf(ids);
+    }
+    synchronized List<QuestPlan.Goal> playerQuestGoals(UUID player,String week)throws SQLException {
+        var offers=savedQuestRotation(week).orElseThrow(()->new IllegalArgumentException("Unknown quest rotation."));
+        if(!QuestSelection.board(offers))return offers;
+        var chosen=questChoices(player,week);if(chosen.isEmpty())return List.of();
+        QuestSelection.validate(offers,chosen);
+        try(var p=db.prepareStatement("SELECT 1 FROM niko_acceptance WHERE uuid=? AND week=?")){
+            bind(p,player,week);try(var r=p.executeQuery()){if(!r.next())throw new IllegalStateException("Quest choices have no acceptance record.");}
+        }
+        return offers.stream().filter(g->chosen.contains(g.id())).toList();
+    }
     boolean acceptNiko(UUID player,String week,String actor,long now)throws SQLException {
+        return acceptNiko(player,week,null,actor,now);
+    }
+    boolean acceptNiko(UUID player,String week,Collection<String> choices,String actor,long now)throws SQLException {
         return tx(()->{
             if(!QuestPlan.week(now).id().equals(week))throw new IllegalArgumentException("The quests have refreshed. Speak to Niko again.");
-            return update("INSERT OR IGNORE INTO niko_acceptance(uuid,week,time,actor) VALUES(?,?,?,?)",player,week,now,actor)==1;
+            var offers=savedQuestRotation(week).orElseThrow(()->new IllegalArgumentException("Unknown quest rotation."));
+            Set<String> selected=QuestSelection.board(offers)?QuestSelection.validate(offers,choices):Set.of();
+            if(!QuestSelection.board(offers) && choices!=null && !choices.isEmpty())throw new IllegalArgumentException("This week uses the shared quest set.");
+            if(update("INSERT OR IGNORE INTO niko_acceptance(uuid,week,time,actor) VALUES(?,?,?,?)",player,week,now,actor)==0){
+                if(!questChoices(player,week).equals(selected))throw new IllegalArgumentException("you've already chosen this week's quests! check /quests for your progress.");
+                return false;
+            }
+            for(String id:selected)update("INSERT INTO quest_choices(uuid,week,goal) VALUES(?,?,?)",player,week,id);
+            return true;
         });
     }
     record VendorOffer(String visit,String design,String name,byte[] item,long price,int allocation,int stock,int cap) {}

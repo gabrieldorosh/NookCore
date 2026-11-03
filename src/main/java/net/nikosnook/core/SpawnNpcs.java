@@ -46,6 +46,9 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     private static final class Menu implements InventoryHolder {
         final UUID player;final String kind,rotation,design;final int quantity;final boolean preview;
         Inventory inventory;
+        final Map<Integer,String> questSlots=new HashMap<>();
+        final Set<String> choices=new LinkedHashSet<>();
+        List<QuestPlan.Goal> offers=List.of();
         Menu(UUID player,String kind,String rotation,String design,int quantity,boolean preview){this.player=player;this.kind=kind;this.rotation=rotation;this.design=design;this.quantity=quantity;this.preview=preview;}
         public Inventory getInventory(){return inventory;}
     }
@@ -190,11 +193,37 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     private Menu menu(Player p,String kind,String rotation,String design,int quantity,boolean preview,String title){var m=new Menu(p.getUniqueId(),kind,rotation,design,quantity,preview);m.inventory=Bukkit.createInventory(m,27,Component.text(title));return m;}
     void openNiko(Player p)throws Exception {
         if(!near(p,"niko"))throw new IllegalArgumentException(directions("niko"));
-        var week=quests.nikoWeek();boolean accepted=store.questAccepted(p.getUniqueId(),week);var m=menu(p,"niko",week,"",0,false,"niko's weekly quests");int slot=10;
+        var week=quests.nikoWeek();boolean accepted=store.questAccepted(p.getUniqueId(),week);
+        var offers=quests.nikoGoals();
+        if(QuestSelection.board(offers)){
+            var m=menu(p,"niko-choice",week,"",0,false,"niko's weekly quests");m.offers=offers;
+            if(accepted){m.choices.addAll(store.questChoices(p.getUniqueId(),week));quests.nikoMilestone(p);}
+            int[] regular={10,11,12,13,14,15,16,19},challenge={21,23};int r=0,c=0;
+            for(var goal:offers)m.questSlots.put(goal.reward()==3000?challenge[c++]:regular[r++],goal.id());
+            paintNikoChoices(p,m);p.openInventory(m.inventory);
+            p.sendMessage(NookUi.message("Niko",accepted?"you've already activated this week's quests! check your progress here or with /quests!":"i've got some more quests ready for you! pick them up below! :D"));return;
+        }
+        var m=menu(p,"niko",week,"",0,false,"niko's weekly quests");int slot=10;
         for(var goal:quests.nikoGoals())m.inventory.setItem(slot++,icon(goal.reward()==3000?Material.NETHER_STAR:Material.BOOK,goal.title(),store.questProgress(p.getUniqueId(),week,goal.id())+" / "+goal.amount(),"Reward: "+Money.format(goal.reward())));
         m.inventory.setItem(4,icon(accepted?Material.LIME_DYE:Material.YELLOW_DYE,accepted?"Quests accepted":"Quests not accepted",accepted?"Your weekly quests are active.":"Accept below to start this week's quests.",accepted?"Use /quests to check your progress anywhere.":"All six quests and the challenge."));
         m.inventory.setItem(22,icon(accepted?Material.MAP:Material.LIME_DYE,accepted?"View my progress":"accept this week's quests",accepted?"Use /quests anywhere.":"All six quests and the challenge.","Rewards arrive automatically."));p.openInventory(m.inventory);
         p.sendMessage(NookUi.message("Niko",store.nikoIntroWeek(week)?"Hi! Come and speak to me next week for new quests!":accepted?"you've already activated this week's quests! check your progress here or with /quests!":"i've got some more quests ready for you! pick them up below! :D"));
+    }
+    private void paintNikoChoices(Player p,Menu m)throws Exception {
+        boolean accepted=store.questAccepted(p.getUniqueId(),m.rotation);
+        int regular=(int)m.offers.stream().filter(g->g.reward()==1500 && m.choices.contains(g.id())).count();
+        int challenges=m.choices.size()-regular;
+        m.inventory.setItem(4,icon(accepted?Material.LIME_DYE:Material.BOOK,accepted?"your quests are ready!":"pick your quests!",regular+" / 6 quests · "+challenges+" / 1 challenge",accepted?"Use /quests to check your progress anywhere.":"Choose six quests and one challenge, then confirm."));
+        for(var entry:m.questSlots.entrySet()){
+            var goal=m.offers.stream().filter(g->g.id().equals(entry.getValue())).findFirst().orElseThrow();boolean selected=m.choices.contains(goal.id());
+            var item=icon(goal.reward()==3000?Material.NETHER_STAR:selected?Material.LIME_DYE:Material.BOOK,
+                (selected?"✓ ":"")+(goal.reward()==3000?"Challenge · ":"")+goal.title(),
+                accepted?(selected?store.questProgress(p.getUniqueId(),m.rotation,goal.id())+" / "+goal.amount():"Not chosen this week."):"Target: "+goal.amount(),
+                "Reward: "+Money.format(goal.reward()),accepted?"Your choices stay fixed until the refresh.":selected?"Tap to unselect.":"Tap to choose.");
+            var meta=item.getItemMeta();meta.setEnchantmentGlintOverride(selected);item.setItemMeta(meta);m.inventory.setItem(entry.getKey(),item);
+        }
+        m.inventory.setItem(25,icon(accepted?Material.MAP:regular==6&&challenges==1?Material.LIME_DYE:Material.GRAY_DYE,
+            accepted?"View my progress":"accept this week's quests",accepted?"Use /quests anywhere.":"Confirm six quests and one challenge.","Rewards arrive automatically.",accepted?"Your weekly choices are saved.":"Your choices stay fixed until the refresh."));
     }
     void openPip(Player p,boolean preview)throws Exception {
         if(!preview && !near(p,"pip"))throw new IllegalArgumentException("Visit Pip at her stall to shop.");
@@ -252,7 +281,17 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         Bukkit.getScheduler().runTask(plugin,()->{
             if(closed || p.getOpenInventory().getTopInventory()!=m.inventory)return;
             try{
-                if(m.kind.equals("niko") && slot==22){
+                if(m.kind.equals("niko-choice")){
+                    if(!near(p,"niko"))throw new IllegalArgumentException(directions("niko"));
+                    if(!quests.nikoWeek().equals(m.rotation))throw new IllegalArgumentException("The quests have refreshed. Speak to Niko again.");
+                    boolean accepted=store.questAccepted(p.getUniqueId(),m.rotation);
+                    if(slot==25){
+                        if(!accepted)quests.nikoAccept(p,m.rotation,m.choices);
+                        p.closeInventory();quests.onCommand(p,plugin.getCommand("quests"),"quests",new String[0]);
+                    }else if(!accepted && m.questSlots.containsKey(slot)){
+                        var chosen=QuestSelection.toggle(m.offers,m.choices,m.questSlots.get(slot));m.choices.clear();m.choices.addAll(chosen);paintNikoChoices(p,m);
+                    }
+                }else if(m.kind.equals("niko") && slot==22){
                     if(!near(p,"niko"))throw new IllegalArgumentException(directions("niko"));
                     quests.nikoAccept(p,m.rotation);p.closeInventory();quests.onCommand(p,plugin.getCommand("quests"),"quests",new String[0]);
                 }else if(m.kind.equals("pip") && !m.preview && slot>=10 && slot<17){
@@ -291,9 +330,14 @@ final class SpawnNpcs implements Listener,AutoCloseable {
                     },s);
                     s.sendMessage(NookUi.message("NPCs","Saving "+role+"'s position…"));return true;
                 }
-                if(a.length==3 && a[1].equals("accept")){
+                if((a.length==3 || a.length==4) && a[1].equals("accept")){
                     var player=store.byName(a[2]).orElseThrow(()->new IllegalArgumentException("Unknown player."));String week=quests.nikoWeek();
-                    store.acceptNiko(player.id(),week,"admin:"+s.getName(),System.currentTimeMillis());plugin.getLogger().info(s.getName()+" accepted Niko quests for "+player.name()+" in "+week);s.sendMessage(NookUi.message("NPCs","Accepted this week's quests for "+player.name()+". Existing progress is unchanged."));return true;
+                    if(QuestSelection.board(quests.nikoGoals()) && a.length==3){
+                        for(var goal:quests.nikoGoals())s.sendMessage(NookUi.text(goal.id()+" · "+goal.title()+" · "+Money.format(goal.reward())));
+                        s.sendMessage(NookUi.text("Ask the player to choose six quests and one challenge, then use /nookadmin npc accept "+a[2]+" <seven comma-separated IDs>."));return true;
+                    }
+                    if(a.length==4)store.acceptNiko(player.id(),week,Arrays.asList(a[3].split(",",-1)),"admin:"+s.getName(),System.currentTimeMillis());
+                    else store.acceptNiko(player.id(),week,"admin:"+s.getName(),System.currentTimeMillis());plugin.getLogger().info(s.getName()+" accepted Niko quests for "+player.name()+" in "+week);s.sendMessage(NookUi.message("NPCs","Accepted this week's quests for "+player.name()+". Existing progress is unchanged."));return true;
                 }
                 NookUi.help(s,"NPCs","/nookadmin npc place <niko|pip> — use your position","/nookadmin npc status","/nookadmin npc accept <player> — logged fallback if Niko is unavailable");return true;
             }

@@ -15,6 +15,24 @@ final class QuestRotationBank {
     }
     int regularCount(){return regular.size();}int challengeCount(){return challenges.size();}
     static String target(QuestPlan.Goal goal){return goal.kind()+":"+goal.target();}
+    List<QuestPlan.Goal> offers(String week,List<QuestPlan.Goal> previous){
+        var base=select(week,previous);var first=base.getLast();
+        Set<String> excluded=new HashSet<>();previous.forEach(g->excluded.add(target(g)));base.forEach(g->excluded.add(target(g)));
+        long seed=LocalDate.parse(week).toEpochDay() ^ 0x4e494b4f43484f49L;
+        var harder=new ArrayList<>(challenges.stream().filter(g->!excluded.contains(target(g))).toList());Collections.shuffle(harder,new Random(seed));
+        for(var second:harder){
+            var chosen=new ArrayList<>(base.subList(0,6));Set<String> used=new HashSet<>(excluded);used.add(target(second));
+            long deposits=base.stream().filter(g->g.kind().equals("DEPOSIT")).count()+(second.kind().equals("DEPOSIT")?1:0);
+            if(deposits>2)continue;
+            var pool=new ArrayList<>(regular.stream().filter(g->!used.contains(target(g))).toList());Collections.shuffle(pool,new Random(seed+second.id().hashCode()));
+            for(var goal:pool){
+                if(chosen.stream().filter(g->g.kind().equals(goal.kind())).count()>=3 || goal.kind().equals("DEPOSIT") && deposits>=2 || !used.add(target(goal)))continue;
+                chosen.add(goal);if(goal.kind().equals("DEPOSIT"))deposits++;
+                if(chosen.size()==8){chosen.add(first);chosen.add(second);return List.copyOf(chosen);}
+            }
+        }
+        throw new IllegalArgumentException("The quest bank needs more varied goals to offer eight quests and two challenges.");
+    }
     List<QuestPlan.Goal> select(String week,List<QuestPlan.Goal> previous){
         long seed=LocalDate.parse(week).toEpochDay() ^ 0x4e494b4f534e4f4fL;
         Set<String> excluded=new HashSet<>();previous.forEach(g->excluded.add(target(g)));
