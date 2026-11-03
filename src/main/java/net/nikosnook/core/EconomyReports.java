@@ -12,7 +12,8 @@ import org.bukkit.inventory.ItemStack;
 /** Read-only staff summaries. Receipt snapshots, not current shop terms, determine prices. */
 final class EconomyReports {
     private static final Set<String> INTERNAL=Set.of("transfer","native-shop-buy","native-shop-sale");
-    private static final Set<String> SOURCES=Set.of("award","staff","rent-refund","vendor-refund");
+    private static final Set<String> SOURCES=Set.of("award","staff","rent-refund","vendor-refund","game-wordle");
+    private static final Set<String> GAME_INTERNAL=Set.of("game-escrow","game-payout","game-refund");
     private static final Set<String> SINKS=Set.of("rent","rent-prepay","rent-reopen","bunny-time","staff","vendor");
     record Flow(String kind,long added,long removed) { long net(){return added-removed;} }
     record Market(byte[] item,long sales,long items,long cents) {
@@ -20,18 +21,20 @@ final class EconomyReports {
         @Override public byte[] item(){return item.clone();}
         String unitPrice(){return "\u20a6"+BigDecimal.valueOf(cents,2).divide(BigDecimal.valueOf(items),4,RoundingMode.HALF_UP).toPlainString();}
     }
-    record Snapshot(long since,long until,long accounts,long supply,List<Flow> flows,List<Market> market,long variants,long pending,long review,long barter) {
+    record Snapshot(long since,long until,long accounts,long cash,long held,List<Flow> flows,List<Market> market,long variants,long pending,long review,long barter) {
         Snapshot { flows=List.copyOf(flows);market=List.copyOf(market); }
         long issued(){return flows.stream().filter(f->SOURCES.contains(f.kind())).mapToLong(Flow::added).sum();}
         long sunk(){return flows.stream().filter(f->SINKS.contains(f.kind())).mapToLong(Flow::removed).sum();}
-        long net(){return flows.stream().mapToLong(Flow::net).sum();}
+        long supply(){return Math.addExact(cash,held);}
+        long net(){return flows.stream().filter(f->!GAME_INTERNAL.contains(f.kind())).mapToLong(Flow::net).sum();}
         long internalNet(){return flows.stream().filter(f->INTERNAL.contains(f.kind())).mapToLong(Flow::net).sum();}
     }
     private static final String SALES=" FROM native_trade_receipts t WHERE t.time>=? AND t.time<? AND t.buyer<>t.seller AND NOT EXISTS (SELECT 1 FROM native_stock_returns r WHERE r.receipt=t.id)";
     static Snapshot read(Connection db,long since,long until)throws SQLException {
         if(since<0 || until<=since)throw new IllegalArgumentException("Invalid report interval.");
-        long accounts,supply;
+        long accounts,supply,held;
         try(var p=db.createStatement();var r=p.executeQuery("SELECT COUNT(*),COALESCE(SUM(cents),0) FROM accounts")){r.next();accounts=r.getLong(1);supply=r.getLong(2);}
+        try(var statement=db.createStatement();var rows=statement.executeQuery("SELECT (SELECT COALESCE(SUM(cents),0) FROM game_holds WHERE state='HELD')+(SELECT COALESCE(SUM(cents),0) FROM game_credits WHERE state='READY')")){rows.next();held=rows.getLong(1);}
         List<Flow> flows=new ArrayList<>();
         try(var p=period(db,"SELECT kind,SUM(CASE WHEN delta>0 THEN delta ELSE 0 END),SUM(CASE WHEN delta<0 THEN -delta ELSE 0 END) FROM ledger WHERE time>=? AND time<? GROUP BY kind ORDER BY kind",since,until);var r=p.executeQuery()){
             while(r.next())flows.add(new Flow(r.getString(1),r.getLong(2),r.getLong(3)));
@@ -44,7 +47,7 @@ final class EconomyReports {
         long pending=count(db,"SELECT COUNT(*)"+SALES+" AND t.delivery='PENDING'",since,until);
         long review=count(db,"SELECT COUNT(*)"+SALES+" AND t.delivery='REVIEW'",since,until);
         long barter=count(db,"SELECT COUNT(*)"+SALES+" AND t.delivery='DELIVERED' AND t.cents=0",since,until);
-        return new Snapshot(since,until,accounts,supply,flows,market,variants,pending,review,barter);
+        return new Snapshot(since,until,accounts,supply,held,flows,market,variants,pending,review,barter);
     }
     private static PreparedStatement period(Connection db,String sql,long since,long until)throws SQLException {
         var p=db.prepareStatement(sql);p.setLong(1,since);p.setLong(2,until);return p;
@@ -66,11 +69,12 @@ final class EconomyReports {
             var format=DateTimeFormatter.ofPattern("dd MMM HH:mm z",Locale.UK).withZone(ZoneId.of("Europe/London"));
             sender.sendMessage(NookUi.text(format.format(Instant.ofEpochMilli(report.since()))+" to "+format.format(Instant.ofEpochMilli(now))+" (rolling "+days+" days)"));
             sender.sendMessage(NookUi.text("Nooks in circulation: "+Money.format(report.supply())+" across "+report.accounts()+" accounts."));
+            sender.sendMessage(NookUi.text("Spendable balances: "+Money.format(report.cash())+"; held for games: "+Money.format(report.held())+"."));
             sender.sendMessage(NookUi.text("Created / refunded: "+Money.format(report.issued())));
             sender.sendMessage(NookUi.text("Spent / removed: "+Money.format(report.sunk())));
             sender.sendMessage(NookUi.text("Net change: "+Money.format(report.net())));
-            for(var flow:report.flows())if(!INTERNAL.contains(flow.kind()))sender.sendMessage(NookUi.text(flow.kind().replace('-',' ')+": +"+Money.format(flow.added())+" / -"+Money.format(flow.removed())));
-            sender.sendMessage(NookUi.text("Transfers and native-shop payments are excluded from issuance. External integration credits/debits are shown separately."));
+            for(var flow:report.flows())if(!INTERNAL.contains(flow.kind()) && !GAME_INTERNAL.contains(flow.kind()))sender.sendMessage(NookUi.text(flow.kind().replace('-',' ')+": +"+Money.format(flow.added())+" / -"+Money.format(flow.removed())));
+            sender.sendMessage(NookUi.text("Transfers, player-shop payments and game pots move existing Nooks. External integration credits/debits are shown separately."));
             if(report.internalNet()!=0)sender.sendMessage(NookUi.problem("Nooks","Transfer/shop ledger entries do not net to zero in this interval: "+Money.format(report.internalNet())+". Investigate before drawing conclusions."));
             sender.sendMessage(NookUi.heading("Shop sales — top 10 by Nooks value"));
             int index=0;
