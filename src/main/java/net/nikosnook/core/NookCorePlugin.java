@@ -30,11 +30,19 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     private StaffMode staffMode;
     private PvpToggle pvp;
     private SpawnNpcs spawnNpcs;
+    private WordleCommand wordleGame;
+    private CoinFlipGame coinFlipGame;
+    private NookMilestones gameMilestones;
     private EndOpening endOpening=new EndOpening(true,null);
     @Override public void onEnable(){
         buildIdentity=BuildIdentity.read(getResource("build-info.properties"));
         getLogger().info("NookCore source: "+buildIdentity.commit()+" ("+buildIdentity.state()+")");
         saveDefaultConfig();
+        for(String name:List.of("wordle","coinflip","games")){
+            var command=getCommand(name);if(command==null)continue;
+            command.setExecutor((sender,cmd,label,args)->{sender.sendMessage(NookUi.message("Games","the games corner is taking a little rest. please try again later <3"));return true;});
+            command.setTabCompleter((sender,cmd,label,args)->List.of());
+        }
         pvp=new PvpToggle(this,()->healthy && store!=null);
         boolean recovery=Files.exists(getDataFolder().toPath().resolve("recovery-mode.flag"));
         if(!recovery && Files.exists(getDataFolder().toPath().resolve("plot-setup-pending.yml"))){blockStartup("Unfinished plot setup: recover plot-setup-pending.yml before enabling trades.");return;}
@@ -127,6 +135,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
                 if(npcConfig.getBoolean("enabled",false))spawnNpcs=new SpawnNpcs(this,store,weeklyQuests,()->healthy);
             }catch(Exception | LinkageError ex){getLogger().log(Level.SEVERE,"Spawn NPCs could not start; existing economy remains available",ex);}
             getServer().getPluginManager().registerEvents(new PipHeads(),this);
+            startGames();
             new CommandNavigation(this);
             new HelperInspection(this);
             new StaffChat(this);
@@ -161,6 +170,23 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             if(shop!=null)getServer().getPluginManager().disablePlugin(shop);
         });
     }
+    private void startGames(){
+        try{wordleGame=new WordleCommand(this,store,()->healthy,error->gameFailure("Wordle",error),player->gameMilestone("WORDLE_SOLVED",player));}
+        catch(Exception error){gameFailure("Wordle",error);}
+        if(healthy)try{
+            coinFlipGame=new CoinFlipGame(this,store,()->healthy,error->gameFailure("Coin flips",error));
+            coinFlipGame.onPlayed(player->gameMilestone("COIN_FLIP_FINISHED",player));
+        }catch(Exception error){gameFailure("Coin flips",error);}
+        if(wordleGame!=null && wordleGame.ready() || coinFlipGame!=null && coinFlipGame.enabled())gameMilestones=new NookMilestones(this,"game-advancements.yml");
+        new GamesCommand(this,store,()->healthy,error->gameFailure("Games",error),()->wordleGame!=null&&wordleGame.ready(),()->coinFlipGame!=null&&coinFlipGame.enabled());
+    }
+    private void gameMilestone(String event,Player player){
+        if(gameMilestones!=null && healthy && player.getGameMode()==GameMode.SURVIVAL && !StaffMode.active(player.getUniqueId()))gameMilestones.trigger(event,player);
+    }
+    private void gameFailure(String feature,Exception error){
+        if(error instanceof SQLException){fail(error);return;}
+        getLogger().log(Level.WARNING,feature+" could not start or continue; other features remain available",error);
+    }
     private List<String> statusSnapshot(){
         var lines=new ArrayList<String>();lines.add("Plugin version: "+getDescription().getVersion());
         lines.addAll((buildIdentity==null?BuildIdentity.read(null):buildIdentity).lines());
@@ -173,6 +199,9 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
         lines.add(bunnyBoots==null?"Bunny boots: unavailable":bunnyBoots.status());
         lines.add("Protection bridge initialised: "+(plotGate!=null)+"; staff-mode command present: "+(getCommand("staffmode")!=null));
         lines.add(weeklyQuests==null?"Quests: unavailable":weeklyQuests.status(System.currentTimeMillis()));
+        lines.add(wordleGame==null?"Wordle: unavailable":wordleGame.status());
+        lines.add(coinFlipGame==null?"Coin flips: unavailable":coinFlipGame.status());
+        if(store!=null)try{lines.add("Game stakes and pending credits: "+Money.format(store.gameHeldFunds()));}catch(SQLException ignored){lines.add("Game funds: unavailable; no repair attempted");}
         lines.add(economyMetrics==null?"Metrics: unavailable":economyMetrics.status());
         if(store==null)lines.add("Inventory reviews: unavailable (store not initialised)");
         else try{int n=store.nativeReviews().size();lines.add("Shop inventory reviews: "+(n==50?"at least 50":Integer.toString(n))+" · /nookadmin shops review");}
@@ -417,6 +446,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     }
     @Override public void onDisable(){
         if(spawnNpcs!=null)spawnNpcs.close();
+        if(coinFlipGame!=null)coinFlipGame.close();
         if(economyMetrics!=null)try{economyMetrics.close();}catch(Exception ex){getLogger().log(Level.WARNING,"Metrics close failed",ex);}
         if(groundedTravel!=null)groundedTravel.close();if(bunnyBoots!=null)bunnyBoots.close();healthy=false;if(chat!=null)chat.close();getServer().getServicesManager().unregisterAll(this);if(store!=null)try{store.close();}catch(SQLException e){getLogger().log(Level.SEVERE,"Database close failed",e);}}
 }

@@ -28,12 +28,14 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     private final YamlConfiguration config;
     private final YamlConfiguration catalogueConfig;
     private final List<VendorCatalogue.Design> catalogue=new ArrayList<>();
+    private final Map<String,PipProducts.Product> catalogueProducts=new HashMap<>();
     private final Map<String,Npc> npcs=new HashMap<>();
     private final Map<String,Location> locations=new HashMap<>();
     private final Map<String,SkinData> skins=new HashMap<>();
     private final Map<UUID,Recovery> recoveries=new HashMap<>();
     private final PipGreetings greetings=new PipGreetings();
     private final PipIdlePose<Npc> pipIdle;
+    private final NikoRoaming<Npc> nikoRoaming;
     private boolean closed, vendorPaused, initializing;
     private final NpcConfigWriter configWriter=new NpcConfigWriter();
     private java.util.concurrent.CompletableFuture<Void> pendingSave;
@@ -60,6 +62,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         file=plugin.getDataFolder().toPath().resolve("spawn-npcs.yml");
         if(!Files.exists(file))plugin.saveResource("spawn-npcs.yml",false);
         config=new YamlConfiguration();config.load(file.toFile());
+        nikoRoaming=NikoRoaming.fancy(config,plugin.getLogger()::warning);
         Path catalogueFile=plugin.getDataFolder().toPath().resolve("pip-catalogue.yml");
         if(Files.exists(catalogueFile)){
             catalogueConfig=new YamlConfiguration();catalogueConfig.load(catalogueFile.toFile());
@@ -70,7 +73,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         var products=Objects.requireNonNull(catalogueConfig.getConfigurationSection("catalogue"),"Missing Pip catalogue");
         for(String id:products.getKeys(false)){
             var c=products.getConfigurationSection(id);if(!c.getBoolean("enabled",true))continue;
-            catalogue.add(new VendorCatalogue.Design(id,c.getString("name"),c.getString("texture"),VendorCatalogue.Rarity.valueOf(c.getString("rarity")),c.getString("category"),new HashSet<>(c.getStringList("seasons")),c.getBoolean("year-round",true),c.getBoolean("modern",false),c.getLong("price-cents"),c.getInt("stock-per-allocation"),c.getInt("cap-per-visit",0),c.getString("source","")));
+            var product=PipProducts.parse(id,c);catalogue.add(product.design());catalogueProducts.put(id,product);
         }
         if(config.getBoolean("test-mode") && config.getLong("test-start",0)==0){config.set("test-start",System.currentTimeMillis());initializing=true;save(config.saveToString(),()->initializing=false,null);}
         for(String role:List.of("niko","pip")){Location loc=config.getLocation("locations."+role);if(loc!=null)locations.put(role,loc);}
@@ -83,9 +86,25 @@ final class SpawnNpcs implements Listener,AutoCloseable {
             pollSave();
             int step=tickCounter++;
             if(step%10==0)animatePip();
+            animateNiko();
             if(step%100!=0)return;
             try{tick();}catch(Exception ex){problem=ex.getMessage();plugin.getLogger().log(Level.SEVERE,"NPC update failed; Pip purchases paused",ex);vendorPaused=true;}
         },1,1);
+    }
+    private void animateNiko(){
+        if(!nikoRoaming.running() || !enabled() || !healthy.getAsBoolean())return;
+        try{
+            var home=locations.get("niko");var npc=npcs.get("niko");var at=getCurrentLocation("niko");
+            boolean busy=at!=null && Bukkit.getOnlinePlayers().stream().anyMatch(p->NikoRoaming.pauses(p,at)
+                || p.getOpenInventory().getTopInventory().getHolder() instanceof Menu m && m.kind.startsWith("niko"));
+            nikoRoaming.update(npc,home==null || home.getWorld()==null?null:NikoRoaming.point(home),busy);
+        }catch(RuntimeException|LinkageError ex){nikoRoaming.failed(ex);}
+    }
+    private Location getCurrentLocation(String role){
+        // Movement never rewrites HOME. Menu distance checks follow the packet NPC even after roaming stops.
+        var npc=npcs.get(role);
+        if(role.equals("niko") && npc!=null && npc.getData().getLocation()!=null)return npc.getData().getLocation().clone();
+        return locations.get(role);
     }
     private void animatePip(){
         if(!config.getBoolean("pip-idle.sitting-enabled",false) || !enabled() || !healthy.getAsBoolean())return;
@@ -163,14 +182,14 @@ final class SpawnNpcs implements Listener,AutoCloseable {
             Set<String> pins=new HashSet<>();
             if(store.previousVendorDesigns(v.id()).isEmpty())pins.addAll(config.getStringList("first-visit-pins"));
             var chosen=VendorCatalogue.select(catalogue,season,pins,store.previousVendorDesigns(v.id()),v.id().hashCode());
-            var items=chosen.stream().map(d->new NookStore.VendorOffer(v.id(),d.id(),d.name(),PipHeads.make(d).serializeAsBytes(),d.price(),d.allocation(),d.allocation(),d.cap())).toList();
+            var items=chosen.stream().map(d->new NookStore.VendorOffer(v.id(),d.id(),d.name(),PipProducts.make(Objects.requireNonNull(catalogueProducts.get(d.id()),"Missing Pip product definition")).serializeAsBytes(),d.price(),d.allocation(),d.allocation(),d.cap())).toList();
             store.openVendorVisit(v,items,season);
         }
         if(saved.size()==6){
             var pins=new HashSet<>(saved.stream().map(NookStore.VendorOffer::design).toList());
-            var chosen=VendorCatalogue.select(catalogue,season(v.arrival()),pins,Set.of(),v.id().hashCode());
+            var chosen=VendorCatalogue.select(VendorCatalogue.legacyVisitPool(catalogue),season(v.arrival()),pins,Set.of(),v.id().hashCode());
             var d=chosen.stream().filter(x->!pins.contains(x.id())).findFirst().orElseThrow();
-            store.expandVendorVisit(new NookStore.VendorOffer(v.id(),d.id(),d.name(),PipHeads.make(d).serializeAsBytes(),d.price(),d.allocation(),d.allocation(),d.cap()));
+            store.expandVendorVisit(new NookStore.VendorOffer(v.id(),d.id(),d.name(),PipProducts.make(Objects.requireNonNull(catalogueProducts.get(d.id()),"Missing Pip product definition")).serializeAsBytes(),d.price(),d.allocation(),d.allocation(),d.cap()));
         }
         store.restockVendor(v.id(),now);return store.vendorOffers(v.id());
     }
@@ -197,8 +216,8 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         var npc=FancyNpcsPlugin.get().getNpcAdapter().apply(data);npc.setSaveToFile(false);
         npc.create();FancyNpcsPlugin.get().getNpcManager().registerNpc(npc);npcs.put(role,npc);npc.spawnForAll();
     }
-    private void remove(String role){var npc=npcs.remove(role);if(npc!=null){npc.removeForAll();FancyNpcsPlugin.get().getNpcManager().removeNpc(npc);}}
-    private boolean near(Player p,String role){var loc=locations.get(role);return enabled() && healthy.getAsBoolean() && p.isOnline() && !p.isDead() && !StaffMode.active(p.getUniqueId()) && p.getGameMode()==GameMode.SURVIVAL && loc!=null && p.getWorld().equals(loc.getWorld()) && p.getLocation().distanceSquared(loc)<=36;}
+    private void remove(String role){if(role.equals("niko"))nikoRoaming.forget();var npc=npcs.remove(role);if(npc!=null){npc.removeForAll();FancyNpcsPlugin.get().getNpcManager().removeNpc(npc);}}
+    private boolean near(Player p,String role){var loc=getCurrentLocation(role);return enabled() && healthy.getAsBoolean() && p.isOnline() && !p.isDead() && !StaffMode.active(p.getUniqueId()) && p.getGameMode()==GameMode.SURVIVAL && loc!=null && p.getWorld().equals(loc.getWorld()) && p.getLocation().distanceSquared(loc)<=36;}
     private String directions(String role){return locations.get(role)==null?"Niko's getting ready at spawn. Ask a member of staff for a hand with your quests!":"Speak to Niko at spawn to get your quests!";}
     private static ItemStack icon(Material type,String title,String...lore){
         var item=new ItemStack(type);var meta=item.getItemMeta();meta.displayName(NookUi.text(title).decoration(TextDecoration.ITALIC,false));meta.lore(Arrays.stream(lore).map(s->NookUi.text(s).decoration(TextDecoration.ITALIC,false)).toList());item.setItemMeta(meta);return item;
@@ -206,6 +225,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     private Menu menu(Player p,String kind,String rotation,String design,int quantity,boolean preview,String title){var m=new Menu(p.getUniqueId(),kind,rotation,design,quantity,preview);m.inventory=Bukkit.createInventory(m,27,Component.text(title));return m;}
     void openNiko(Player p)throws Exception {
         if(!near(p,"niko"))throw new IllegalArgumentException(directions("niko"));
+        nikoRoaming.interact();
         var week=quests.nikoWeek();boolean accepted=store.questAccepted(p.getUniqueId(),week);
         boolean complete=accepted && quests.nikoComplete(p.getUniqueId(),week);
         var offers=quests.nikoGoals();
@@ -262,7 +282,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         var m=new Menu(p.getUniqueId(),"catalogue","","",0,true);
         m.inventory=Bukkit.createInventory(m,54,Component.text("pip's designs!"));int slot=0;
         for(var d:catalogue.stream().limit(54).toList()){
-            var item=PipHeads.make(d);var meta=item.getItemMeta();var lore=new ArrayList<Component>(meta.lore());
+            var item=PipProducts.make(Objects.requireNonNull(catalogueProducts.get(d.id()),"Missing Pip product definition"));var meta=item.getItemMeta();var lore=new ArrayList<Component>(meta.lore());
             lore.add(NookUi.text("Trial price: "+Money.format(d.price())));lore.add(NookUi.text("Preview only · "+d.id()));meta.lore(lore);item.setItemMeta(meta);m.inventory.setItem(slot++,item);
         }
         p.openInventory(m.inventory);

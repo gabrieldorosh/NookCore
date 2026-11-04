@@ -1,0 +1,56 @@
+# Prototype examples only: not installed or merged into the live catalogue automatically.
+# Copy chosen entries into the existing pip-catalogue.yml after review, then enable them.
+# Prices and quantities are test proposals. Existing persisted visit stock never changes.
+catalogue:
+  sunny-nook-banner:
+    enabled: false
+    type: BANNER
+    name: a little sunshine
+    rarity: COMMON
+    category: banners
+    seasons: [autumn]
+    year-round: true
+    modern: false
+    price-cents: 400
+    stock-per-allocation: 10
+    cap-per-visit: 0
+    source: Niko's Nook prototype
+    banner:
+      base: WHITE
+      patterns:
+        - pattern: border
+          colour: YELLOW
+        - pattern: flower
+          colour: ORANGE
+  pip-lantern-journal:
+    enabled: false
+    type: WRITTEN_BOOK
+    name: a road and a warm light
+    rarity: UNCOMMON
+    category: journals
+    seasons: [autumn]
+    year-round: true
+    modern: false
+    price-cents: 800
+    stock-per-allocation: 5
+    cap-per-visit: 0
+    source: Niko's Nook prototype
+    book:
+      title: a road and a warm light
+      author: Pip
+      generation: COPY_OF_COPY
+      pages:
+        - |-
+          the road home
+
+          i followed a line of little lanterns through the rain. every bend brought another warm light, and soon the dark did not seem quite so large.
+        - |-
+          a useful rule
+
+          a good journey needs a little space in your bag, someone to wave to, and a place to rest your feet. a biscuit helps too.
+        - |-
+          until next time
+
+          i left one lantern by the last turning. perhaps someone else will be glad to find it.
+
+          see you back at the nook <3

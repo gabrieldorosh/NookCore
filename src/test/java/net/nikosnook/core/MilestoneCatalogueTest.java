@@ -15,7 +15,7 @@ import org.yaml.snakeyaml.Yaml;
 import static org.junit.jupiter.api.Assertions.*;
 
 class MilestoneCatalogueTest {
-    static final Predicate<String> ITEMS=Set.of("BOOK","WRITTEN_BOOK","SPYGLASS","CHEST","EMERALD")::contains;
+    static final Predicate<String> ITEMS=Set.of("BOOK","WRITTEN_BOOK","SPYGLASS","CHEST","EMERALD","PAPER","SUNFLOWER")::contains;
     static String defaults()throws Exception{try(var in=MilestoneCatalogueTest.class.getResourceAsStream("/advancements.yml")){assertNotNull(in);return new String(in.readAllBytes(),StandardCharsets.UTF_8);}}
     static MilestoneCatalogue parse(String text){return MilestoneCatalogue.parse(text,ITEMS);}
     static final class Memory implements NookMilestones.Gateway {
@@ -30,8 +30,18 @@ class MilestoneCatalogueTest {
     @Test void defaultsContainFourCosmeticEventsAndPreserveLegacyIds()throws Exception{
         var catalogue=parse(defaults());assertTrue(catalogue.enabled());assertEquals(4,catalogue.milestones().size());assertEquals(MilestoneCatalogue.ROOT,catalogue.root().id());
         var choice=catalogue.milestones().getFirst();assertEquals(MilestoneCatalogue.CHOICE,choice.id());assertEquals("chosen",choice.criterion());assertEquals("visit",catalogue.root().criterion());
-        assertEquals(Set.of(MilestoneCatalogue.Event.values()),new HashSet<>(catalogue.milestones().stream().map(MilestoneCatalogue.Definition::event).toList()));
+        assertEquals(Set.of(MilestoneCatalogue.Event.QUESTS_CHOSEN,MilestoneCatalogue.Event.PIP_VISITED,MilestoneCatalogue.Event.COMMUNITY_CONTRIBUTION,MilestoneCatalogue.Event.WEEK_COMPLETE),new HashSet<>(catalogue.milestones().stream().map(MilestoneCatalogue.Definition::event).toList()));
         for(var definition:catalogue.milestones())assertFalse(definition.json().contains("\"rewards\""));
+    }
+    @Test void separateGameCatalogueUsesStableIdsAndTogetherCataloguesCoverSupportedEvents()throws Exception{
+        String yaml;try(var in=MilestoneCatalogueTest.class.getResourceAsStream("/game-advancements.yml")){assertNotNull(in);yaml=new String(in.readAllBytes(),StandardCharsets.UTF_8);}
+        var games=parse(yaml);assertTrue(games.enabled());assertEquals(MilestoneCatalogue.ROOT,games.root().id());
+        assertEquals(Set.of("nikosnook:games/five_little_letters","nikosnook:games/heads_or_tails"),new HashSet<>(games.milestones().stream().map(MilestoneCatalogue.Definition::id).toList()));
+        assertEquals(Set.of(MilestoneCatalogue.Event.WORDLE_SOLVED,MilestoneCatalogue.Event.COIN_FLIP_FINISHED),new HashSet<>(games.milestones().stream().map(MilestoneCatalogue.Definition::event).toList()));
+        var all=new HashSet<MilestoneCatalogue.Event>();parse(defaults()).milestones().forEach(d->all.add(d.event()));games.milestones().forEach(d->all.add(d.event()));
+        assertEquals(Set.of(MilestoneCatalogue.Event.values()),all);
+        var memory=new Memory();new NookMilestones(parse(defaults()),memory,s->{});new NookMilestones(games,memory,s->{});
+        assertEquals(7,memory.installed.size());for(var d:games.milestones())assertFalse(d.json().contains("\"rewards\""));
     }
     @Test void generatedJsonIsValidAndEscapesLiteralOwnerText()throws Exception{
         String edited=defaults().replace("title: 'a little choice'","title: 'a \"little\" \\ choice <3'");var definition=parse(edited).milestones().getFirst();

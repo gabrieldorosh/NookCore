@@ -5,17 +5,24 @@ import java.util.*;
 /** Bounded constraint search; invalid pools fail closed instead of publishing an invalid visit. */
 final class VendorCatalogue {
     enum Rarity { COMMON, UNCOMMON, RARE }
+    enum Type { HEAD, BANNER, WRITTEN_BOOK }
     record Design(String id,String name,String texture,Rarity rarity,String category,Set<String> seasons,
-                  boolean yearRound,boolean modern,long price,int allocation,int cap,String source) {
+                  boolean yearRound,boolean modern,long price,int allocation,int cap,String source,Type type) {
+        Design(String id,String name,String texture,Rarity rarity,String category,Set<String> seasons,
+               boolean yearRound,boolean modern,long price,int allocation,int cap,String source){
+            this(id,name,texture,rarity,category,seasons,yearRound,modern,price,allocation,cap,source,Type.HEAD);
+        }
         Design {
-            seasons=Set.copyOf(seasons);
-            if(!id.matches("[a-z0-9_-]{1,48}") || name.isBlank() || !texture.matches("[a-f0-9]{32,64}")
+            seasons=Set.copyOf(seasons);Objects.requireNonNull(type);Objects.requireNonNull(rarity);
+            if(!id.matches("[a-z0-9_-]{1,48}") || name.isBlank() || (texture==null || (type==Type.HEAD?!texture.matches("[a-f0-9]{32,64}"):!texture.isEmpty()))
                 || category.isBlank() || price<1 || price>Money.MAX || allocation<1 || allocation>1000 || cap<0 || cap>2000)
                 throw new IllegalArgumentException("Invalid Pip design: "+id);
         }
         boolean seasonal(String season){return seasons.contains(season);}
         boolean eligible(String season){return yearRound || seasonal(season);}
     }
+    /** Legacy six-head visits may gain their old seventh head, never newly configured product types. */
+    static List<Design> legacyVisitPool(List<Design> pool){return pool.stream().filter(d->d.type()==Type.HEAD).toList();}
     static List<Design> select(List<Design> pool,String season,Set<String> pinned,Set<String> previous,long seed){
         if(pool.stream().map(Design::id).distinct().count()!=pool.size())throw new IllegalArgumentException("Duplicate Pip design IDs.");
         var choices=new ArrayList<>(pool.stream().filter(d->d.eligible(season)).toList());

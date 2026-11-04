@@ -1,0 +1,24 @@
+# Game milestones. These have no extra Nooks reward beyond the game result.
+# The existing advancement-rewards map can explicitly assign a reviewed one-time reward.
+# IDs/criteria are permanent; disabling retains already earned progress.
+schema-version: 1
+enabled: true
+root:
+  title: "niko's nook"
+  description: 'little adventures and small comforts <3'
+  icon: BOOK
+milestones:
+  games/five_little_letters:
+    enabled: true
+    title: 'five little letters'
+    description: 'solve your first daily word puzzle'
+    icon: PAPER
+    event: WORDLE_SOLVED
+    show-toast: true
+  games/heads_or_tails:
+    enabled: true
+    title: 'heads or tails?'
+    description: 'finish a friendly coin flip'
+    icon: SUNFLOWER
+    event: COIN_FLIP_FINISHED
+    show-toast: true

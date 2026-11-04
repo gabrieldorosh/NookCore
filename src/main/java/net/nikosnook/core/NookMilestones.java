@@ -33,10 +33,11 @@ final class NookMilestones implements Listener {
     private final BiConsumer<Player,Boolean> celebration;
     private MilestoneCatalogue.Definition root;
 
-    NookMilestones(JavaPlugin plugin){
+    NookMilestones(JavaPlugin plugin){this(plugin,"advancements.yml");}
+    NookMilestones(JavaPlugin plugin,String catalogueFile){
         gateway=new BukkitGateway();warning=plugin.getLogger()::warning;celebration=QuestCelebrations::play;
         try{
-            var file=plugin.getDataFolder().toPath().resolve("advancements.yml");if(!Files.exists(file))plugin.saveResource("advancements.yml",false);
+            var file=plugin.getDataFolder().toPath().resolve(catalogueFile);if(!Files.exists(file))plugin.saveResource(catalogueFile,false);
             var catalogue=MilestoneCatalogue.parse(Files.readString(file,StandardCharsets.UTF_8),name->{var material=Material.matchMaterial(name);return material!=null&&material.isItem()&&!material.isAir();});
             install(catalogue);
             plugin.getServer().getPluginManager().registerEvents(this,plugin);

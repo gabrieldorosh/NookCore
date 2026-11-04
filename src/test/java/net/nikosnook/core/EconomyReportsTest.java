@@ -125,4 +125,37 @@ class EconomyReportsTest {
         setupShop();for(int i=1;i<=11;i++)buy(offer(new byte[]{(byte)i},1,i),3,true);
         var report=store.economyReport(0,10);assertEquals(11,report.variants());assertEquals(10,report.market().size());assertEquals(11,report.market().getFirst().cents());assertEquals(2,report.market().getLast().cents());
     }
+
+    @Test void gameHoldsRemainInCirculationWithoutLookingLikeMoneyRemoved()throws Exception {
+        store.join(seller,"Seller",0,10_000);store.join(buyer,"Buyer",0,10_000);
+        var games=new GameLedger(store);games.transact(tx->{tx.reserve("hold-a","match-a",seller,1_000,5);return null;});
+        var report=store.economyReport(0,10);
+        assertEquals(20_000,report.supply());assertEquals(19_000,report.cash());assertEquals(1_000,report.held());
+        assertEquals(20_000,report.issued());assertEquals(0,report.sunk());assertEquals(20_000,report.net());assertEquals(0,report.internalNet());
+        var holdOnly=store.economyReport(5,6);assertEquals(0,holdOnly.issued());assertEquals(0,holdOnly.sunk());assertEquals(0,holdOnly.net());
+    }
+    @Test void returnedAndWonGamePotsAreInternalEvenAcrossReportWindows()throws Exception {
+        store.join(seller,"Seller",0,10_000);store.join(buyer,"Buyer",0,10_000);var games=new GameLedger(store);
+        games.transact(tx->{tx.reserve("cancel-a","cancelled-game",seller,500,1);return null;});
+        games.transact(tx->{tx.refundGame("cancelled-game",2);return null;});
+        var refund=store.economyReport(2,3);assertEquals(0,refund.issued());assertEquals(0,refund.sunk());assertEquals(0,refund.net());assertEquals(20_000,refund.supply());
+        games.transact(tx->{tx.reserve("pot-a","settled-game",seller,1_000,3);tx.reserve("pot-b","settled-game",buyer,1_000,3);return null;});
+        games.transact(tx->{tx.settleHolds("settled-game",2_000,seller,4);return null;});
+        var payout=store.economyReport(4,5);assertEquals(0,payout.issued());assertEquals(0,payout.sunk());assertEquals(0,payout.net());assertEquals(0,payout.held());assertEquals(20_000,payout.supply());
+    }
+    @Test void unclaimedGameCreditsStayInSupplyAndReportsNeverCollectThem()throws Exception {
+        store.join(seller,"Seller",0,Money.MAX);store.join(buyer,"Buyer",0,10_000);var games=new GameLedger(store);
+        games.transact(tx->{tx.reserve("cap-a","cap-game",seller,1_000,1);tx.reserve("cap-b","cap-game",buyer,1_000,1);return null;});
+        store.adjust(seller,1_000,"staff","incoming money",2);
+        games.transact(tx->{tx.settleHolds("cap-game",2_000,seller,3);return null;});
+        var report=store.economyReport(0,4);assertEquals(2_000,report.held());assertEquals(Money.MAX+11_000,report.supply());assertEquals(Money.MAX+9_000,report.cash());
+        assertEquals(2_000L,games.<Long>transact(tx->tx.pendingCredits(seller)).longValue());store.economyReport(0,4);
+        assertEquals(2_000L,games.<Long>transact(tx->tx.pendingCredits(seller)).longValue());assertEquals(Money.MAX,store.account(seller).orElseThrow().cents());
+    }
+    @Test void dailyWordGameRewardsAreActualIssuanceSeparateFromPlayerPots()throws Exception {
+        store.join(seller,"Seller",0,0);var games=new GameLedger(store);
+        games.transact(tx->{tx.award(seller,"wordle:2026-11-04",100,"game-wordle","2026-11-04",5);return null;});
+        var report=store.economyReport(5,6);assertEquals(100,report.issued());assertEquals(0,report.sunk());assertEquals(100,report.net());assertEquals(100,report.supply());
+        assertTrue(report.flows().stream().anyMatch(flow->flow.kind().equals("game-wordle") && flow.added()==100));
+    }
 }

@@ -7,6 +7,17 @@ author: NikosNook
 softdepend: [FancyNpcs, DiscordSRV, Vault, WorldGuard, WorldEdit, PlaceholderAPI]
 loadbefore: [ChestShop]
 commands:
+  games:
+    description: Find a little game or collect game winnings
+    permission: nookcore.games
+    usage: /games [help|collect]
+  coinflip:
+    description: A friendly equal-stake coin flip
+    permission: nookcore.coinflip
+    usage: /coinflip [invite <player> <amount>|accept <player>|decline <player>|cancel|history|collect]
+  wordle:
+    description: a little daily word puzzle
+    usage: /wordle [word|help|share]
   pvp:
     description: toggle pvp.
     usage: /pvp [on|off|status]
@@ -54,6 +65,13 @@ commands:
     permission: nookcore.admin
     usage: /nookadmin <status|teleport|return> ...
 permissions:
+  nookcore.games:
+    default: true
+  nookcore.coinflip:
+    default: true
+  nookcore.wordle:
+    description: Play the daily word puzzle
+    default: true
   nookcore.pvp:
     description: Enable your own PvP preference
     default: true
