@@ -53,6 +53,11 @@ final class TravelProgress {
             && Math.abs(sample.x())<=29_999_984 && Math.abs(sample.z())<=29_999_984;
     }
     Totals pending(){return new Totals(roadMillimetres,railMillimetres);}
+    /** At most one threshold write is in flight; acknowledged goals need no extra writes. */
+    boolean thresholdSave(long savedRoad,long savedRail,long roadGoal,long railGoal,boolean writing){
+        return !writing && (savedRoad<roadGoal && roadMillimetres>=roadGoal-savedRoad
+            || savedRail<railGoal && railMillimetres>=railGoal-savedRail);
+    }
     /** Retry this same batch until its store transaction commits; new observations remain pending. */
     Batch snapshot(){
         if(outstanding==null && (roadMillimetres!=0 || railMillimetres!=0))outstanding=new Batch(++sequence,roadMillimetres,railMillimetres);

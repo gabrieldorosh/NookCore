@@ -98,6 +98,28 @@ class TravelProgressTest {
         assertEquals(1000,progress.pending().roadMillimetres());assertNull(progress.anchor());
         var restarted=new TravelProgress();restarted.observe(sample(10,65,0,10));assertEquals(0,restarted.pending().roadMillimetres());
     }
+    @Test void thresholdFlushOnlyForUncommittedGoalsAndNeverWhileWriting(){
+        var progress=new TravelProgress();progress.observe(sample(0,65,0,0));progress.observe(sample(1,65,0,5));
+        assertFalse(progress.thresholdSave(0,0,2000,2000,false));
+        assertTrue(progress.thresholdSave(1000,0,2000,2000,false));
+        assertFalse(progress.thresholdSave(1000,0,2000,2000,true));
+        var batch=progress.snapshot();assertTrue(progress.acknowledge(batch));
+        assertFalse(progress.thresholdSave(2000,0,2000,2000,false));
+        progress.observe(sample(WORLD,VEHICLE,TravelProgress.Kind.RAIL,1,65,0,10,500_000_000,true));
+        progress.observe(sample(WORLD,VEHICLE,TravelProgress.Kind.RAIL,3,65,0,15,750_000_000,true));
+        assertTrue(progress.thresholdSave(2000,0,2000,2000,false));
+        assertFalse(progress.thresholdSave(2000,0,2000,2000,true));
+        assertFalse(progress.thresholdSave(2000,2000,2000,2000,false));
+    }
+    @Test void secondGoalCrossingDuringFirstFlushRemainsPendingForNextWrite(){
+        var progress=new TravelProgress();progress.observe(sample(0,65,0,0));progress.observe(sample(2,65,0,5));
+        var road=progress.snapshot();assertTrue(progress.thresholdSave(0,0,2000,2000,false));
+        progress.observe(sample(WORLD,VEHICLE,TravelProgress.Kind.RAIL,2,65,0,10,500_000_000,true));
+        progress.observe(sample(WORLD,VEHICLE,TravelProgress.Kind.RAIL,4,65,0,15,750_000_000,true));
+        assertFalse(progress.thresholdSave(0,0,2000,2000,true));assertTrue(progress.acknowledge(road));
+        assertTrue(progress.thresholdSave(2000,0,2000,2000,false));
+        assertEquals(new TravelProgress.Totals(0,2000),progress.pending());
+    }
     @Test void invalidLimitsAreRejected(){
         assertThrows(IllegalArgumentException.class,()->new TravelProgress.Limits(Double.NaN,40,10,1_000_000_000));
         assertThrows(IllegalArgumentException.class,()->new TravelProgress.Limits(50,0,10,1_000_000_000));

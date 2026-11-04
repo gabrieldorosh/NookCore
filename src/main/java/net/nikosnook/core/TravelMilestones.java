@@ -65,17 +65,19 @@ final class TravelMilestones implements Listener,AutoCloseable {
             poll();
             if(disabled || !healthy.getAsBoolean()){riders.values().forEach(r->r.progress.reset());return;}
             long tick=Bukkit.getCurrentTick(),nanos=System.nanoTime();
-            for(Player player:Bukkit.getOnlinePlayers()){
-                if(!eligible(player)){reset(player.getUniqueId());continue;}
-                var state=rider(player);if(state.saved==null){if(!state.loading.isDone())continue;state.saved=state.loading.get();}
-                grantSaved(state,player);measure(state,player,tick,nanos);
-            }
+            for(Player player:Bukkit.getOnlinePlayers())samplePlayer(player,tick,nanos);
             if(++samples%240==0)flush(new ArrayList<>(riders.values()));
             var offline=new ArrayList<Rider>();
             for(var state:riders.values())if(Bukkit.getPlayer(state.id)==null){state.progress.reset();offline.add(state);}
             flush(offline);
             riders.values().removeIf(r->Bukkit.getPlayer(r.id)==null && !r.writing && r.progress.pending().roadMillimetres()==0 && r.progress.pending().railMillimetres()==0);
         }catch(Exception|LinkageError error){disable(error);}
+    }
+    private void samplePlayer(Player player,long tick,long nanos)throws Exception{
+        if(!eligible(player)){reset(player.getUniqueId());return;}
+        var state=rider(player);if(state.saved==null){if(!state.loading.isDone())return;state.saved=state.loading.get();}
+        grantSaved(state,player);measure(state,player,tick,nanos);
+        if(state.progress.thresholdSave(state.saved.roadMillimetres(),state.saved.railMillimetres(),roadGoal,railGoal,state.writing))flush(List.of(state));
     }
     private void measure(Rider state,Player player,long tick,long nanos){
         Entity vehicle=player.getVehicle();TravelProgress.Kind kind;double halfWidth;
@@ -137,7 +139,7 @@ final class TravelMilestones implements Listener,AutoCloseable {
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true) public void vehicleTeleport(EntityTeleportEvent e){for(var state:riders.values()){var anchor=state.progress.anchor();if(anchor!=null && anchor.vehicle().equals(e.getEntity().getUniqueId()))state.progress.reset();}}
     @EventHandler public void quit(PlayerQuitEvent e){var state=riders.get(e.getPlayer().getUniqueId());if(state!=null){state.progress.reset();flush(List.of(state));}}
     @Override public void close(){
-        closed=true;if(task!=null)task.cancel();HandlerList.unregisterAll(this);if(writer==null)return;
+        if(closed)return;closed=true;if(task!=null)task.cancel();HandlerList.unregisterAll(this);if(writer==null)return;
         // Absolute monotonic snapshots make this safe even when an older minute/quit batch is still queued.
         var targets=new HashMap<UUID,NookStore.TravelTotals>();
         try{
