@@ -11,6 +11,19 @@ skin-models:
   niko: SLIM
   pip: SLIM
 locations: {}
+# Optional flat-path prototype. Leave off until a local road loop is built and checked.
+# Every point is a foot position; first point must exactly match locations.niko (HOME).
+# 2–32 points, same world and Y, <=32 blocks from HOME, <=256 blocks for the closed loop.
+# Example only: a 4x4 toy cobblestone loop with road top Y=65. Not a surveyed spawn route.
+# Build a road at least two blocks wide around every segment; keep two blocks above it clear.
+# Use y: 64.9375 for a homogeneous DIRT_PATH road whose blocks are at Y=64.
+niko-roaming:
+  enabled: false
+  waypoints:
+    - {world: world, x: 0.5, y: 65.0, z: 0.5}
+    - {world: world, x: 4.5, y: 65.0, z: 0.5}
+    - {world: world, x: 4.5, y: 65.0, z: 4.5}
+    - {world: world, x: 0.5, y: 65.0, z: 4.5}
 # Optional idle pose at Pip's placed position; test the seat height with your stall first.
 pip-idle:
   sitting-enabled: false

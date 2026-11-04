@@ -34,6 +34,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     private final Map<UUID,Recovery> recoveries=new HashMap<>();
     private final PipGreetings greetings=new PipGreetings();
     private final PipIdlePose<Npc> pipIdle;
+    private final NikoRoaming<Npc> nikoRoaming;
     private boolean closed, vendorPaused, initializing;
     private final NpcConfigWriter configWriter=new NpcConfigWriter();
     private java.util.concurrent.CompletableFuture<Void> pendingSave;
@@ -60,6 +61,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         file=plugin.getDataFolder().toPath().resolve("spawn-npcs.yml");
         if(!Files.exists(file))plugin.saveResource("spawn-npcs.yml",false);
         config=new YamlConfiguration();config.load(file.toFile());
+        nikoRoaming=NikoRoaming.fancy(config,plugin.getLogger()::warning);
         Path catalogueFile=plugin.getDataFolder().toPath().resolve("pip-catalogue.yml");
         if(Files.exists(catalogueFile)){
             catalogueConfig=new YamlConfiguration();catalogueConfig.load(catalogueFile.toFile());
@@ -83,9 +85,25 @@ final class SpawnNpcs implements Listener,AutoCloseable {
             pollSave();
             int step=tickCounter++;
             if(step%10==0)animatePip();
+            animateNiko();
             if(step%100!=0)return;
             try{tick();}catch(Exception ex){problem=ex.getMessage();plugin.getLogger().log(Level.SEVERE,"NPC update failed; Pip purchases paused",ex);vendorPaused=true;}
         },1,1);
+    }
+    private void animateNiko(){
+        if(!nikoRoaming.running() || !enabled() || !healthy.getAsBoolean())return;
+        try{
+            var home=locations.get("niko");var npc=npcs.get("niko");var at=getCurrentLocation("niko");
+            boolean busy=at!=null && Bukkit.getOnlinePlayers().stream().anyMatch(p->NikoRoaming.pauses(p,at)
+                || p.getOpenInventory().getTopInventory().getHolder() instanceof Menu m && m.kind.startsWith("niko"));
+            nikoRoaming.update(npc,home==null || home.getWorld()==null?null:NikoRoaming.point(home),busy);
+        }catch(RuntimeException|LinkageError ex){nikoRoaming.failed(ex);}
+    }
+    private Location getCurrentLocation(String role){
+        // Movement never rewrites HOME. Menu distance checks follow the packet NPC even after roaming stops.
+        var npc=npcs.get(role);
+        if(role.equals("niko") && npc!=null && npc.getData().getLocation()!=null)return npc.getData().getLocation().clone();
+        return locations.get(role);
     }
     private void animatePip(){
         if(!config.getBoolean("pip-idle.sitting-enabled",false) || !enabled() || !healthy.getAsBoolean())return;
@@ -197,8 +215,8 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         var npc=FancyNpcsPlugin.get().getNpcAdapter().apply(data);npc.setSaveToFile(false);
         npc.create();FancyNpcsPlugin.get().getNpcManager().registerNpc(npc);npcs.put(role,npc);npc.spawnForAll();
     }
-    private void remove(String role){var npc=npcs.remove(role);if(npc!=null){npc.removeForAll();FancyNpcsPlugin.get().getNpcManager().removeNpc(npc);}}
-    private boolean near(Player p,String role){var loc=locations.get(role);return enabled() && healthy.getAsBoolean() && p.isOnline() && !p.isDead() && !StaffMode.active(p.getUniqueId()) && p.getGameMode()==GameMode.SURVIVAL && loc!=null && p.getWorld().equals(loc.getWorld()) && p.getLocation().distanceSquared(loc)<=36;}
+    private void remove(String role){if(role.equals("niko"))nikoRoaming.forget();var npc=npcs.remove(role);if(npc!=null){npc.removeForAll();FancyNpcsPlugin.get().getNpcManager().removeNpc(npc);}}
+    private boolean near(Player p,String role){var loc=getCurrentLocation(role);return enabled() && healthy.getAsBoolean() && p.isOnline() && !p.isDead() && !StaffMode.active(p.getUniqueId()) && p.getGameMode()==GameMode.SURVIVAL && loc!=null && p.getWorld().equals(loc.getWorld()) && p.getLocation().distanceSquared(loc)<=36;}
     private String directions(String role){return locations.get(role)==null?"Niko's getting ready at spawn. Ask a member of staff for a hand with your quests!":"Speak to Niko at spawn to get your quests!";}
     private static ItemStack icon(Material type,String title,String...lore){
         var item=new ItemStack(type);var meta=item.getItemMeta();meta.displayName(NookUi.text(title).decoration(TextDecoration.ITALIC,false));meta.lore(Arrays.stream(lore).map(s->NookUi.text(s).decoration(TextDecoration.ITALIC,false)).toList());item.setItemMeta(meta);return item;
@@ -206,6 +224,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     private Menu menu(Player p,String kind,String rotation,String design,int quantity,boolean preview,String title){var m=new Menu(p.getUniqueId(),kind,rotation,design,quantity,preview);m.inventory=Bukkit.createInventory(m,27,Component.text(title));return m;}
     void openNiko(Player p)throws Exception {
         if(!near(p,"niko"))throw new IllegalArgumentException(directions("niko"));
+        nikoRoaming.interact();
         var week=quests.nikoWeek();boolean accepted=store.questAccepted(p.getUniqueId(),week);
         boolean complete=accepted && quests.nikoComplete(p.getUniqueId(),week);
         var offers=quests.nikoGoals();
