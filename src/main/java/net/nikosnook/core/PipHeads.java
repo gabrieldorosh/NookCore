@@ -8,6 +8,7 @@ import org.bukkit.event.block.*;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.SkullMeta;
+import org.bukkit.inventory.meta.BannerMeta;
 import org.bukkit.persistence.PersistentDataType;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.*;
@@ -15,10 +16,11 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-/** Stable same-design metadata. Explosions leave collectible skulls intact. */
+/** Stable same-design metadata. Explosions leave saved collectibles intact. */
 final class PipHeads implements Listener {
     static final NamespacedKey DESIGN=new NamespacedKey("nookcore","pip-design");
     static final NamespacedKey SAVED=new NamespacedKey("nookcore","pip-placed-item");
+    static final NamespacedKey PRODUCT_TYPE=new NamespacedKey("nookcore","pip-product-type");
     static ItemStack make(VendorCatalogue.Design d){
         var item=new ItemStack(Material.PLAYER_HEAD);var meta=(SkullMeta)item.getItemMeta();
         var profile=Bukkit.createPlayerProfile(UUID.nameUUIDFromBytes(("nookcore:pip:"+d.id()).getBytes(StandardCharsets.UTF_8)));
@@ -41,10 +43,25 @@ final class PipHeads implements Listener {
         if(e.getBlockPlaced().getState() instanceof Skull skull){
             var one=item.clone();one.setAmount(1);
             skull.getPersistentDataContainer().set(SAVED,PersistentDataType.BYTE_ARRAY,one.serializeAsBytes());skull.update(false,false);
+        }else if(e.getBlockPlaced().getState() instanceof Banner banner){
+            var one=item.clone();one.setAmount(1);
+            if(matchesBanner(one,banner.getType(),banner.getPatterns())){
+                banner.getPersistentDataContainer().set(SAVED,PersistentDataType.BYTE_ARRAY,one.serializeAsBytes());banner.update(false,false);
+            }
         }
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void drops(BlockDropItemEvent e){
+        if(e.getBlockState() instanceof Banner banner){
+            var saved=savedBanner(banner);if(saved==null)return;
+            for(var entity:e.getItems()){
+                var drop=entity.getItemStack();
+                if(drop.getAmount()==1 && drop.getItemMeta() instanceof BannerMeta meta && matchesBanner(saved,drop.getType(),meta.getPatterns())){
+                    entity.setItemStack(saved.clone());break;
+                }
+            }
+            return;
+        }
         if(!(e.getBlockState() instanceof Skull skull))return;
         byte[] bytes=skull.getPersistentDataContainer().get(SAVED,PersistentDataType.BYTE_ARRAY);if(bytes==null)return;
         var head=ItemStack.deserializeBytes(bytes);boolean replaced=false;
@@ -53,7 +70,23 @@ final class PipHeads implements Listener {
             // Vanilla produces one head. Never add a second entity or invent a cancelled drop.
         }
     }
-    private static boolean collectible(Block b){return b.getState() instanceof Skull s && s.getPersistentDataContainer().has(SAVED,PersistentDataType.BYTE_ARRAY);}
+    private static boolean matchesBanner(ItemStack saved,Material type,List<?> patterns){
+        if(saved.getAmount()!=1 || !(saved.getItemMeta() instanceof BannerMeta meta))return false;
+        var pdc=meta.getPersistentDataContainer();
+        return PipBannerIdentity.matches(pdc.get(PRODUCT_TYPE,PersistentDataType.STRING),pdc.get(DESIGN,PersistentDataType.STRING),saved.getType().name(),type.name(),meta.getPatterns(),patterns);
+    }
+    private static ItemStack savedBanner(Banner banner){
+        byte[] bytes=banner.getPersistentDataContainer().get(SAVED,PersistentDataType.BYTE_ARRAY);if(bytes==null)return null;
+        try{
+            var saved=ItemStack.deserializeBytes(bytes);
+            return matchesBanner(saved,banner.getType(),banner.getPatterns())?saved:null;
+        }catch(RuntimeException invalid){return null;} // Corrupt/stale bytes never replace a vanilla drop.
+    }
+    private static boolean collectible(Block b){
+        var state=b.getState();
+        return state instanceof Skull s && s.getPersistentDataContainer().has(SAVED,PersistentDataType.BYTE_ARRAY)
+            || state instanceof Banner banner && savedBanner(banner)!=null;
+    }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true) public void explosion(EntityExplodeEvent e){e.blockList().removeIf(PipHeads::collectible);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true) public void explosion(BlockExplodeEvent e){e.blockList().removeIf(PipHeads::collectible);}
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true) public void piston(BlockPistonExtendEvent e){if(e.getBlocks().stream().anyMatch(PipHeads::collectible))e.setCancelled(true);}

@@ -15,7 +15,7 @@ class PipProductsTest {
     }
     YamlConfiguration banner(){var c=entry("BANNER");c.set("banner.base","WHITE");c.set("banner.patterns",List.of(Map.of("pattern","minecraft:border","colour","YELLOW")));return c;}
     YamlConfiguration book(){var c=entry("WRITTEN_BOOK");c.set("book.title","a little journal");c.set("book.pages",List.of("a warm light <3","<click:run_command:'/op somebody'>literal ink</click>"));return c;}
-    PipProducts.Product parse(YamlConfiguration c){return PipProducts.parse("little-find",c,Set.of("border","flower","stripe_bottom")::contains);}
+    PipProducts.Product parse(YamlConfiguration c){return PipProducts.parse("little-find",c,Set.of("border","flower","stripe_bottom","small_stripes","circle","rhombus","bricks")::contains);}
     @Test void oldHeadDefinitionsAndConstructorsKeepTheirExactIdentity(){
         var c=entry("HEAD");c.set("type",null);c.set("texture","a".repeat(64));
         var product=parse(c);var expected=new VendorCatalogue.Design("little-find","A little find","a".repeat(64),VendorCatalogue.Rarity.COMMON,"home",Set.of(),true,false,400,10,0,"");
@@ -106,7 +106,7 @@ class PipProductsTest {
     @Test void bundledExamplesAreValidButNeverEnabledByDefault(){
         var resource=getClass().getResourceAsStream("/pip-products-examples.yml");assertNotNull(resource);
         var config=YamlConfiguration.loadConfiguration(new InputStreamReader(resource,StandardCharsets.UTF_8)).getConfigurationSection("catalogue");
-        assertEquals(2,config.getKeys(false).size());
-        for(String id:config.getKeys(false)){var c=config.getConfigurationSection(id);assertFalse(c.getBoolean("enabled",true));assertNotNull(PipProducts.parse(id,c,Set.of("border","flower","stripe_bottom")::contains));}
+        assertEquals(6,config.getKeys(false).size());
+        for(String id:config.getKeys(false)){var c=config.getConfigurationSection(id);assertFalse(c.getBoolean("enabled",true));assertNotNull(PipProducts.parse(id,c,Set.of("border","flower","stripe_bottom","small_stripes","circle","rhombus","bricks")::contains));}
     }
 }
