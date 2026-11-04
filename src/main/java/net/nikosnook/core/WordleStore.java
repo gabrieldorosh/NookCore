@@ -55,7 +55,8 @@ final class WordleStore {
             return new Result(board,consumed,paid,anySolved);
         });
     }
-    private long claimPending(GameLedger.Tx tx,UUID player,long now)throws SQLException {
+    static long claimPending(GameLedger.Tx tx,UUID player,long now)throws SQLException {
+        if(!hasSavedRounds(tx.connection()))return 0;
         var db=tx.connection();var pending=new ArrayList<Map.Entry<String,Long>>();
         try(var q=prepare(db,"SELECT r.day,d.reward FROM wordle_rounds r JOIN wordle_days d ON d.day=r.day WHERE r.uuid=? AND r.state='WON' AND r.reward_paid=0 ORDER BY r.day",player);var r=q.executeQuery()){
             while(r.next())pending.add(Map.entry(r.getString(1),r.getLong(2)));
@@ -68,6 +69,13 @@ final class WordleStore {
             if(fresh)paid=Math.addExact(paid,amount);
         }
         return paid;
+    }
+    static long pendingRewards(GameLedger.Tx tx,UUID player)throws SQLException {
+        var db=tx.connection();if(!hasSavedRounds(db))return 0;
+        try(var q=prepare(db,"SELECT COALESCE(SUM(d.reward),0) FROM wordle_rounds r JOIN wordle_days d ON d.day=r.day WHERE r.uuid=? AND r.state='WON' AND r.reward_paid=0",player);var rows=q.executeQuery()){return rows.next()?rows.getLong(1):0;}
+    }
+    private static boolean hasSavedRounds(Connection db)throws SQLException {
+        try(var q=prepare(db,"SELECT 1 FROM sqlite_master WHERE type='table' AND name='wordle_rounds'");var rows=q.executeQuery()){return rows.next();}
     }
     private Puzzle puzzle(Connection db,String day,long now)throws SQLException {
         try(var q=prepare(db,"SELECT answer,reward FROM wordle_days WHERE day=?",day);var r=q.executeQuery()){if(r.next())return new Puzzle(r.getString(1),r.getLong(2));}

@@ -49,6 +49,9 @@ final class WordleCommand implements CommandExecutor,TabCompleter {
                 player.sendMessage(NookUi.text("= right place · ~ elsewhere · - not in the word"));
                 NookUi.help(player,"wordle","/wordle — open today's puzzle","/wordle <word> — try a word after opening the board","/wordle guess <word> — also works for words like SHARE","/wordle share — copy a result without the letters");return true;
             }
+            if(args.length==1 && args[0].equalsIgnoreCase("guess")){
+                player.sendMessage(NookUi.command("/wordle guess <word>").append(NookUi.text(" · choose a five-letter word")));return true;
+            }
             if(args.length==1 && args[0].equalsIgnoreCase("share")){
                 result=game.open(player.getUniqueId(),now);var share=WordleUi.share(result.board());
                 player.sendMessage(Component.text(share,NookUi.BODY));
@@ -77,12 +80,12 @@ final class WordleCommand implements CommandExecutor,TabCompleter {
             player.sendMessage(NookUi.command("try a word!","/wordle guess "+board.day()+" "));
         }else if(board.state()==WordleStore.State.WON){
             player.sendMessage(NookUi.message("Wordle","lovely solve! another little puzzle is on its way <3"));
-            if(!board.rewardPaid() && board.reward()>0)player.sendMessage(NookUi.message("Wordle","your "+Money.format(board.reward())+" reward is waiting safely. make room in your balance, then open /wordle again."));
+            if(!board.rewardPaid() && board.reward()>0)player.sendMessage(NookUi.message("Wordle","your "+Money.format(board.reward())+" reward is waiting safely. make room in your balance, then use /games collect."));
         }else player.sendMessage(NookUi.message("Wordle","today's word was "+board.revealedAnswer().toUpperCase(Locale.ROOT)+". have another go tomorrow! <3"));
         player.sendMessage(Component.text("next puzzle: "+NookUi.date(board.nextReset()),NookUi.MUTED));paid(player,result);milestone(player,result);
     }
     private void paid(Player player,WordleStore.Result result){if(result.paidNow()>0)player.sendMessage(NookUi.message("Nooks","+"+Money.format(result.paidNow())+" · daily word puzzle"));}
     private void milestone(Player player,WordleStore.Result result){if(result.anySolved())try{solved.accept(player);}catch(RuntimeException ignored){/* A cosmetic callback cannot reverse a saved puzzle. */}}
     private void report(Exception error){try{failure.accept(error);}catch(RuntimeException ignored){/* The module stays unavailable even if logging fails. */}}
-    @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args){return args.length==1?NookUi.complete(args[0],List.of("help","share","guess")):List.of();}
+    @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args){return sender.hasPermission("nookcore.wordle") && args.length==1?NookUi.complete(args[0],List.of("help","share","guess")):List.of();}
 }

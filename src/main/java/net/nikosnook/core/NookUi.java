@@ -40,6 +40,10 @@ final class NookUi {
             case "rent-prepay"->"Rent paid in advance · "+entry.reference();
             case "rent-reopen"->"Plot reopened · "+entry.reference();
             case "rent-refund"->"Unused rent refunded · "+entry.reference().split(" lease=",2)[0];
+            case "game-wordle"->"Daily word puzzle reward";
+            case "game-escrow"->"Game stake held safely";
+            case "game-payout"->"Game winnings";
+            case "game-refund"->"Game stake returned";
             case "native-shop-buy"->"Shop purchase";
             case "native-shop-sale"->"Shop sale income";
             case "bunny-time"->"Bunny time · "+entry.reference();

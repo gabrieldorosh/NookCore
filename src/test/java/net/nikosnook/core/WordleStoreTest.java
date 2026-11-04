@@ -58,6 +58,21 @@ class WordleStoreTest {
   long next=won.board().nextReset();money.transfer(a,b,100,next);var claimed=game.open(a,next);
   assertEquals(100,claimed.paidNow());assertTrue(claimed.anySolved());assertEquals(Money.MAX,balance(a));assertEquals(0,game.open(a,next).paidNow());
  }
+ @Test void savedRewardCanBeCollectedAfterRestartWithoutEnablingOrOpeningWordle()throws Exception{
+  money.adjust(a,Money.MAX,"console","test capacity",now);game.open(a,now);game.submit(a,null,"apple",now);
+  money.close();money=new NookStore(temp.resolve("nooks.db"));game=null;var ledger=new GameLedger(money);
+  assertEquals(100L,ledger.<Long>transact(tx->WordleStore.pendingRewards(tx,a)).longValue());money.transfer(a,b,100,now+1);
+  assertEquals(100L,ledger.<Long>transact(tx->WordleStore.claimPending(tx,a,now+2)).longValue());assertEquals(Money.MAX,balance(a));
+  assertEquals(0L,ledger.<Long>transact(tx->WordleStore.claimPending(tx,a,now+3)).longValue());assertEquals(0L,ledger.<Long>transact(tx->WordleStore.pendingRewards(tx,a)).longValue());
+  ledger.transact(tx->{var db=tx.connection();for(String table:List.of("wordle_days","wordle_rounds","wordle_views","wordle_guesses"))try(var q=db.createStatement();var rows=q.executeQuery("SELECT COUNT(*) FROM "+table)){assertTrue(rows.next());assertEquals(1,rows.getInt(1),table);}
+   try(var q=db.createStatement();var rows=q.executeQuery("SELECT COUNT(*) FROM ledger WHERE kind='game-wordle'")){assertTrue(rows.next());assertEquals(1,rows.getInt(1));}return null;});
+ }
+ @Test void disabledCleanInstallCollectionDoesNotCreateWordleTablesOrAwards()throws Exception{
+  try(var fresh=new NookStore(temp.resolve("disabled.db"))){fresh.join(a,"Alice",now,0);var ledger=new GameLedger(fresh);
+   assertEquals(0L,ledger.<Long>transact(tx->WordleStore.pendingRewards(tx,a)).longValue());assertEquals(0L,ledger.<Long>transact(tx->WordleStore.claimPending(tx,a,now)).longValue());
+   ledger.transact(tx->{try(var q=tx.connection().createStatement();var rows=q.executeQuery("SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'wordle_%'")){assertTrue(rows.next());assertEquals(0,rows.getInt(1));}return null;});assertEquals(0,fresh.account(a).orElseThrow().cents());
+  }
+ }
  @Test void simultaneousWinningRequestsPayAndConsumeOnlyOnce()throws Exception{
   String day=game.open(a,now).board().day();try(var pool=Executors.newFixedThreadPool(4)){
    var tasks=new ArrayList<Future<WordleStore.Result>>();for(int i=0;i<8;i++)tasks.add(pool.submit(()->game.submit(a,day,"apple",now)));

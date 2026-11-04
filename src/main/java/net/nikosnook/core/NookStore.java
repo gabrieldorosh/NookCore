@@ -259,15 +259,23 @@ public final class NookStore implements AutoCloseable {
     long gameHeldFunds()throws SQLException {return gameTransaction(GameLedger.Tx::heldTotal);}
 
     private synchronized <T> T tx(Work<T> work) throws SQLException {
-
+        if(!db.getAutoCommit())throw new SQLException("Nested balance transactions are not supported.");
         db.setAutoCommit(false);
-
-        try { T result = work.run(); db.commit(); return result; }
-
-        catch (SQLException | RuntimeException e) { db.rollback(); throw e; }
-
-        finally { db.setAutoCommit(true); }
-
+        boolean finished=false;
+        try {
+            T result=work.run();db.commit();finished=true;return result;
+        }catch(SQLException|RuntimeException|Error error){
+            try{db.rollback();finished=true;}
+            catch(SQLException rollback){
+                error.addSuppressed(rollback);
+                // Enabling autocommit after a failed rollback could commit partial work.
+                // Close the connection instead; callers will pause the affected feature.
+                try{db.close();}catch(SQLException close){error.addSuppressed(close);}
+            }
+            throw error;
+        }finally {
+            if(finished && !db.isClosed())db.setAutoCommit(true);
+        }
     }
 
     private int update(String sql, Object... args) throws SQLException {

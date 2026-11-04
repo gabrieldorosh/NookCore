@@ -91,6 +91,31 @@ class GameLedgerTest {
         assertThrows(SQLException.class,()->games.transact(tx->{tx.debit(a,200,"game-escrow","probe",2);return games.transact(inner->inner.balance(a));}));
         assertEquals(1000,cash(a));
     }
+    @Test void fatalCallbackErrorsRollBackStakesAndModuleRows()throws Exception{
+        games.transact(tx->{try(var q=tx.connection().createStatement()){q.execute("CREATE TABLE error_game(id TEXT PRIMARY KEY)");}return null;});
+        assertThrows(AssertionError.class,()->games.transact(tx->{tx.reserve("fatal","bad-game",a,200,2);try(var q=tx.connection().createStatement()){q.execute("INSERT INTO error_game VALUES('bad-game')");}throw new AssertionError("simulated provider failure");}));
+        assertEquals(1000,cash(a));assertEquals(0,store.gameHeldFunds());
+        long rows=games.<Long>transact(tx->{try(var q=tx.connection().createStatement();var r=q.executeQuery("SELECT COUNT(*) FROM error_game")){r.next();return r.getLong(1);}});assertEquals(0,rows);
+    }
+    @Test void nestedOrdinaryAwardsCannotCommitAnOuterGameOperation()throws Exception{
+        assertThrows(SQLException.class,()->games.transact(tx->{tx.reserve("outer","nested",a,200,2);store.award(a,"wrong-nesting",100,2);return null;}));
+        assertEquals(1000,cash(a));assertEquals(0,store.gameHeldFunds());
+        assertTrue(store.award(a,"wrong-nesting",100,3));assertEquals(1100,cash(a));
+    }
+    @Test void failedRollbackClosesConnectionInsteadOfCommittingPartialMoney()throws Exception{
+        var field=NookStore.class.getDeclaredField("db");field.setAccessible(true);var actual=(java.sql.Connection)field.get(store);
+        var restored=new java.util.concurrent.atomic.AtomicInteger();
+        var wrapped=(java.sql.Connection)java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),new Class[]{java.sql.Connection.class},(object,method,args)->{
+            if(method.getName().equals("rollback"))throw new SQLException("simulated rollback I/O failure");
+            if(method.getName().equals("setAutoCommit") && Boolean.TRUE.equals(args[0]))restored.incrementAndGet();
+            try{return method.invoke(actual,args);}catch(java.lang.reflect.InvocationTargetException error){throw error.getCause();}
+        });
+        field.set(store,wrapped);
+        var failure=assertThrows(AssertionError.class,()->games.transact(tx->{tx.reserve("fatal-io","failed-rollback",a,200,2);throw new AssertionError("provider failed");}));
+        assertTrue(actual.isClosed());assertEquals(0,restored.get());assertEquals(1,failure.getSuppressed().length);
+        store=new NookStore(folder.resolve("nooks.db"));games=new GameLedger(store);
+        assertEquals(1000,cash(a));assertEquals(0,store.gameHeldFunds());
+    }
     @Test void longestSupportedIdsCanStillBeRefunded()throws Exception{
         String hold="h".repeat(200),game="g".repeat(200);
         games.transact(tx->tx.reserve(hold,game,a,200,2));assertTrue(games.<Boolean>transact(tx->tx.refundHold(hold,3)));assertEquals(2000,supply());

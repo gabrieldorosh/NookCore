@@ -9,7 +9,7 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 /** Cosmetic definitions only. Stable keys and criteria preserve Minecraft progress. */
 record MilestoneCatalogue(boolean enabled,Definition root,List<Definition> milestones) {
     static final String ROOT="nikosnook:small_comforts",CHOICE="nikosnook:quests/a_little_choice";
-    enum Event { QUESTS_CHOSEN, PIP_VISITED, COMMUNITY_CONTRIBUTION, WEEK_COMPLETE }
+    enum Event { QUESTS_CHOSEN, PIP_VISITED, COMMUNITY_CONTRIBUTION, WEEK_COMPLETE, WORDLE_SOLVED, COIN_FLIP_FINISHED }
     record Definition(String id,String title,String description,String icon,Event event,boolean enabled,boolean showToast) {
         String criterion(){return id.equals(ROOT)?"visit":id.equals(CHOICE)?"chosen":"complete";}
         String json(){
