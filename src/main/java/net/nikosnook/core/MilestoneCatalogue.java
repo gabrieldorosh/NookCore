@@ -9,7 +9,7 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 /** Cosmetic definitions only. Stable keys and criteria preserve Minecraft progress. */
 record MilestoneCatalogue(boolean enabled,Definition root,List<Definition> milestones) {
     static final String ROOT="nikosnook:small_comforts",CHOICE="nikosnook:quests/a_little_choice";
-    enum Event { QUESTS_CHOSEN, PIP_VISITED, COMMUNITY_CONTRIBUTION, WEEK_COMPLETE, WORDLE_SOLVED, COIN_FLIP_FINISHED }
+    enum Event { QUESTS_CHOSEN, PIP_VISITED, COMMUNITY_CONTRIBUTION, WEEK_COMPLETE, WORDLE_SOLVED, COIN_FLIP_FINISHED, ROAD_MOUNT, RAIL }
     record Definition(String id,String title,String description,String icon,Event event,boolean enabled,boolean showToast) {
         String criterion(){return id.equals(ROOT)?"visit":id.equals(CHOICE)?"chosen":"complete";}
         String json(){
@@ -30,7 +30,7 @@ record MilestoneCatalogue(boolean enabled,Definition root,List<Definition> miles
         for(var entry:entries.entrySet()){
             String id=id(entry.getKey());if(id.equals(ROOT)||!ids.add(id))throw bad(entry.getKey(),"duplicate or reserved advancement ID");
             var config=map(entry.getValue(),entry.getKey());keys(config,Set.of("title","description","icon","event","enabled","show-toast"),entry.getKey());
-            Event event;try{event=Event.valueOf(text(config,"event",48).toUpperCase(Locale.ROOT));}catch(IllegalArgumentException e){throw bad(entry.getKey()+".event","use QUESTS_CHOSEN, PIP_VISITED, COMMUNITY_CONTRIBUTION or WEEK_COMPLETE");}
+            Event event;try{event=Event.valueOf(text(config,"event",48).toUpperCase(Locale.ROOT));}catch(IllegalArgumentException e){throw bad(entry.getKey()+".event","use a supported cosmetic milestone event");}
             result.add(definition(id,config,event,bool(config,"enabled",true),bool(config,"show-toast",true),validMaterial));
         }
         return new MilestoneCatalogue(bool(document,"enabled",true),rootDefinition,List.copyOf(result));

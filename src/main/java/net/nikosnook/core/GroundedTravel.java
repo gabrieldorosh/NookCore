@@ -140,6 +140,8 @@ final class GroundedTravel implements Listener {
         if(existing!=null)attribute.removeModifier(existing);
         if(amount>0)attribute.addTransientModifier(new AttributeModifier(speedKey,amount,AttributeModifier.Operation.MULTIPLY_SCALAR_1));
     }
+    boolean allowedRoadMount(AbstractHorse horse){return mounts.contains(horse.getType().name());}
+    boolean roadMaterial(Material material){return roads.contains(material);}
     boolean roadUnder(Location feet){
         World world=feet.getWorld();
         for(double dx:new double[]{0,-0.35,0.35})for(double dz:new double[]{0,-0.35,0.35}){

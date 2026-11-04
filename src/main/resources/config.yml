@@ -47,6 +47,11 @@ travel:
   # Example: "2026-10-23T19:00:00+01:00". Blank preserves the manual lock.
   end-opens-at: ""
   block-command-teleports: true
+  # Optional cosmetic lifetime counters; no travel money rewards.
+  lifetime-milestones:
+    enabled: false
+    road-mount-blocks: 1000
+    rail-blocks: 1000
   # Local Travel Update candidate. Enable only after route tests and tuning.
   grounded:
     enabled: false
