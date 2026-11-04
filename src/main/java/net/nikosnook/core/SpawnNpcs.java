@@ -28,6 +28,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     private final YamlConfiguration config;
     private final YamlConfiguration catalogueConfig;
     private final List<VendorCatalogue.Design> catalogue=new ArrayList<>();
+    private final Map<String,PipProducts.Product> catalogueProducts=new HashMap<>();
     private final Map<String,Npc> npcs=new HashMap<>();
     private final Map<String,Location> locations=new HashMap<>();
     private final Map<String,SkinData> skins=new HashMap<>();
@@ -70,7 +71,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         var products=Objects.requireNonNull(catalogueConfig.getConfigurationSection("catalogue"),"Missing Pip catalogue");
         for(String id:products.getKeys(false)){
             var c=products.getConfigurationSection(id);if(!c.getBoolean("enabled",true))continue;
-            catalogue.add(new VendorCatalogue.Design(id,c.getString("name"),c.getString("texture"),VendorCatalogue.Rarity.valueOf(c.getString("rarity")),c.getString("category"),new HashSet<>(c.getStringList("seasons")),c.getBoolean("year-round",true),c.getBoolean("modern",false),c.getLong("price-cents"),c.getInt("stock-per-allocation"),c.getInt("cap-per-visit",0),c.getString("source","")));
+            var product=PipProducts.parse(id,c);catalogue.add(product.design());catalogueProducts.put(id,product);
         }
         if(config.getBoolean("test-mode") && config.getLong("test-start",0)==0){config.set("test-start",System.currentTimeMillis());initializing=true;save(config.saveToString(),()->initializing=false,null);}
         for(String role:List.of("niko","pip")){Location loc=config.getLocation("locations."+role);if(loc!=null)locations.put(role,loc);}
@@ -163,14 +164,14 @@ final class SpawnNpcs implements Listener,AutoCloseable {
             Set<String> pins=new HashSet<>();
             if(store.previousVendorDesigns(v.id()).isEmpty())pins.addAll(config.getStringList("first-visit-pins"));
             var chosen=VendorCatalogue.select(catalogue,season,pins,store.previousVendorDesigns(v.id()),v.id().hashCode());
-            var items=chosen.stream().map(d->new NookStore.VendorOffer(v.id(),d.id(),d.name(),PipHeads.make(d).serializeAsBytes(),d.price(),d.allocation(),d.allocation(),d.cap())).toList();
+            var items=chosen.stream().map(d->new NookStore.VendorOffer(v.id(),d.id(),d.name(),PipProducts.make(Objects.requireNonNull(catalogueProducts.get(d.id()),"Missing Pip product definition")).serializeAsBytes(),d.price(),d.allocation(),d.allocation(),d.cap())).toList();
             store.openVendorVisit(v,items,season);
         }
         if(saved.size()==6){
             var pins=new HashSet<>(saved.stream().map(NookStore.VendorOffer::design).toList());
-            var chosen=VendorCatalogue.select(catalogue,season(v.arrival()),pins,Set.of(),v.id().hashCode());
+            var chosen=VendorCatalogue.select(VendorCatalogue.legacyVisitPool(catalogue),season(v.arrival()),pins,Set.of(),v.id().hashCode());
             var d=chosen.stream().filter(x->!pins.contains(x.id())).findFirst().orElseThrow();
-            store.expandVendorVisit(new NookStore.VendorOffer(v.id(),d.id(),d.name(),PipHeads.make(d).serializeAsBytes(),d.price(),d.allocation(),d.allocation(),d.cap()));
+            store.expandVendorVisit(new NookStore.VendorOffer(v.id(),d.id(),d.name(),PipProducts.make(Objects.requireNonNull(catalogueProducts.get(d.id()),"Missing Pip product definition")).serializeAsBytes(),d.price(),d.allocation(),d.allocation(),d.cap()));
         }
         store.restockVendor(v.id(),now);return store.vendorOffers(v.id());
     }
@@ -262,7 +263,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         var m=new Menu(p.getUniqueId(),"catalogue","","",0,true);
         m.inventory=Bukkit.createInventory(m,54,Component.text("pip's designs!"));int slot=0;
         for(var d:catalogue.stream().limit(54).toList()){
-            var item=PipHeads.make(d);var meta=item.getItemMeta();var lore=new ArrayList<Component>(meta.lore());
+            var item=PipProducts.make(Objects.requireNonNull(catalogueProducts.get(d.id()),"Missing Pip product definition"));var meta=item.getItemMeta();var lore=new ArrayList<Component>(meta.lore());
             lore.add(NookUi.text("Trial price: "+Money.format(d.price())));lore.add(NookUi.text("Preview only · "+d.id()));meta.lore(lore);item.setItemMeta(meta);m.inventory.setItem(slot++,item);
         }
         p.openInventory(m.inventory);
