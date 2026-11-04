@@ -1,0 +1,24 @@
+# Cosmetic lifetime travel milestones. Tracking is default-off in config.yml:
+# travel.lifetime-milestones.enabled. Goals default to 1,000 blocks each there.
+# Keep these IDs/criteria stable. No money or commands are part of this catalogue.
+schema-version: 1
+enabled: true
+root:
+  title: "niko's nook"
+  description: 'little adventures and small comforts <3'
+  icon: BOOK
+milestones:
+  travel/a_familiar_road:
+    enabled: true
+    title: 'a familiar road'
+    description: 'ride a road mount for 1,000 lifetime blocks'
+    icon: SADDLE
+    event: ROAD_MOUNT
+    show-toast: true
+  travel/on_the_rails:
+    enabled: true
+    title: 'on the rails'
+    description: 'travel 1,000 lifetime blocks in an occupied rail cart'
+    icon: RAIL
+    event: RAIL
+    show-toast: true

@@ -26,6 +26,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     private EconomyMetrics economyMetrics;
     private BunnyBoots bunnyBoots;
     private GroundedTravel groundedTravel;
+    private TravelMilestones travelMilestones;
     private AdminTeleports adminTeleports;
     private StaffMode staffMode;
     private PvpToggle pvp;
@@ -136,6 +137,8 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             }catch(Exception | LinkageError ex){getLogger().log(Level.SEVERE,"Spawn NPCs could not start; existing economy remains available",ex);}
             getServer().getPluginManager().registerEvents(new PipHeads(),this);
             startGames();
+            try{travelMilestones=new TravelMilestones(this,store,groundedTravel,()->healthy);}
+            catch(Exception|LinkageError ex){getLogger().log(Level.WARNING,"Optional travel milestones could not start; other features remain available",ex);}
             new CommandNavigation(this);
             new HelperInspection(this);
             new StaffChat(this);
@@ -447,6 +450,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
     @Override public void onDisable(){
         if(spawnNpcs!=null)spawnNpcs.close();
         if(coinFlipGame!=null)coinFlipGame.close();
+        if(travelMilestones!=null)travelMilestones.close();
         if(economyMetrics!=null)try{economyMetrics.close();}catch(Exception ex){getLogger().log(Level.WARNING,"Metrics close failed",ex);}
         if(groundedTravel!=null)groundedTravel.close();if(bunnyBoots!=null)bunnyBoots.close();healthy=false;if(chat!=null)chat.close();getServer().getServicesManager().unregisterAll(this);if(store!=null)try{store.close();}catch(SQLException e){getLogger().log(Level.SEVERE,"Database close failed",e);}}
 }

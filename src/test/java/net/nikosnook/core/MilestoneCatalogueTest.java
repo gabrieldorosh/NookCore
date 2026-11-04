@@ -15,7 +15,7 @@ import org.yaml.snakeyaml.Yaml;
 import static org.junit.jupiter.api.Assertions.*;
 
 class MilestoneCatalogueTest {
-    static final Predicate<String> ITEMS=Set.of("BOOK","WRITTEN_BOOK","SPYGLASS","CHEST","EMERALD","PAPER","SUNFLOWER")::contains;
+    static final Predicate<String> ITEMS=Set.of("BOOK","WRITTEN_BOOK","SPYGLASS","CHEST","EMERALD","PAPER","SUNFLOWER","SADDLE","RAIL")::contains;
     static String defaults()throws Exception{try(var in=MilestoneCatalogueTest.class.getResourceAsStream("/advancements.yml")){assertNotNull(in);return new String(in.readAllBytes(),StandardCharsets.UTF_8);}}
     static MilestoneCatalogue parse(String text){return MilestoneCatalogue.parse(text,ITEMS);}
     static final class Memory implements NookMilestones.Gateway {
@@ -39,6 +39,9 @@ class MilestoneCatalogueTest {
         assertEquals(Set.of("nikosnook:games/five_little_letters","nikosnook:games/heads_or_tails"),new HashSet<>(games.milestones().stream().map(MilestoneCatalogue.Definition::id).toList()));
         assertEquals(Set.of(MilestoneCatalogue.Event.WORDLE_SOLVED,MilestoneCatalogue.Event.COIN_FLIP_FINISHED),new HashSet<>(games.milestones().stream().map(MilestoneCatalogue.Definition::event).toList()));
         var all=new HashSet<MilestoneCatalogue.Event>();parse(defaults()).milestones().forEach(d->all.add(d.event()));games.milestones().forEach(d->all.add(d.event()));
+        String travelYaml;try(var in=MilestoneCatalogueTest.class.getResourceAsStream("/travel-advancements.yml")){assertNotNull(in);travelYaml=new String(in.readAllBytes(),StandardCharsets.UTF_8);}
+        var travel=parse(travelYaml);travel.milestones().forEach(d->{all.add(d.event());assertFalse(d.json().contains("\"rewards\""));});
+        assertEquals(Set.of("nikosnook:travel/a_familiar_road","nikosnook:travel/on_the_rails"),new HashSet<>(travel.milestones().stream().map(MilestoneCatalogue.Definition::id).toList()));
         assertEquals(Set.of(MilestoneCatalogue.Event.values()),all);
         var memory=new Memory();new NookMilestones(parse(defaults()),memory,s->{});new NookMilestones(games,memory,s->{});
         assertEquals(7,memory.installed.size());for(var d:games.milestones())assertFalse(d.json().contains("\"rewards\""));

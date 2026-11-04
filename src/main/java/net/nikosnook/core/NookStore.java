@@ -63,6 +63,7 @@ public final class NookStore implements AutoCloseable {
 
             s.execute("CREATE INDEX IF NOT EXISTS ledger_account ON ledger(uuid,id)");
             GameLedger.install(s);
+            s.execute("CREATE TABLE IF NOT EXISTS travel_progress(uuid TEXT PRIMARY KEY REFERENCES accounts(uuid),road_mm INTEGER NOT NULL CHECK(road_mm BETWEEN 0 AND 9000000000000000),rail_mm INTEGER NOT NULL CHECK(rail_mm BETWEEN 0 AND 9000000000000000))");
             s.execute("CREATE TABLE IF NOT EXISTS offline_income (ledger_id INTEGER PRIMARY KEY REFERENCES ledger(id))");
             s.execute("CREATE TABLE IF NOT EXISTS bunny_time (uuid TEXT PRIMARY KEY REFERENCES accounts(uuid), seconds INTEGER NOT NULL CHECK(seconds BETWEEN 0 AND 360000))");
             s.execute("CREATE TABLE IF NOT EXISTS bunny_grants (id INTEGER PRIMARY KEY, uuid TEXT NOT NULL, seconds INTEGER NOT NULL, actor TEXT NOT NULL, time INTEGER NOT NULL)");
@@ -290,6 +291,25 @@ public final class NookStore implements AutoCloseable {
 
     }
 
+    static final long MAX_TRAVEL_MM=9_000_000_000_000_000L;
+    record TravelTotals(long roadMillimetres,long railMillimetres) {
+        TravelTotals {if(roadMillimetres<0 || railMillimetres<0 || roadMillimetres>MAX_TRAVEL_MM || railMillimetres>MAX_TRAVEL_MM)throw new IllegalArgumentException("Travel totals are outside the supported lifetime range");}
+    }
+    synchronized TravelTotals travelTotals(UUID id)throws SQLException {
+        try(var p=db.prepareStatement("SELECT road_mm,rail_mm FROM travel_progress WHERE uuid=?")){
+            bind(p,id);try(var rows=p.executeQuery()){return rows.next()?new TravelTotals(rows.getLong(1),rows.getLong(2)):new TravelTotals(0,0);}
+        }
+    }
+    /** Monotonic absolute snapshots: replaying a committed minute/quit save cannot add it twice. */
+    synchronized Map<UUID,TravelTotals> saveTravelTotals(Map<UUID,TravelTotals> snapshots)throws SQLException {
+        if(snapshots.size()>64)throw new IllegalArgumentException("At most 64 travel snapshots per transaction");
+        if(snapshots.isEmpty())return Map.of();
+        var immutable=Map.copyOf(snapshots);
+        return tx(()->{
+            for(var entry:immutable.entrySet())update("INSERT INTO travel_progress(uuid,road_mm,rail_mm) VALUES(?,?,?) ON CONFLICT(uuid) DO UPDATE SET road_mm=MAX(road_mm,excluded.road_mm),rail_mm=MAX(rail_mm,excluded.rail_mm)",entry.getKey(),entry.getValue().roadMillimetres(),entry.getValue().railMillimetres());
+            var result=new HashMap<UUID,TravelTotals>();for(var id:immutable.keySet())result.put(id,travelTotals(id));return Map.copyOf(result);
+        });
+    }
     synchronized long bunnySeconds(UUID id)throws SQLException {
         try(var p=db.prepareStatement("SELECT seconds FROM bunny_time WHERE uuid=?")){
             bind(p,id);try(var r=p.executeQuery()){return r.next()?r.getLong(1):0;}
