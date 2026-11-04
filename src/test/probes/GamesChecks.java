@@ -308,7 +308,7 @@ public final class GamesChecks extends JavaPlugin implements Listener {
     private void run(){
         try{
             setup();wordleChecks();coinflipChecks();discoveryChecks();
-            int products=PipProductsChecks.run(core);check(products==39,"actual Paper banner journal and head factory checks pass");
+            int products=PipProductsChecks.run(core);check(products==63,"actual Paper banner journal and head factory checks pass");
             World world=Bukkit.getWorlds().getFirst();world.getChunkAt(0,0).load();
             for(int x=6;x<=12;x++)for(int z=6;z<=12;z++){
                 world.getBlockAt(x,120,z).setType(Material.STONE_BRICKS,false);

@@ -50,6 +50,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     private static final class Menu implements InventoryHolder {
         final UUID player;final String kind,rotation,design;final int quantity;final boolean preview;
         Inventory inventory;
+        int cataloguePage;
         final Map<Integer,String> questSlots=new HashMap<>();
         final Set<String> choices=new LinkedHashSet<>();
         List<QuestPlan.Goal> offers=List.of();
@@ -278,13 +279,19 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         m.inventory.setItem(22,icon(Material.CLOCK,"Pip's visit",(System.currentTimeMillis()<v.restock()?"Restock: "+NookUi.date(v.restock()):"This visit's final stock is out."),"Leaves: "+NookUi.date(v.departure()),config.getBoolean("test-mode")?"LOCAL TEST · trial prices and stock":"Prices stay fixed for this visit."));p.openInventory(m.inventory);
         if(!preview){if(config.getBoolean("pip-idle.sitting-enabled",false))pipIdle.standOnClick(npcs.get("pip"),System.nanoTime());greetings.greet(p.getUniqueId(),p.getName(),System.currentTimeMillis()).ifPresent(message->p.sendMessage(NookUi.message("Pip",message)));quests.milestone("PIP_VISITED",p);}
     }
-    private void cataloguePreview(Player p){
+    private void cataloguePreview(Player p){cataloguePreview(p,0);}
+    private void cataloguePreview(Player p,int requested){
+        var page=CataloguePage.of(catalogue,requested);
         var m=new Menu(p.getUniqueId(),"catalogue","","",0,true);
         m.inventory=Bukkit.createInventory(m,54,Component.text("pip's designs!"));int slot=0;
-        for(var d:catalogue.stream().limit(54).toList()){
+        m.cataloguePage=page.index();
+        for(var d:page.entries()){
             var item=PipProducts.make(Objects.requireNonNull(catalogueProducts.get(d.id()),"Missing Pip product definition"));var meta=item.getItemMeta();var lore=new ArrayList<Component>(meta.lore());
             lore.add(NookUi.text("Trial price: "+Money.format(d.price())));lore.add(NookUi.text("Preview only · "+d.id()));meta.lore(lore);item.setItemMeta(meta);m.inventory.setItem(slot++,item);
         }
+        if(page.previous())m.inventory.setItem(45,icon(Material.ARROW,"previous page"));
+        m.inventory.setItem(49,icon(Material.PAPER,"page "+(page.index()+1)+" of "+page.pages(),"Preview only · no items or Nooks change"));
+        if(page.next())m.inventory.setItem(53,icon(Material.ARROW,"next page"));
         p.openInventory(m.inventory);
     }
     private void checkout(Player p,Menu from,String design,int quantity)throws Exception {
@@ -316,7 +323,12 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         Bukkit.getScheduler().runTask(plugin,()->{
             if(closed || p.getOpenInventory().getTopInventory()!=m.inventory)return;
             try{
-                if(m.kind.equals("niko-choice")){
+                if(m.kind.equals("catalogue")){
+                    if(!p.hasPermission("nookcore.admin"))throw new IllegalArgumentException("This command is for admins.");
+                    var page=CataloguePage.of(catalogue,m.cataloguePage);
+                    if(slot==45 && page.previous())cataloguePreview(p,page.index()-1);
+                    else if(slot==53 && page.next())cataloguePreview(p,page.index()+1);
+                }else if(m.kind.equals("niko-choice")){
                     if(!near(p,"niko"))throw new IllegalArgumentException(directions("niko"));
                     if(!quests.nikoWeek().equals(m.rotation))throw new IllegalArgumentException("The quests have refreshed. Speak to Niko again.");
                     boolean accepted=store.questAccepted(p.getUniqueId(),m.rotation);
@@ -390,7 +402,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
                 String reason=String.join(" ",Arrays.copyOfRange(a,4,a.length));recoveries.put(actor(s),new Recovery(id,a[3].equals("delivered"),reason,System.currentTimeMillis()+60000));
                 s.sendMessage(NookUi.text("Review "+record.quantity()+" × "+record.design()+" for "+Money.format(record.cents())+". Confirm only after checking whether delivery occurred. Refund restores Nooks and stock but does not remove an item."));s.sendMessage(NookUi.command("/nookadmin vendor recover "+id+" confirm"));return true;
             }
-            NookUi.help(s,"Pip","/nookadmin vendor preview — read-only local catalogue","/nookadmin vendor status","/nookadmin vendor review","/nookadmin vendor recover <receipt> <delivered|refund> <reason>");
+            NookUi.help(s,"Pip","/nookadmin vendor catalogue — browse all designs","/nookadmin vendor preview — read-only local catalogue","/nookadmin vendor status","/nookadmin vendor review","/nookadmin vendor recover <receipt> <delivered|refund> <reason>");
         }catch(Exception ex){s.sendMessage(NookUi.problem("NPCs",ex.getMessage()==null?"Action failed; check the log.":ex.getMessage()));if(!(ex instanceof IllegalArgumentException))plugin.getLogger().log(Level.SEVERE,"NPC administration failed",ex);}
         return true;
     }
