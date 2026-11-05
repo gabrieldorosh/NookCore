@@ -297,6 +297,18 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
                 if(args.length!=1)throw new IllegalArgumentException("/nookadmin quests "+args[0].toLowerCase(Locale.ROOT));
                 refreshBank(sender,args[0].equalsIgnoreCase("reload"));return true;
             }
+            if(args.length>=1 && args[0].equalsIgnoreCase("current")){
+                if(!sender.hasPermission("nookcore.admin"))throw new IllegalArgumentException("Only admins can review the full quest board.");
+                if(args.length!=1)throw new IllegalArgumentException("/nookadmin quests current");
+                var current=QuestPlan.week(clock.getAsLong());
+                var published=store.savedQuestRotation(current.id()).orElseThrow(()->new IllegalArgumentException("This week's quest board hasn't been published yet."));
+                sender.sendMessage(NookUi.heading("this week's quests · "+current.id()));
+                for(var goal:published){
+                    String prefix=goal.reward()==3000?"Challenge · ":"";
+                    sender.sendMessage(NookUi.text(prefix+goal.title()+" · "+Money.format(goal.reward())));
+                }
+                return true;
+            }
             if(args.length>=1 && args[0].equalsIgnoreCase("next")){
                 if(!sender.hasPermission("nookcore.admin"))throw new IllegalArgumentException("Only admins can preview next week's quests.");
                 if(args.length!=1)throw new IllegalArgumentException("/nookadmin quests next");
@@ -358,7 +370,7 @@ final class WeeklyQuests implements Listener,CommandExecutor,TabCompleter {
         return true;
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args){
-        if(args.length==1)return NookUi.complete(args[0],sender.hasPermission("nookcore.admin")?List.of("list","help","inspect","next","validate","reload","contribute","contributions","collect","activate-config"):List.of("list","help","contribute"));
+        if(args.length==1)return NookUi.complete(args[0],sender.hasPermission("nookcore.admin")?List.of("list","help","inspect","current","next","validate","reload","contribute","contributions","collect","activate-config"):List.of("list","help","contribute"));
         if(args.length==2 && args[0].equalsIgnoreCase("contribute")){
             if(!enabled || !healthy.getAsBoolean())return List.of();
             try{rotation(clock.getAsLong());return NookUi.complete(args[1],(sender instanceof Player p?store.playerQuestGoals(p.getUniqueId(),week.id()):goals).stream().filter(g->g.kind().equals("DEPOSIT")).map(g->g.target().toLowerCase(Locale.ROOT)).toList());}catch(Exception e){failure.accept(e);return List.of();}

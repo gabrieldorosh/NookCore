@@ -16,6 +16,11 @@ import org.bukkit.craftbukkit.CraftWorld;
 import org.bukkit.entity.Player;
 import org.bukkit.event.*;
 import org.bukkit.event.player.PlayerAdvancementDoneEvent;
+import org.bukkit.event.server.BroadcastMessageEvent;
+import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.title.Title;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /** Runs only in a disposable Paper fixture. No real account or online player is used. */
@@ -24,6 +29,20 @@ public final class GamesChecks extends JavaPlugin implements Listener {
     private static final UUID BOB=UUID.fromString("20261103-0000-4000-8000-000000000002");
     private final Map<String,Integer> announcements=new HashMap<>();
     private final List<Exception> moduleErrors=new ArrayList<>();
+    private final List<Component> wordleBroadcasts=new ArrayList<>();
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
+    public void sharedWordle(BroadcastMessageEvent event){
+        if(plain(event.message()).startsWith("niko's wordle"))wordleBroadcasts.add(event.message());
+    }
+    private static String plain(Component text){return PlainTextComponentSerializer.plainText().serialize(text);}
+    private static List<TextColor> colours(Component text,boolean squares){
+        var result=new ArrayList<TextColor>();collectColours(text,null,squares,result);return result;
+    }
+    private static void collectColours(Component text,TextColor inherited,boolean squares,List<TextColor> out){
+        TextColor colour=text.color()==null?inherited:text.color();
+        if(text instanceof TextComponent part)part.content().chars().filter(c->squares?c=='■':Character.isUpperCase(c)).forEach(c->out.add(colour));
+        for(Component child:text.children())collectColours(child,colour,squares,out);
+    }
     private JavaPlugin core;
     private Object store,wordle,coinflip,wagers;
     private Connection db;
@@ -122,6 +141,7 @@ public final class GamesChecks extends JavaPlugin implements Listener {
         final Player proxy;
         final List<Component> components=new ArrayList<>();
         final List<String> messages=new ArrayList<>();
+        final List<Title> titles=new ArrayList<>();
         Fixture(UUID id,String name,GameMode mode,boolean allowed){
             this.id=id;this.name=name;this.mode=mode;this.allowed=allowed;
             World world=Bukkit.getWorlds().getFirst();
@@ -131,9 +151,10 @@ public final class GamesChecks extends JavaPlugin implements Listener {
                 case "getUniqueId"->id;case "getName"->name;case "getWorld"->world;
                 case "getLocation","getEyeLocation"->new Location(world,0.5,121,0.5);
                 case "isOnline","isConnected"->true;case "isDead"->false;case "getGameMode"->mode;
-                case "hasPermission"->allowed;case "isOp"->false;
+                case "hasPermission"->allowed;case "isOp"->false;case "isVisibleByDefault","canSee"->true;
                 case "sendMessage","sendPlainMessage","sendRichMessage"->{if(args!=null)for(var value:args)capture(value);yield null;}
-                case "playSound","stopSound","sendActionBar","showTitle","sendTitle","resetTitle"->null;
+                case "showTitle"->{titles.add((Title)args[0]);yield null;}
+                case "playSound","stopSound","sendActionBar","sendTitle","resetTitle"->null;
                 case "hashCode"->id.hashCode();case "equals"->object==args[0];case "toString"->"GamesChecks["+name+"]";
                 default->{try{yield method.invoke(real,args);}catch(InvocationTargetException error){throw error.getCause();}}
             });
@@ -144,7 +165,7 @@ public final class GamesChecks extends JavaPlugin implements Listener {
             else if(value.getClass().isArray()){for(int i=0;i<Array.getLength(value);i++)capture(Array.get(value,i));}
             else if(value instanceof String message)messages.add(message);
         }
-        void clear(){messages.clear();components.clear();}
+        void clear(){messages.clear();components.clear();titles.clear();}
         String output(){return String.join("\n",messages);}
         int results(){return (int)messages.stream().filter(message->message.contains(" won ")&&message.contains("! <3")).count();}
         boolean click(ClickEvent.Action action,String value){return components.stream().anyMatch(component->hasClick(component,action,value));}
@@ -189,10 +210,10 @@ public final class GamesChecks extends JavaPlugin implements Listener {
         wagers=field(coinflip,"wagers");check((boolean)call(coinflip,"enabled"),"injected coin-flip UI uses enabled trial settings");
         Object settings=field(coinflip,"settings");
         check((long)call(settings,"minimum")==100&&(long)call(settings,"maximum")==10000,"coin-flip stake bounds are the trial values");
-        check((long)call(settings,"invitationMillis")==90000&&(long)call(settings,"cooldownMillis")==5000,"coin-flip expiry and cooldown are the trial values");
+        check((long)call(settings,"invitationMillis")==120000&&(long)call(settings,"cooldownMillis")==5000,"coin-flip expiry and cooldown are the trial values");
         Object today=invoke(coreClass("WordleDay"),null,"at",System.currentTimeMillis());day=(String)call(today,"id");
-        update("INSERT INTO wordle_days(day,answer,reward,created) VALUES(?,?,?,?)",day,"stone",100L,System.currentTimeMillis());
-        check(text("SELECT answer FROM wordle_days WHERE day=?",day).equals("stone"),"only today's fixture puzzle is seeded as STONE");
+        update("INSERT INTO wordle_days(day,answer,reward,created) VALUES(?,?,?,?)",day,"weave",100L,System.currentTimeMillis());
+        check(text("SELECT answer FROM wordle_days WHERE day=?",day).equals("weave"),"only today's fixture puzzle is seeded as WEAVE");
         check(supply()==10000,"initial player money plus escrow is exactly conserved");
     }
     private void wordleChecks()throws Exception{
@@ -200,37 +221,44 @@ public final class GamesChecks extends JavaPlugin implements Listener {
         command(denied,"wordle");command(spectator,"wordle");
         check(number("SELECT COUNT(*) FROM wordle_rounds")==rounds,"Wordle denies missing permission and spectator mode before saving progress");
         check(denied.output().contains("isn't available")&&spectator.output().contains("Survival"),"Wordle eligibility failures give private explanations");
-        alice.clear();command(alice,"wordle");
+        alice.clear();command(alice,"wordle","share");
+        check(wordleBroadcasts.isEmpty()&&number("SELECT COUNT(*) FROM wordle_rounds")==rounds,"unfinished share stays private and does not open a round");
+        command(alice,"wordle");
         check(attempts(ALICE)==0,"opening Wordle consumes zero guesses");
-        check(alice.output().contains("6 guesses left")&&alice.output().contains("= right place"),"Wordle displays remaining attempts and a plain-text feedback key");
+        check(alice.output().contains("6 guesses left")&&alice.output().contains("niko's wordle")&&!alice.output().contains("= right place"),"Wordle displays the compact heading and attempt count");
         check(alice.click(ClickEvent.Action.SUGGEST_COMMAND,"/wordle guess "+day+" "),"Wordle guess action carries the displayed puzzle date");
         command(alice,"wordle","guess");check(attempts(ALICE)==0,"bare /wordle guess consumes no attempt");
         command(alice,"wordle","zzzzz");check(attempts(ALICE)==0,"unknown dictionary word consumes no attempt");
         alice.clear();command(alice,"wordle","SHEEP");
         check(attempts(ALICE)==1,"a valid uppercase word consumes one guess");
-        check(text("SELECT marks FROM wordle_guesses WHERE uuid=? AND day=? AND ordinal=1",ALICE,day).equals("20100"),"SHEEP uses two-pass duplicate-E feedback against STONE");
-        check(alice.output().contains("[S=] [H-] [E~] [E-] [P-]"),"Wordle command renders the saved duplicate-letter feedback");
+        check(text("SELECT marks FROM wordle_guesses WHERE uuid=? AND day=? AND ordinal=1",ALICE,day).equals("00110"),"SHEEP matches both Es elsewhere against WEAVE");
+        var row=alice.components.stream().filter(component->plain(component).equals("S H E E P")).findFirst().orElseThrow();
+        check(colours(row,false).equals(List.of(NamedTextColor.GRAY,NamedTextColor.GRAY,NamedTextColor.YELLOW,NamedTextColor.YELLOW,NamedTextColor.GRAY)),"Wordle renders letters with actual gray/yellow feedback and no symbols");
         command(alice,"wordle","sheep");check(attempts(ALICE)==1,"repeating an accepted word consumes no attempt");
-        alice.clear();command(alice,"wordle","guess",day,"STONE");
+        alice.clear();command(alice,"wordle","guess",day,"WEAVE");
         check(attempts(ALICE)==2&&text("SELECT state FROM wordle_rounds WHERE uuid=? AND day=?",ALICE,day).equals("WON"),"dated Wordle guess saves the winning second attempt");
+        check(alice.output().contains("great job! come back tomorrow for another puzzle <3"),"Wordle uses the requested completion text");
         check(cash(ALICE)==5100&&cash(BOB)==5000,"Wordle solve awards exactly 100 cents once");
         check(number("SELECT reward_paid FROM wordle_rounds WHERE uuid=? AND day=?",ALICE,day)==1,"Wordle reward is durably marked paid");
         check(number("SELECT COUNT(*) FROM ledger WHERE uuid=? AND kind='game-wordle'",ALICE)==1,"Wordle produces exactly one reward ledger entry");
         check(milestone(alice,"games/five_little_letters"),"first Wordle solve grants its cosmetic advancement");
         check(announced(ALICE,"games/five_little_letters")==1,"Wordle advancement emits one ordinary chat event");
-        command(alice,"wordle");command(alice,"wordle","stone");alice.clear();command(alice,"wordle","share");
-        String share=alice.messages.stream().filter(message->message.startsWith("niko's nook wordle")).findFirst().orElseThrow();
-        check(share.contains("2/6")&&share.contains("[=][-][~][-][-]")&&share.contains("[=][=][=][=][=]"),"share uses the saved result and accessible feedback markers");
-        check(!share.toLowerCase(Locale.ROOT).contains("stone")&&!share.toLowerCase(Locale.ROOT).contains("sheep"),"shared result reveals no guess or solution letters");
-        check(alice.click(ClickEvent.Action.COPY_TO_CLIPBOARD,share),"share provides a copy-result action");
+        command(alice,"wordle");command(alice,"wordle","weave");alice.clear();command(alice,"wordle","share");
+        check(wordleBroadcasts.size()==1,"share produces one public Paper broadcast");
+        Component published=wordleBroadcasts.getFirst();String share=plain(published);
+        check(share.contains("2/6")&&share.lines().filter(line->line.equals("■■■■■")).count()==2,"public share shows two rows of squares");
+        check(colours(published,true).equals(List.of(NamedTextColor.GRAY,NamedTextColor.GRAY,NamedTextColor.YELLOW,NamedTextColor.YELLOW,NamedTextColor.GRAY,NamedTextColor.GREEN,NamedTextColor.GREEN,NamedTextColor.GREEN,NamedTextColor.GREEN,NamedTextColor.GREEN)),"public share squares carry the actual three colors");
+        check(!share.toLowerCase(Locale.ROOT).contains("weave")&&!share.toLowerCase(Locale.ROOT).contains("sheep"),"shared result reveals no guess or solution letters");
+        command(alice,"wordle","share");check(wordleBroadcasts.size()==1,"repeat share does not spam public chat");
         check(cash(ALICE)==5100&&attempts(ALICE)==2&&announced(ALICE,"games/five_little_letters")==1,"reopen repeat solve and share cannot repeat money or advancement");
         check(new HashSet<>(tab(alice,"wordle","")).equals(Set.of("help","share","guess")),"Wordle tab completion lists commands without a dictionary or solution");
         check(tab(alice,"wordle","guess","").isEmpty()&&tab(alice,"wordle","st").isEmpty(),"Wordle later arguments and solution prefixes expose no words");
         bob.clear();command(bob,"wordle");
         for(String guess:List.of("crane","grape","brick","wheat","chest","melon"))command(bob,"wordle",guess);
         check(attempts(BOB)==6&&text("SELECT state FROM wordle_rounds WHERE uuid=? AND day=?",BOB,day).equals("LOST"),"six valid wrong guesses finish Bob's puzzle as lost");
-        check(bob.output().contains("today's word was STONE")&&cash(BOB)==5000,"losing reveals the answer privately and pays nothing");
-        command(bob,"wordle","stone");command(bob,"wordle","share");
+        check(bob.output().contains("today's word was WEAVE")&&cash(BOB)==5000,"losing reveals the answer privately and pays nothing");
+        command(bob,"wordle","weave");command(bob,"wordle","share");
+        check(wordleBroadcasts.size()==2&&plain(wordleBroadcasts.getLast()).contains("X/6"),"a completed loss can share its spoiler-free result");
         check(attempts(BOB)==6&&cash(BOB)==5000&&!milestone(bob,"games/five_little_letters"),"a lost board cannot be solved again or grant the solve advancement");
         check(supply()==10100,"daily Wordle award is the only new money after both puzzles");
     }
@@ -243,23 +271,27 @@ public final class GamesChecks extends JavaPlugin implements Listener {
         check(number("SELECT COUNT(*) FROM game_wagers")==matches&&supply()==10100,"permission spectator and target eligibility checks create no wager or money change");
         check(denied.output().contains("permission")&&spectator.output().contains("Survival"),"coin-flip denied players receive a private explanation");
         alice.clear();bob.clear();denied.clear();spectator.clear();
-        command(alice,"coinflip","invite","GameBob","2");
+        check(tab(alice,"coinflip","invite","GameBob","2","").containsAll(List.of("heads","tails")),"coin flip offers both side choices");
+        command(alice,"coinflip","invite","GameBob","2","tails");
         Object invitation=((Optional<?>)call(wagers,"outgoing",ALICE)).orElseThrow();UUID match=(UUID)call(invitation,"id");
         check(cash(ALICE)==4900&&cash(BOB)==5000&&(long)call(store,"gameHeldFunds")==200,"invitation reserves Alice's exact two-Nook stake");
         check(supply()==10100&&number("SELECT stake FROM game_wagers WHERE id=?",match)==200,"invitation preserves all money and saves the agreed stake");
-        check(alice.output().contains("you're heads")&&bob.output().contains("you're tails"),"private invitation fixes the inviter and guest sides");
-        check(bob.output().contains("50/50")&&bob.output().contains("full pot")&&bob.output().contains("no fee")&&bob.output().contains("pot."),"guest sees odds full-pot terms and the pot amount");
+        check(alice.output().contains("coinflip >> invited GameBob for ₦2.00!"),"inviter sees one concise lowercase confirmation");
+        check(bob.output().contains("GameAlice invited you to a coinflip for ₦2.00! they chose tails."),"guest sees the agreed amount and chosen side");
+        check(text("SELECT rules FROM game_wagers WHERE id=?",match).contains("creator-side=tails"),"creator's choice is frozen in the saved wager");
         check(bob.click(ClickEvent.Action.RUN_COMMAND,"/coinflip accept GameAlice")&&bob.click(ClickEvent.Action.RUN_COMMAND,"/coinflip decline GameAlice"),"invitation provides private accept and decline actions");
-        check(denied.messages.isEmpty()&&spectator.messages.isEmpty(),"invitation is not broadcast to other fixture players");
+        check(denied.output().contains("GameAlice invited GameBob to a coinflip for ₦2.00!")&&spectator.output().contains("GameAlice invited GameBob to a coinflip for ₦2.00!"),"observers see the public invitation without accept buttons");
         check(tab(bob,"coinflip","accept","").equals(List.of("GameAlice")),"accept completion lists the saved eligible inviter");
         command(bob,"coinflip","accept","GameAlice");
         Object settled=call(wagers,"inspect",match,ALICE);UUID winner=(UUID)call(settled,"winner");String side=call(settled,"side").toString();
         check(call(settled,"state").toString().equals("SETTLED")&&(side.equals("HEADS")||side.equals("TAILS")),"accept saves a complete coin-flip outcome");
-        check(winner.equals(side.equals("HEADS")?ALICE:BOB),"saved winner matches the preannounced side assignment");
+        check(winner.equals(side.equals("TAILS")?ALICE:BOB),"saved winner honors the chosen tails side");
         check(cash(ALICE)==(winner.equals(ALICE)?5300:4900)&&cash(BOB)==(winner.equals(BOB)?5200:4800),"winner receives the full four-Nook pot with no fee");
         check((long)call(store,"gameHeldFunds")==0&&supply()==10100,"settlement leaves no held funds and conserves all player money");
         check(number("SELECT COUNT(*) FROM game_credits WHERE game_id=? AND kind='game-payout' AND cents=400 AND state='CLAIMED'","coinflip:"+match)==1,"full-pot payout is durably saved and collected once");
-        check(alice.results()==1&&bob.results()==1,"each participant receives exactly one private result");
+        check(alice.results()==1&&bob.results()==1&&denied.results()==1&&spectator.results()==1,"participants and observers each receive one result");
+        check(alice.titles.size()==1&&bob.titles.size()==1&&denied.titles.isEmpty()&&spectator.titles.isEmpty(),"only participants receive the result title");
+        check(plain(alice.titles.getFirst().title()).equals(side+"!")&&plain(alice.titles.getFirst().subtitle()).equals((winner.equals(ALICE)?"GameAlice":"GameBob")+" wins"),"result title and subtitle name the landed side and winner");
         check(number("SELECT creator_notified+target_notified FROM game_wagers WHERE id=?",match)==2,"both result notices are durably acknowledged");
         check(milestone(alice,"games/heads_or_tails")&&milestone(bob,"games/heads_or_tails"),"both participants receive the cosmetic coin-flip advancement");
         check(announced(ALICE,"games/heads_or_tails")==1&&announced(BOB,"games/heads_or_tails")==1,"coin-flip advancements each emit one ordinary chat event");
@@ -267,7 +299,11 @@ public final class GamesChecks extends JavaPlugin implements Listener {
         check(supply()==10100&&(long)call(store,"gameHeldFunds")==0,"repeated accept cancel and summary cannot repeat payouts");
         check(alice.results()==1&&bob.results()==1&&announced(ALICE,"games/heads_or_tails")==1&&announced(BOB,"games/heads_or_tails")==1,"repeated commands cannot repeat result notices or advancements");
         alice.clear();command(alice,"coinflip","history");
-        check(alice.output().contains("GameBob")&&(alice.output().contains("won")||alice.output().contains("lost")),"history describes the saved opponent and result");
+        check(!alice.output().contains("GameBob")&&!tab(alice,"coinflip","").contains("history"),"player history is no longer offered");
+        alice.clear();command(alice,"nookadmin","games","history","GameAlice");
+        check(alice.output().contains("GameBob"),"admin history reads the saved participant record");
+        denied.clear();command(denied,"nookadmin","games","history","GameAlice");
+        check(!denied.output().contains("GameBob"),"non-admins cannot read another player's history");
         check(((List<?>)call(wagers,"history",ALICE)).size()==1,"history contains the one saved settled match");
         command(alice,"coinflip","invite","GameBob","2");
         check(((Optional<?>)call(wagers,"outgoing",ALICE)).isEmpty()&&number("SELECT COUNT(*) FROM game_wagers")==1,"five-second creator cooldown rejects an immediate new invitation");
@@ -279,11 +315,13 @@ public final class GamesChecks extends JavaPlugin implements Listener {
         // probe is one main-thread task, so the normal expiry task cannot interleave here.
         update("UPDATE game_wagers SET expires=? WHERE id=?",System.currentTimeMillis()-1,reverseId);
         long ledgerBefore=number("SELECT COUNT(*) FROM ledger"),cashBefore=cash(ALICE)+cash(BOB);
-        command(alice,"coinflip","help");command(bob,"coinflip","history");
+        alice.clear();command(alice,"coinflip","help");command(bob,"nookadmin","games","history","GameBob");
+        check(alice.output().contains("heads or tails?"),"coin flip help uses the requested heading");
         check(text("SELECT state FROM game_wagers WHERE id=?",reverseId).equals("INVITED"),"read-only help and history do not expire an overdue fixture invitation");
         check(number("SELECT COUNT(*) FROM ledger")==ledgerBefore&&cash(ALICE)+cash(BOB)==cashBefore&&(long)call(store,"gameHeldFunds")==200,"read-only help and history do not claim or move money");
         update("UPDATE game_wagers SET expires=? WHERE id=?",System.currentTimeMillis()+90000,reverseId);
-        command(alice,"coinflip","decline","GameBob");
+        bob.clear();command(alice,"coinflip","decline","GameBob");
+        check(bob.output().contains("GameAlice declined your coin flip </3"),"decline uses the short requested copy");
         check(text("SELECT state FROM game_wagers WHERE id=?",reverseId).equals("DECLINED"),"Alice can decline Bob's waiting invitation");
         check(cash(ALICE)==aliceBefore&&cash(BOB)==bobBefore&&(long)call(store,"gameHeldFunds")==0&&supply()==10100,"decline refunds the exact held stake without changing supply");
         command(alice,"coinflip","decline","GameBob");command(bob,"coinflip","cancel");
@@ -293,11 +331,12 @@ public final class GamesChecks extends JavaPlugin implements Listener {
         alice.clear();command(alice,"games");
         check(alice.output().contains("/wordle")&&alice.output().contains("/coinflip"),"games discovery offers both ready games");
         check(alice.click(ClickEvent.Action.SUGGEST_COMMAND,"/wordle")&&alice.click(ClickEvent.Action.SUGGEST_COMMAND,"/coinflip"),"games discovery has usable private game actions");
-        check(new HashSet<>(tab(alice,"games","")).equals(Set.of("help","collect")),"games completion offers help and collect");
+        check(alice.output().contains("minigames")&&!alice.output().contains("collect"),"games has a minigames heading and no collection button");
+        check(new HashSet<>(tab(alice,"games","")).equals(Set.of("help")),"games completion does not promote collection");
         long ledgerBefore=number("SELECT COUNT(*) FROM ledger");
         command(alice,"games","collect");command(bob,"games","collect");command(alice,"coinflip","collect");
         check(supply()==10100&&number("SELECT COUNT(*) FROM ledger")==ledgerBefore,"empty game collection cannot mint or repeat money");
-        check(alice.output().contains("nothing waiting to collect"),"empty collection explains there is nothing waiting");
+        check(!alice.output().contains("/games collect"),"legacy recovery syntax adds no public menu clutter");
         denied.clear();command(denied,"games");command(denied,"games","collect");
         check(denied.output().contains("isn't available")&&tab(denied,"games","").isEmpty(),"games UI guards direct calls and completion by permission");
         check(number("SELECT COUNT(*) FROM accounts")==2,"all integration activity stays within the two fixture accounts");
