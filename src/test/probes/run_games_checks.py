@@ -101,7 +101,7 @@ games:
     enabled: true
     minimum-cents: 100
     maximum-cents: 10000
-    invitation-seconds: 90
+    invitation-seconds: 120
     cooldown-seconds: 5
     incoming-limit: 5
 ''', encoding='utf-8')

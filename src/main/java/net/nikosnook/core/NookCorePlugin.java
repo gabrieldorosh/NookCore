@@ -292,6 +292,11 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             return spawnNpcs.command(sender,args);
         }
         if(command.getName().equals("nookadmin") && args.length>0 && args[0].equalsIgnoreCase("status"))return AdminStatus.execute(sender,args,this::statusSnapshot);
+        if(command.getName().equals("nookadmin") && args.length>0 && args[0].equalsIgnoreCase("games")){
+            if(!sender.hasPermission("nookcore.admin")){sender.sendMessage(NookUi.problem("NookAdmin","This command is for admins."));return true;}
+            if(coinFlipGame==null || !healthy){sender.sendMessage(NookUi.problem("games","coinflip history is unavailable."));return true;}
+            coinFlipGame.showHistory(sender,CommandNavigation.tail(args,1));return true;
+        }
         if(command.getName().equals("nooks") && args.length>0 && args[0].equalsIgnoreCase("metrics")){
             if(economyMetrics==null){sender.sendMessage(NookUi.problem("Nooks","Activity metrics unavailable."));return true;}
             return economyMetrics.command(sender,args);
@@ -408,7 +413,7 @@ public final class NookCorePlugin extends JavaPlugin implements Listener, Comman
             int page=args.length==0?1:Integer.parseInt(args[0]);if(page<1 || page>100000)throw new IllegalArgumentException("Choose a positive page number.");
             var accounts=store.accounts().stream().sorted(Comparator.comparingLong(NookStore.Account::cents).reversed().thenComparing(NookStore.Account::name).thenComparing(a->a.id().toString())).toList();
             int pages=Math.max(1,(accounts.size()+9)/10);if(page>pages)throw new IllegalArgumentException("There are "+pages+" pages.");
-            sender.sendMessage(NookUi.heading("Nooks · Top balances · "+page+"/"+pages));
+            sender.sendMessage(NookUi.heading("niko's top earners! "+page+"/"+pages));
             for(int i=(page-1)*10;i<Math.min(page*10,accounts.size());i++){var a=accounts.get(i);sender.sendMessage(NookUi.text((i+1)+". ").append(NookUi.name(a.id(),a.name())).append(NookUi.text(" · "+Money.format(a.cents()))));}
         }catch(IllegalArgumentException e){sender.sendMessage(NookUi.problem("Nooks",e instanceof NumberFormatException?"Choose a positive page number.":e.getMessage()));}
         catch(Exception e){fail(e);sender.sendMessage(NookUi.problem("Nooks","Could not read balances."));}return true;

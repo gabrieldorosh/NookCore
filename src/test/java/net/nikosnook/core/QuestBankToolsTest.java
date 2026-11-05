@@ -19,6 +19,25 @@ class QuestBankToolsTest {
  @AfterEach void close()throws Exception{store.close();}
  WeeklyQuests quests(AutomaticQuests settings){var bank=QuestRotationBankTest.bundled();return new WeeklyQuests(store,()->true,failures::add,bank.select("2026-10-28",List.of()),clock::get,settings);}
  AutomaticQuests automatic(){return new AutomaticQuests(true,"2026-11-04",QuestRotationBankTest.bundled());}
+ @Test void currentBoardReviewReadsOnlyTheSavedSnapshot()throws Exception{
+  var q=quests(automatic());clock.set(Instant.parse("2026-11-04T03:00:00Z").toEpochMilli());
+  var lines=new ArrayList<String>();
+  var reviewer=(CommandSender)Proxy.newProxyInstance(getClass().getClassLoader(),new Class[]{CommandSender.class},(o,m,a)->{
+   if(m.getName().equals("hasPermission"))return true;
+   if(m.getName().equals("sendMessage") && a[0] instanceof net.kyori.adventure.text.Component c)
+    lines.add(net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(c));
+   return null;
+  });
+  q.onCommand(reviewer,null,"quests",new String[]{"current"});
+  assertTrue(store.savedQuestRotation("2026-11-04").isEmpty());
+  assertTrue(lines.toString().contains("hasn't been published yet"));
+  var board=q.nikoGoals();assertEquals(11,board.size());lines.clear();
+  q.onCommand(reviewer,null,"quests",new String[]{"current"});
+  assertEquals(12,lines.size());
+  for(var goal:board)assertTrue(lines.stream().anyMatch(line->line.contains(goal.title())),goal.title());
+  assertEquals(board,store.savedQuestRotation("2026-11-04").orElseThrow());
+  assertTrue(failures.isEmpty());
+ }
  @Test void validationReadsCandidateWithoutReplacingLoadedBankOrSavingFutureSnapshots()throws Exception{
   var q=quests(AutomaticQuests.disabled());var current=q.nikoGoals();var calls=new AtomicInteger();q.automaticLoader(()->{calls.incrementAndGet();return automatic();});
   q.onCommand(admin,null,"quests",new String[]{"validate"});assertEquals(1,calls.get());assertEquals(current,q.nikoGoals());assertTrue(store.savedQuestRotation("2026-11-04").isEmpty());

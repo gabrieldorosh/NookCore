@@ -221,7 +221,24 @@ final class SpawnNpcs implements Listener,AutoCloseable {
     private boolean near(Player p,String role){var loc=getCurrentLocation(role);return enabled() && healthy.getAsBoolean() && p.isOnline() && !p.isDead() && !StaffMode.active(p.getUniqueId()) && p.getGameMode()==GameMode.SURVIVAL && loc!=null && p.getWorld().equals(loc.getWorld()) && p.getLocation().distanceSquared(loc)<=36;}
     private String directions(String role){return locations.get(role)==null?"Niko's getting ready at spawn. Ask a member of staff for a hand with your quests!":"Speak to Niko at spawn to get your quests!";}
     private static ItemStack icon(Material type,String title,String...lore){
-        var item=new ItemStack(type);var meta=item.getItemMeta();meta.displayName(NookUi.text(title).decoration(TextDecoration.ITALIC,false));meta.lore(Arrays.stream(lore).map(s->NookUi.text(s).decoration(TextDecoration.ITALIC,false)).toList());item.setItemMeta(meta);return item;
+        return icon(new ItemStack(type),title,lore);
+    }
+    private static ItemStack icon(ItemStack item,String title,String...lore){
+        var meta=item.getItemMeta();
+        meta.displayName(NookUi.text(title).decoration(TextDecoration.ITALIC,false));
+        meta.lore(Arrays.stream(lore).map(line->NookUi.text(line).decoration(TextDecoration.ITALIC,false)).toList());
+        item.setItemMeta(meta);
+        return item;
+    }
+    private ItemStack purchaseButton(String title,String...lore){
+        var design=catalogueProducts.get("money-bag");
+        if(design==null || !(design.spec() instanceof PipProducts.Head))return icon(Material.EMERALD,title,lore);
+        var item=PipProducts.make(design);
+        var meta=item.getItemMeta();
+        var tags=meta.getPersistentDataContainer();
+        for(var key:tags.getKeys())tags.remove(key);
+        item.setItemMeta(meta);
+        return icon(item,title,lore);
     }
     private Menu menu(Player p,String kind,String rotation,String design,int quantity,boolean preview,String title){var m=new Menu(p.getUniqueId(),kind,rotation,design,quantity,preview);m.inventory=Bukkit.createInventory(m,27,Component.text(title));return m;}
     void openNiko(Player p)throws Exception {
@@ -241,7 +258,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         var m=menu(p,"niko",week,"",0,false,"niko's weekly quests");int slot=10;
         for(var goal:quests.nikoGoals())m.inventory.setItem(slot++,icon(goal.reward()==3000?Material.NETHER_STAR:Material.BOOK,goal.title(),store.questProgress(p.getUniqueId(),week,goal.id())+" / "+goal.amount(),"Reward: "+Money.format(goal.reward())));
         m.inventory.setItem(4,icon(accepted?Material.LIME_DYE:Material.YELLOW_DYE,accepted?"Quests accepted":"Quests not accepted",accepted?"Your weekly quests are active.":"Accept below to start this week's quests.",accepted?"Use /quests to check your progress anywhere.":"All six quests and the challenge."));
-        m.inventory.setItem(22,icon(accepted?Material.MAP:Material.LIME_DYE,accepted?"View my progress":"accept this week's quests",accepted?"Use /quests anywhere.":"All six quests and the challenge.","Rewards arrive automatically."));p.openInventory(m.inventory);
+        m.inventory.setItem(22,icon(accepted?Material.MAP:Material.WRITABLE_BOOK,accepted?"View my progress":"accept this week's quests",accepted?"Use /quests anywhere.":"All six quests and the challenge.","Rewards arrive automatically."));p.openInventory(m.inventory);
         p.sendMessage(NookUi.message("Niko",store.nikoIntroWeek(week)?"Hi! Come and speak to me next week for new quests!":complete?"you've completed all of this week's quests! visit me next week for more :3":accepted?"you've already activated this week's quests! check your progress here or with /quests!":"i've got some more quests ready for you! pick them up below! :D"));
     }
     private void paintNikoChoices(Player p,Menu m)throws Exception {
@@ -257,7 +274,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
                 "Reward: "+Money.format(goal.reward()),accepted?"Your choices stay fixed until the refresh.":selected?"Tap to unselect.":"Tap to choose.");
             var meta=item.getItemMeta();meta.setEnchantmentGlintOverride(selected);item.setItemMeta(meta);m.inventory.setItem(entry.getKey(),item);
         }
-        m.inventory.setItem(25,icon(accepted?Material.MAP:regular==6&&challenges==1?Material.LIME_DYE:Material.GRAY_DYE,
+        m.inventory.setItem(25,icon(accepted?Material.MAP:regular==6&&challenges==1?Material.WRITABLE_BOOK:Material.GRAY_DYE,
             accepted?"View my progress":"accept this week's quests",accepted?"Use /quests anywhere.":"Confirm six quests and one challenge.","Rewards arrive automatically.",accepted?"Your weekly choices are saved.":"Your choices stay fixed until the refresh."));
     }
     void openPip(Player p,boolean preview)throws Exception {
@@ -303,7 +320,7 @@ final class SpawnNpcs implements Listener,AutoCloseable {
         var lore=new ArrayList<Component>(meta.lore()==null?List.of():meta.lore());lore.add(NookUi.text("Available stock: "+o.stock()));meta.lore(lore);head.setItemMeta(meta);
         m.inventory.setItem(13,head);
         m.inventory.setItem(11,icon(Material.RED_DYE,"Buy fewer"));m.inventory.setItem(15,icon(Material.LIME_DYE,"Buy more"));
-        m.inventory.setItem(22,icon(Material.EMERALD,"Buy "+quantity+" for "+Money.format(Math.multiplyExact(o.price(),quantity)),"From your Nooks balance","You will receive "+quantity+" × "+o.name()));
+        m.inventory.setItem(22,purchaseButton("Buy "+quantity+" for "+Money.format(Math.multiplyExact(o.price(),quantity)),"From your Nooks balance","You will receive "+quantity+" × "+o.name()));
         m.inventory.setItem(18,icon(Material.ARROW,"Back"));p.openInventory(m.inventory);
     }
     private void buy(Player p,Menu m)throws Exception {
@@ -334,13 +351,16 @@ final class SpawnNpcs implements Listener,AutoCloseable {
                     boolean accepted=store.questAccepted(p.getUniqueId(),m.rotation);
                     if(slot==25){
                         if(!accepted)quests.nikoAccept(p,m.rotation,m.choices);
-                        p.closeInventory();quests.onCommand(p,plugin.getCommand("quests"),"quests",new String[0]);
+                        finishNikoInteraction(p,!accepted);
                     }else if(!accepted && m.questSlots.containsKey(slot)){
                         var chosen=QuestSelection.toggle(m.offers,m.choices,m.questSlots.get(slot));m.choices.clear();m.choices.addAll(chosen);paintNikoChoices(p,m);
                     }
                 }else if(m.kind.equals("niko") && slot==22){
                     if(!near(p,"niko"))throw new IllegalArgumentException(directions("niko"));
-                    quests.nikoAccept(p,m.rotation);p.closeInventory();quests.onCommand(p,plugin.getCommand("quests"),"quests",new String[0]);
+                    if(!quests.nikoWeek().equals(m.rotation))throw new IllegalArgumentException("The quests have refreshed. Speak to Niko again.");
+                    boolean accepted=store.questAccepted(p.getUniqueId(),m.rotation);
+                    if(!accepted)quests.nikoAccept(p,m.rotation);
+                    finishNikoInteraction(p,!accepted);
                 }else if(m.kind.equals("pip") && !m.preview && slot>=10 && slot<17){
                     if(!near(p,"pip"))throw new IllegalArgumentException("Visit Pip at her stall to shop.");
                     var offers=store.vendorOffers(m.rotation);checkout(p,m,offers.get(slot-10).design(),1);
@@ -350,6 +370,11 @@ final class SpawnNpcs implements Listener,AutoCloseable {
                 }
             }catch(Exception ex){showError(p,ex);}
         });
+    }
+    private void finishNikoInteraction(Player player,boolean newlyAccepted){
+        player.closeInventory();
+        if(newlyAccepted)player.sendMessage(NookUi.message("Niko","thanks for stopping by! get questing!"));
+        else quests.onCommand(player,plugin.getCommand("quests"),"quests",new String[0]);
     }
     @EventHandler(priority=EventPriority.HIGHEST) public void drag(InventoryDragEvent e){if(e.getView().getTopInventory().getHolder() instanceof Menu)e.setCancelled(true);}
     private void showError(Player p,Exception e){

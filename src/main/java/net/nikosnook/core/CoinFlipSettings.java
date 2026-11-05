@@ -13,7 +13,7 @@ record CoinFlipSettings(boolean enabled,long minimum,long maximum,long invitatio
     static CoinFlipSettings load(ConfigurationSection config){
         try{return new CoinFlipSettings(config!=null && config.getBoolean("enabled",false),
             integer(config,"minimum-cents",100),integer(config,"maximum-cents",10_000),
-            Math.multiplyExact(integer(config,"invitation-seconds",90),1_000),
+            Math.multiplyExact(integer(config,"invitation-seconds",120),1_000),
             Math.multiplyExact(integer(config,"cooldown-seconds",5),1_000),
             Math.toIntExact(integer(config,"incoming-limit",5)));
         }catch(ArithmeticException error){throw new IllegalArgumentException("Coin-flip settings are out of range.");}

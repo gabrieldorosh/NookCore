@@ -45,6 +45,33 @@ class WagerServiceTest {
         wagers=new WagerService(ledger,settings,()->false);var match=wagers.accept(invite().id(),b,20_000);
         assertEquals(WagerService.Side.TAILS,match.side());assertEquals(b,match.winner());assertEquals(9_000,balance(a));assertEquals(11_000,balance(b));assertEquals(20_000,supply());
     }
+    @Test void creatorTailsIsFrozenAcrossRestartAndGuestReceivesHeads()throws Exception {
+        var invitation=wagers.invite(a,b,1_000,WagerService.Side.TAILS,10_000);
+        reopen();
+        assertEquals(invitation,wagers.invitation(a,b).orElseThrow());
+        assertEquals(WagerService.Side.TAILS,invitation.creatorSide());
+        var heads=wagers.accept(invitation.id(),b,20_000);
+        assertEquals(WagerService.Side.HEADS,heads.side());assertEquals(b,heads.winner());
+        assertEquals(9_000,balance(a));assertEquals(11_000,balance(b));assertEquals(20_000,supply());
+        wagers=new WagerService(ledger,settings,()->false);
+        var rematch=wagers.invite(a,b,1_000,WagerService.Side.TAILS,30_000);
+        var tails=wagers.accept(rematch.id(),b,40_000);
+        assertEquals(WagerService.Side.TAILS,tails.side());assertEquals(a,tails.winner());
+        assertEquals(10_000,balance(a));assertEquals(10_000,balance(b));assertEquals(20_000,supply());
+    }
+    @Test void unknownSavedRulesDoNotDrawOrMoveMoney()throws Exception {
+        var invitation=invite();
+        ledger.transact(tx->{
+            try(var sql=tx.connection().prepareStatement("UPDATE game_wagers SET rules=? WHERE id=?")){
+                sql.setString(1,WagerService.RULES+"|creator-side=edge");
+                sql.setString(2,invitation.id().toString());sql.executeUpdate();
+            }
+            return null;
+        });
+        assertThrows(SQLException.class,()->wagers.accept(invitation.id(),b,20_000));
+        assertEquals(0,draws.get());assertEquals(9_000,balance(a));assertEquals(10_000,balance(b));
+        assertEquals(1_000,held());assertEquals(20_000,supply());
+    }
     @Test void duplicateConcurrentAcceptsCannotDrawOrPayTwice()throws Exception {
         var match=invite();try(var pool=Executors.newFixedThreadPool(2)){
             var one=pool.submit(()->wagers.accept(match.id(),b,20_000));var two=pool.submit(()->wagers.accept(match.id(),b,20_000));

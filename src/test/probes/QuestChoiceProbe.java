@@ -36,7 +36,10 @@ public class QuestChoiceProbe extends JavaPlugin implements org.bukkit.event.Lis
   var handle=new ServerPlayer(((CraftServer)getServer()).getServer(),((CraftWorld)world).getHandle(),new GameProfile(UUID.randomUUID(),"ChoiceTester"),ClientInformation.createDefault());var real=handle.getBukkitEntity();uuid=real.getUniqueId();inventory=real.getInventory();top=Bukkit.createInventory(null,27);
   player=(Player)Proxy.newProxyInstance(getClassLoader(),new Class[]{Player.class},(o,m,a)->switch(m.getName()){
    case "getUniqueId"->uuid;case "getName"->"ChoiceTester";case "getLocation"->location.clone();case "getWorld"->world;case "isOnline"->true;case "isDead"->false;case "getGameMode"->GameMode.SURVIVAL;case "hasPermission"->false;case "getOpenInventory"->view;
-   case "openInventory"->{top=(Inventory)a[0];yield view;}case "closeInventory"->{top=Bukkit.createInventory(null,27);yield null;}case "sendMessage"->{messages.add(Arrays.toString(a));yield null;}
+   case "openInventory"->{top=(Inventory)a[0];yield view;}case "closeInventory"->{top=Bukkit.createInventory(null,27);yield null;}case "sendMessage"->{for(Object value:a){
+    if(value instanceof net.kyori.adventure.text.Component component)messages.add(net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(component));
+    else messages.add(String.valueOf(value));
+   }yield null;}
    default->{try{yield m.invoke(real,a);}catch(InvocationTargetException e){throw e.getCause();}}
   });
   view=(InventoryView)Proxy.newProxyInstance(getClassLoader(),new Class[]{InventoryView.class},(o,m,a)->switch(m.getName()){
@@ -53,6 +56,17 @@ public class QuestChoiceProbe extends JavaPlugin implements org.bukkit.event.Lis
   int hello=(int)messages.stream().filter(message->message.contains("hi there,")).count();call(npcs,"openPip",player,false);
   check(hello==1 && messages.stream().filter(message->message.contains("hi there,")).count()==1,"reopening Pip does not spam the private hello");
   check((long)call(((Optional<?>)call(store,"account",uuid)).orElseThrow(),"cents")==6075L,"Pip reopen cannot repeat the custom reward");
+  Object shop=top.getHolder(),visit=call(npcs,"visit",System.currentTimeMillis());
+  Object offer=((List<?>)call(store,"vendorOffers",call(visit,"id"))).getFirst();
+  call(npcs,"checkout",player,shop,call(offer,"design"),1);
+  var button=top.getItem(22);check(button.getType()==Material.PLAYER_HEAD,"checkout uses the money bag head for the labeled buy action");
+  var buttonMeta=(org.bukkit.inventory.meta.SkullMeta)button.getItemMeta();
+  check(buttonMeta.getOwnerProfile()!=null && buttonMeta.getOwnerProfile().getTextures().getSkin()!=null,"buy button carries a vanilla client head texture");
+  check(buttonMeta.getPersistentDataContainer().isEmpty(),"checkout icon has no sale-item identity tags");
+  check(buttonMeta.displayName().toString().contains("Buy 1 for"),"custom button retains the action and price label");
+  check((long)call(((Optional<?>)call(store,"account",uuid)).orElseThrow(),"cents")==6075L,"showing the icon charges nothing");
+  messages.clear();core.getCommand("baltop").execute(player,"baltop",new String[0]);
+  check(messages.toString().contains("niko's top earners! 1/1"),"leaderboard uses the requested title and page count");
   call(quests,"onCommand",Bukkit.getConsoleSender(),core.getCommand("quests"),"quests",new String[]{"validate"});
   call(quests,"onCommand",Bukkit.getConsoleSender(),core.getCommand("quests"),"quests",new String[]{"reload"});
   check(((Optional<?>)call(store,"savedQuestRotation","2026-11-11")).isEmpty(),"validate and reload do not publish future snapshots");
@@ -76,8 +90,10 @@ public class QuestChoiceProbe extends JavaPlugin implements org.bukkit.event.Lis
    case 1->{check(!(boolean)call(store,"questAccepted",uuid,week),"incomplete confirmation cannot accept");click(10,ClickType.SHIFT_LEFT);}
    case 2->{check(choices().isEmpty(),"shift click cannot select or extract");for(int slot:new int[]{9,10,11,12,13,14})click(slot,ClickType.LEFT);}
    case 3->{check(choices().size()==6,"six regular choices retained across deferred clicks");check(top.getItem(9).getType()==Material.ENCHANTED_BOOK && (!top.getItem(9).getItemMeta().hasEnchantmentGlintOverride() || top.getItem(9).getItemMeta().getEnchantmentGlintOverride()),"selected state is visibly highlighted");check(top.getItem(9).getType()==Material.ENCHANTED_BOOK,"selected regular quests are enchanted books");click(15,ClickType.LEFT);click(21,ClickType.LEFT);click(23,ClickType.LEFT);}
-   case 4->{check(choices().size()==7,"seventh regular refused and one challenge retained");String first=(String)((Map<?,?>)field(top.getHolder(),"questSlots")).get(21);String second=(String)((Map<?,?>)field(top.getHolder(),"questSlots")).get(23);check(!choices().contains(first)&&choices().contains(second),"choosing second challenge replaces first");check(top.getItem(25).getType()==Material.LIME_DYE,"complete selection enables confirmation");accepted=choices();messages.clear();click(25,ClickType.LEFT);click(25,ClickType.LEFT);}
-   case 5->{check((boolean)call(store,"questAccepted",uuid,week),"confirmation accepted once");check(accepted.equals(call(store,"questChoices",uuid,week)),"saved choices match selected menu");check(((List<?>)call(store,"playerQuestGoals",uuid,week)).size()==7,"remote progress has only seven personal tasks");check((long)call(((Optional<?>)call(store,"account",uuid)).orElseThrow(),"cents")==6150L,"choice milestone pays approved one-time reward");check(announcements.getOrDefault("nikosnook:quests/a_little_choice",0)==1,"choice milestone has one advancement chat event");
+   case 4->{check(choices().size()==7,"seventh regular refused and one challenge retained");String first=(String)((Map<?,?>)field(top.getHolder(),"questSlots")).get(21);String second=(String)((Map<?,?>)field(top.getHolder(),"questSlots")).get(23);check(!choices().contains(first)&&choices().contains(second),"choosing second challenge replaces first");check(top.getItem(25).getType()==Material.WRITABLE_BOOK,"complete selection uses a book and quill for confirmation");accepted=choices();messages.clear();click(25,ClickType.LEFT);click(25,ClickType.LEFT);}
+   case 5->{check(messages.toString().contains("thanks for stopping by! get questing!"),"Niko thanks the player after accepting their quests");
+    check(!messages.toString().contains("NookQuests - Refresh:"),"accepting quests does not dump progress into chat");
+    check((boolean)call(store,"questAccepted",uuid,week),"confirmation accepted once");check(accepted.equals(call(store,"questChoices",uuid,week)),"saved choices match selected menu");check(((List<?>)call(store,"playerQuestGoals",uuid,week)).size()==7,"remote progress has only seven personal tasks");check((long)call(((Optional<?>)call(store,"account",uuid)).orElseThrow(),"cents")==6150L,"choice milestone pays approved one-time reward");check(announcements.getOrDefault("nikosnook:quests/a_little_choice",0)==1,"choice milestone has one advancement chat event");
     check(!(boolean)call(quests,"nikoComplete",uuid,week),"accepted incomplete personal week is not complete");
     var chosen=(List<?>)call(store,"playerQuestGoals",uuid,week);
     for(var goal:chosen){

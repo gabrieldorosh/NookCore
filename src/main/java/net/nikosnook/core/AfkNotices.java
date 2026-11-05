@@ -3,7 +3,7 @@ package net.nikosnook.core;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
-/** Public idle transitions only; hidden staff and their return from staff mode never produce a notice. */
+/** Public idle transitions and the shared Discord relay for public notices. */
 final class AfkNotices {
     record State(boolean away,boolean hidden){}
     static String message(String name,State previous,State current){
@@ -20,6 +20,6 @@ final class AfkNotices {
             Class<?> textChannel=Class.forName("github.scarsz.discordsrv.dependencies.jda.api.entities.TextChannel",true,loader);
             Class<?> util=Class.forName("github.scarsz.discordsrv.util.DiscordUtil",true,loader);
             util.getMethod("queueMessage",textChannel,String.class,boolean.class).invoke(null,channel,message,false);
-        }catch(ReflectiveOperationException | LinkageError e){owner.getLogger().warning("Could not relay AFK notice to DiscordSRV: "+e.getClass().getSimpleName());}
+        }catch(ReflectiveOperationException | LinkageError e){owner.getLogger().warning("Could not relay public notice to DiscordSRV: "+e.getClass().getSimpleName());}
     }
 }
