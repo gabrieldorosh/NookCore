@@ -344,9 +344,28 @@ public final class GamesChecks extends JavaPlugin implements Listener {
         check(moduleErrors.isEmpty()&&healthy(),"game modules finish without storage errors or health degradation");
         check(Bukkit.getPlayer(ALICE)==null&&Bukkit.getPlayer(BOB)==null,"fixture players remain outside the live player list after all commands");
     }
+    private void automaticCreditCheck()throws Exception {
+        long now=System.currentTimeMillis()+6000L;
+        long original=cash(ALICE),other=cash(BOB);
+        Object match=call(wagers,"invite",ALICE,BOB,100L,now);
+        UUID id=(UUID)call(match,"id");
+        long cap=100_000_000_000L,topUp=cap-cash(ALICE);
+        call(store,"adjust",ALICE,topUp,"console","disposable cap check",now);
+        call(wagers,"cancel",id,ALICE,now+1);
+        Object games=core.getCommand("games").getExecutor();
+        call(games,"recover",alice.proxy);
+        check(cash(ALICE)==cap&&(long)call(store,"gameHeldFunds")==100,"full balance retains the refunded stake safely");
+        call(store,"transfer",ALICE,BOB,100L,now+2);
+        alice.clear();call(games,"recover",alice.proxy);
+        check(cash(ALICE)==cap&&(long)call(store,"gameHeldFunds")==0&&alice.output().contains("in your balance"),"scheduled recovery path credits the refund once space is available");
+        call(games,"recover",alice.proxy);
+        check(cash(ALICE)==cap&&alice.messages.size()==1,"repeated automatic recovery has no duplicate credit or notice");
+        call(store,"adjust",ALICE,-topUp,"console","restore disposable cap check",now+3);
+        check(cash(ALICE)==original-100&&cash(BOB)==other+100&&supply()==10100,"automatic recovery preserves the original money supply");
+    }
     private void run(){
         try{
-            setup();wordleChecks();coinflipChecks();discoveryChecks();
+            setup();wordleChecks();coinflipChecks();discoveryChecks();automaticCreditCheck();
             int products=PipProductsChecks.run(core);check(products==63,"actual Paper banner journal and head factory checks pass");
             World world=Bukkit.getWorlds().getFirst();world.getChunkAt(0,0).load();
             for(int x=6;x<=12;x++)for(int z=6;z<=12;z++){

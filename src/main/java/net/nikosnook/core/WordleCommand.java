@@ -80,7 +80,7 @@ final class WordleCommand implements CommandExecutor,TabCompleter {
             player.sendMessage(NookUi.command(remaining+(remaining==1?" guess left":" guesses left"),"/wordle guess "+board.day()+" "));
         }else if(board.state()==WordleStore.State.WON){
             player.sendMessage(NookUi.text("great job! come back tomorrow for another puzzle <3"));
-            if(!board.rewardPaid() && board.reward()>0)player.sendMessage(NookUi.message(WordleUi.TITLE,"your "+Money.format(board.reward())+" reward is waiting safely. make room in your balance, then use /games collect."));
+            if(!board.rewardPaid() && board.reward()>0)player.sendMessage(NookUi.message(WordleUi.TITLE,"your "+Money.format(board.reward())+" reward will arrive when there's room in your balance."));
         }else{
             player.sendMessage(NookUi.text("today's word was "+board.revealedAnswer().toUpperCase(Locale.ROOT)+". try again tomorrow! <3"));
         }
