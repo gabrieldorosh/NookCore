@@ -30,9 +30,10 @@ final class WordleStore {
             s.execute("CREATE TABLE IF NOT EXISTS wordle_views(uuid TEXT PRIMARY KEY REFERENCES accounts(uuid),day TEXT NOT NULL REFERENCES wordle_days(day))");
         }return null;});
     }
-    Result open(UUID player,long now)throws SQLException {return operate(player,null,null,now);}
-    Result submit(UUID player,String shownDay,String word,long now)throws SQLException {return operate(player,shownDay,WordleScore.normalize(word),now);}
-    private Result operate(UUID player,String shownDay,String word,long now)throws SQLException {
+    Result open(UUID player,long now)throws SQLException {return operate(player,null,null,now,true);}
+    Result forShare(UUID player,long now)throws SQLException {return operate(player,null,null,now,false);}
+    Result submit(UUID player,String shownDay,String word,long now)throws SQLException {return operate(player,shownDay,WordleScore.normalize(word),now,true);}
+    private Result operate(UUID player,String shownDay,String word,long now,boolean rememberView)throws SQLException {
         return ledger.transact(tx->{
             tx.balance(player);var day=WordleDay.at(now);var db=tx.connection();
             if(word!=null){String expected=shownDay==null?lastShown(db,player):shownDay;if(!day.id().equals(expected))throw new StaleBoardException();}
@@ -40,15 +41,15 @@ final class WordleStore {
             var round=round(db,player,day.id());var guesses=guesses(db,player,day.id());boolean consumed=false;
             validateSaved(round,guesses,puzzle);
             if(word!=null && round.state()==State.ACTIVE){
-                if(!word.equals(puzzle.answer()) && !words.accepts(word))throw new IllegalArgumentException("that word isn't in our little dictionary! try another :3");
-                if(guesses.stream().anyMatch(guess->guess.word().equals(word)))throw new IllegalArgumentException("you've tried that one already! pick a different word :3");
+                if(!word.equals(puzzle.answer()) && !words.accepts(word))throw new IllegalArgumentException("that word isn't in our dictionary! try again");
+                if(guesses.stream().anyMatch(guess->guess.word().equals(word)))throw new IllegalArgumentException("you've tried that one already!");
                 int ordinal=guesses.size()+1;var marks=WordleScore.score(puzzle.answer(),word);
                 update(db,"INSERT INTO wordle_guesses(uuid,day,ordinal,word,marks) VALUES(?,?,?,?,?)",player,day.id(),ordinal,word,WordleScore.encode(marks));
                 State state=word.equals(puzzle.answer())?State.WON:ordinal==6?State.LOST:State.ACTIVE;
                 update(db,"UPDATE wordle_rounds SET state=? WHERE uuid=? AND day=?",state.name(),player,day.id());consumed=true;
             }
             long paid=claimPending(tx,player,now);
-            update(db,"INSERT INTO wordle_views(uuid,day) VALUES(?,?) ON CONFLICT(uuid) DO UPDATE SET day=excluded.day",player,day.id());
+            if(rememberView)update(db,"INSERT INTO wordle_views(uuid,day) VALUES(?,?) ON CONFLICT(uuid) DO UPDATE SET day=excluded.day",player,day.id());
             round=round(db,player,day.id());guesses=guesses(db,player,day.id());
             var board=new Board(day.id(),day.nextReset(),guesses,round.state(),puzzle.reward(),round.paid(),round.state()==State.ACTIVE?null:puzzle.answer());
             boolean anySolved;try(var q=prepare(db,"SELECT 1 FROM wordle_rounds WHERE uuid=? AND state='WON' LIMIT 1",player);var r=q.executeQuery()){anySolved=r.next();}

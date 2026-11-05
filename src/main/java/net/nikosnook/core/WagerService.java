@@ -8,9 +8,13 @@ import java.util.function.BooleanSupplier;
 /** Player-funded matches. Participants consent; only the trusted game decides a result. */
 final class WagerService {
     static final String RULES="coinflip-v1|equal-stakes|50/50|full-pot|no-fee";
+    private static final String CREATOR_TAILS=RULES+"|creator-side=tails";
     enum State { INVITED, SETTLED, DECLINED, CANCELLED, EXPIRED }
-    enum Side { HEADS, TAILS }
-    record Match(UUID id,UUID creator,UUID target,long stake,String rules,long created,long expires,
+    enum Side {
+        HEADS, TAILS;
+        String label(){return name().toLowerCase(Locale.ROOT);}
+    }
+    record Match(UUID id,UUID creator,UUID target,long stake,String rules,Side creatorSide,long created,long expires,
                  State state,Side side,UUID winner,long finished) {
         long pot(){return Math.multiplyExact(stake,2);}
         boolean participant(UUID player){return creator.equals(player)||target.equals(player);}
@@ -34,7 +38,11 @@ final class WagerService {
     }
 
     Match invite(UUID creator,UUID target,long stake,long now)throws SQLException {
-        Objects.requireNonNull(creator);Objects.requireNonNull(target);validateTime(now);
+        return invite(creator,target,stake,Side.HEADS,now);
+    }
+
+    Match invite(UUID creator,UUID target,long stake,Side creatorSide,long now)throws SQLException {
+        Objects.requireNonNull(creator);Objects.requireNonNull(target);Objects.requireNonNull(creatorSide);validateTime(now);
         if(!settings.enabled())throw new IllegalArgumentException("coin flips aren't open just yet.");
         if(creator.equals(target))throw new IllegalArgumentException("pick another player to flip with!");
         if(stake<settings.minimum() || stake>settings.maximum())throw new IllegalArgumentException("choose a stake from "+Money.format(settings.minimum())+" to "+Money.format(settings.maximum())+".");
@@ -52,7 +60,7 @@ final class WagerService {
             }
             UUID id=UUID.randomUUID();String game="coinflip:"+id;long expires=Math.addExact(now,settings.invitationMillis());
             try(var insert=tx.connection().prepareStatement("INSERT INTO game_wagers(id,creator,target,stake,rules,created,expires,state) VALUES(?,?,?,?,?,?,?,'INVITED')")){
-                bind(insert,id,creator,target,stake,RULES,now,expires);insert.executeUpdate();
+                bind(insert,id,creator,target,stake,creatorSide==Side.HEADS?RULES:CREATOR_TAILS,now,expires);insert.executeUpdate();
             }
             if(!tx.reserve(game+":creator",game,creator,stake,now))throw new SQLException("The new invitation already has a stake.");
             return required(tx.connection(),id);
@@ -61,7 +69,7 @@ final class WagerService {
 
     Match accept(UUID id,UUID actor,long now)throws SQLException {
         Objects.requireNonNull(id);Objects.requireNonNull(actor);validateTime(now);
-        if(!settings.enabled())throw new IllegalArgumentException("coin flips aren't open just yet. waiting stakes can still be cancelled or collected.");
+        if(!settings.enabled())throw new IllegalArgumentException("coin flips are paused. you can still cancel or decline.");
         return ledger.transact(tx->{
             var match=required(tx.connection(),id);
             if(!match.target().equals(actor))throw new IllegalArgumentException("that invitation is for another player.");
@@ -70,7 +78,7 @@ final class WagerService {
             String game=match.gameId();
             if(!tx.reserve(game+":target",game,actor,match.stake(),now))throw new SQLException("The accepting stake already exists.");
             Side side=heads.getAsBoolean()?Side.HEADS:Side.TAILS;
-            UUID winner=side==Side.HEADS?match.creator():match.target();
+            UUID winner=side==match.creatorSide()?match.creator():match.target();
             // The outcome, both stakes and the payout entitlement commit before any UI.
             if(!tx.settleHolds(game,match.pot(),winner,now))throw new SQLException("This match was already settled without its result.");
             try(var update=tx.connection().prepareStatement("UPDATE game_wagers SET state='SETTLED',side=?,winner=?,finished=? WHERE id=? AND state='INVITED'")){
@@ -165,8 +173,14 @@ final class WagerService {
         try(var query=db.prepareStatement("SELECT * FROM game_wagers WHERE id=?")){query.setString(1,id.toString());try(var rows=query.executeQuery()){if(!rows.next())throw new IllegalArgumentException("that coin flip is no longer available.");return read(rows);}}
     }
     private static Match read(ResultSet rows)throws SQLException {
-        String side=rows.getString("side"),winner=rows.getString("winner");
-        return new Match(UUID.fromString(rows.getString("id")),UUID.fromString(rows.getString("creator")),UUID.fromString(rows.getString("target")),rows.getLong("stake"),rows.getString("rules"),rows.getLong("created"),rows.getLong("expires"),State.valueOf(rows.getString("state")),side==null?null:Side.valueOf(side),winner==null?null:UUID.fromString(winner),rows.getLong("finished"));
+        String side=rows.getString("side"),winner=rows.getString("winner"),rules=rows.getString("rules");
+        // Old invitations froze the creator as heads without a side suffix.
+        Side creatorSide=switch(rules){
+            case RULES->Side.HEADS;
+            case CREATOR_TAILS->Side.TAILS;
+            default->throw new SQLException("Unknown saved coin-flip rules.");
+        };
+        return new Match(UUID.fromString(rows.getString("id")),UUID.fromString(rows.getString("creator")),UUID.fromString(rows.getString("target")),rows.getLong("stake"),rules,creatorSide,rows.getLong("created"),rows.getLong("expires"),State.valueOf(rows.getString("state")),side==null?null:Side.valueOf(side),winner==null?null:UUID.fromString(winner),rows.getLong("finished"));
     }
     private void validateTime(long now){if(now<0 || now>Long.MAX_VALUE-settings.invitationMillis())throw new IllegalArgumentException("Invalid game time.");}
     private static void bind(PreparedStatement statement,Object...values)throws SQLException {for(int i=0;i<values.length;i++)statement.setObject(i+1,values[i] instanceof UUID id?id.toString():values[i]);}

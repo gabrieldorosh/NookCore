@@ -234,11 +234,11 @@ pvp:
   combat-lock-seconds: 15
 
 # Experimental game settings. Keep disabled until the development build is reviewed.
-# Existing stakes still expire/refund and can be collected if new flips are disabled.
+# Existing stakes still expire and refund automatically if new flips are disabled.
 games:
   coinflip:
     enabled: false
     minimum-cents: 100
     maximum-cents: 10000
-    invitation-seconds: 90
+    invitation-seconds: 120
     cooldown-seconds: 5

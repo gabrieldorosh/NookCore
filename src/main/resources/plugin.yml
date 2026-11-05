@@ -8,13 +8,13 @@ softdepend: [FancyNpcs, DiscordSRV, Vault, WorldGuard, WorldEdit, PlaceholderAPI
 loadbefore: [ChestShop]
 commands:
   games:
-    description: Find a little game or collect game winnings
+    description: Find a minigame
     permission: nookcore.games
-    usage: /games [help|collect]
+    usage: /games [help]
   coinflip:
     description: A friendly equal-stake coin flip
     permission: nookcore.coinflip
-    usage: /coinflip [invite <player> <amount>|accept <player>|decline <player>|cancel|history|collect]
+    usage: /coinflip [[invite] <player> <amount> [heads|tails]|accept <player>|decline <player>|cancel|help]
   wordle:
     description: a little daily word puzzle
     usage: /wordle [word|help|share]
