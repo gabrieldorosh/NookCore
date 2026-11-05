@@ -19,10 +19,10 @@ class WordleStoreTest {
  @Test void bareGuessNeedsTheDisplayedDayAndUnknownWordsConsumeNothing()throws Exception{
   assertThrows(WordleStore.StaleBoardException.class,()->game.submit(a,null,"apple",now));
   var board=game.open(a,now).board();assertEquals(0,board.guesses().size());assertNull(board.revealedAnswer());
-  assertThrows(IllegalArgumentException.class,()->game.submit(a,null,"zzzzz",now));assertEquals(0,game.open(a,now).board().guesses().size());assertEquals(0,balance(a));
+  assertEquals("that word isn't in our dictionary! try again",assertThrows(IllegalArgumentException.class,()->game.submit(a,null,"zzzzz",now)).getMessage());assertEquals(0,game.open(a,now).board().guesses().size());assertEquals(0,balance(a));
  }
  @Test void repeatsAreRejectedWithoutAnotherAttempt()throws Exception{
-  game.open(a,now);game.submit(a,null,"crane",now);assertThrows(IllegalArgumentException.class,()->game.submit(a,null,"CRANE",now));assertEquals(1,game.open(a,now).board().guesses().size());
+  game.open(a,now);game.submit(a,null,"crane",now);assertEquals("you've tried that one already!",assertThrows(IllegalArgumentException.class,()->game.submit(a,null,"CRANE",now)).getMessage());assertEquals(1,game.open(a,now).board().guesses().size());
  }
  @Test void sixthGuessCanWinAndNoMoreAttemptsOrAwardsAreCreated()throws Exception{
   String day=game.open(a,now).board().day();for(String word:List.of("crane","stare","brick","stone","grass"))assertEquals(WordleStore.State.ACTIVE,game.submit(a,day,word,now).board().state());
@@ -48,6 +48,7 @@ class WordleStoreTest {
  }
  @Test void staleBareAndExplicitGuessesCannotLandInTheNextDaysPuzzle()throws Exception{
   var old=game.open(a,now).board();long next=old.nextReset();
+  assertEquals(WordleStore.State.ACTIVE,game.forShare(a,next).board().state());
   assertThrows(WordleStore.StaleBoardException.class,()->game.submit(a,null,"flame",next));
   assertThrows(WordleStore.StaleBoardException.class,()->game.submit(a,old.day(),"flame",next));
   var fresh=game.open(a,next);assertNotEquals(old.day(),fresh.board().day());assertTrue(fresh.board().guesses().isEmpty());assertEquals(WordleStore.State.WON,game.submit(a,null,"flame",next).board().state());
