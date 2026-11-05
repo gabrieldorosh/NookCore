@@ -36,7 +36,10 @@ public class QuestChoiceProbe extends JavaPlugin implements org.bukkit.event.Lis
   var handle=new ServerPlayer(((CraftServer)getServer()).getServer(),((CraftWorld)world).getHandle(),new GameProfile(UUID.randomUUID(),"ChoiceTester"),ClientInformation.createDefault());var real=handle.getBukkitEntity();uuid=real.getUniqueId();inventory=real.getInventory();top=Bukkit.createInventory(null,27);
   player=(Player)Proxy.newProxyInstance(getClassLoader(),new Class[]{Player.class},(o,m,a)->switch(m.getName()){
    case "getUniqueId"->uuid;case "getName"->"ChoiceTester";case "getLocation"->location.clone();case "getWorld"->world;case "isOnline"->true;case "isDead"->false;case "getGameMode"->GameMode.SURVIVAL;case "hasPermission"->false;case "getOpenInventory"->view;
-   case "openInventory"->{top=(Inventory)a[0];yield view;}case "closeInventory"->{top=Bukkit.createInventory(null,27);yield null;}case "sendMessage"->{messages.add(Arrays.toString(a));yield null;}
+   case "openInventory"->{top=(Inventory)a[0];yield view;}case "closeInventory"->{top=Bukkit.createInventory(null,27);yield null;}case "sendMessage"->{for(Object value:a){
+    if(value instanceof net.kyori.adventure.text.Component component)messages.add(net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer.plainText().serialize(component));
+    else messages.add(String.valueOf(value));
+   }yield null;}
    default->{try{yield m.invoke(real,a);}catch(InvocationTargetException e){throw e.getCause();}}
   });
   view=(InventoryView)Proxy.newProxyInstance(getClassLoader(),new Class[]{InventoryView.class},(o,m,a)->switch(m.getName()){

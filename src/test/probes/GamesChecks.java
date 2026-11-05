@@ -222,7 +222,7 @@ public final class GamesChecks extends JavaPlugin implements Listener {
         check(number("SELECT COUNT(*) FROM wordle_rounds")==rounds,"Wordle denies missing permission and spectator mode before saving progress");
         check(denied.output().contains("isn't available")&&spectator.output().contains("Survival"),"Wordle eligibility failures give private explanations");
         alice.clear();command(alice,"wordle","share");
-        check(wordleBroadcasts.isEmpty()&&number("SELECT COUNT(*) FROM wordle_rounds")==rounds,"unfinished share stays private and does not open a round");
+        check(wordleBroadcasts.isEmpty()&&attempts(ALICE)==0&&number("SELECT COUNT(*) FROM wordle_views WHERE uuid=?",ALICE)==0,"unfinished share stays private without using a guess or marking the board viewed");
         command(alice,"wordle");
         check(attempts(ALICE)==0,"opening Wordle consumes zero guesses");
         check(alice.output().contains("6 guesses left")&&alice.output().contains("niko's wordle")&&!alice.output().contains("= right place"),"Wordle displays the compact heading and attempt count");
